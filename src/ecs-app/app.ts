@@ -1,4 +1,4 @@
-import { ErrorExt, Option, Result, is_error, is_some } from "joshkaposh-iterator";
+import { ErrorExt, Option, Result, is_error, is_some } from "joshkaposh-option";
 import { Component, Resource } from "../ecs/component";
 import { Plugin, Plugins } from "../ecs/plugin";
 import { Schedule, ScheduleBuildSettings, ScheduleLabel, Schedules } from "../ecs/schedule";

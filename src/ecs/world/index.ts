@@ -1,5 +1,6 @@
-import { ErrorExt, ExactSizeDoubleEndedIterator, ExactSizeIterator, IterInputType, Iterator, Option, Result, from_fn, is_error, is_none, is_some, iter, once } from "joshkaposh-iterator";
+import { ExactSizeDoubleEndedIterator, ExactSizeIterator, Iterator, from_fn, iter, once } from "joshkaposh-iterator";
 import { TODO } from "joshkaposh-iterator/src/util";
+import { Err, Option, Result, is_error, is_none, is_some, ErrorExt } from 'joshkaposh-option';
 import { UNIT, Unit } from '../../util';
 import { ArchetypeComponentId, Archetypes } from "../archetype";
 import { Component, ComponentId, ComponentInfo, Components, Resource, TypeId } from "../component";
@@ -139,7 +140,7 @@ export class World {
             throw new Error(`Entity ${refs.get()} does not exist`)
         }
 
-        return refs;
+        return refs as EntityRef[];
     }
 
     many_entities_mut(entities: Entity[]): EntityWorldMut[] {
@@ -148,7 +149,7 @@ export class World {
             throw new Error(`Entity ${refs.get()} does not exist`)
         }
 
-        return refs;
+        return refs as EntityWorldMut[];
     }
 
     inspect_entity(entity: Entity): ComponentInfo[] {
@@ -188,7 +189,7 @@ export class World {
         return new EntityRef(new UnsafeEntityCell(this, entity, location))
     }
 
-    get_many_entities(entities: Entity[]): Result<EntityRef[], Entity> {
+    get_many_entities(entities: Entity[]): Result<EntityRef[], Err<Entity>> {
         const refs: EntityRef[] = [];
         for (let i = 0; i < entities.length; i++) {
             const ref = this.get_entity(entities[i]);

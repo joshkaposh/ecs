@@ -1,4 +1,5 @@
-import { Option, is_some, iter } from "joshkaposh-iterator";
+import { iter } from "joshkaposh-iterator";
+import { Option, is_some } from 'joshkaposh-option'
 import { capacity, reserve, swap_remove, swap_remove_unchecked } from "../../array-helpers";
 import { ComponentId, ComponentInfo, Components } from "../component";
 import { SparseSet } from "./sparse-set";

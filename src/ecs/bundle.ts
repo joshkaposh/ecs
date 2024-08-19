@@ -1,4 +1,4 @@
-import { Option, is_some } from "joshkaposh-iterator";
+import { Option, is_some } from 'joshkaposh-option'
 import { Archetype, ArchetypeId, Archetypes, BundleComponentStatus, ComponentStatus, SpawnBundleStatus } from "./archetype";
 import { Component, ComponentId, Components } from "./component";
 import { Entities, Entity, EntityLocation } from "./entity";
@@ -6,7 +6,6 @@ import { StorageType, Storages } from "./storage";
 import { SparseSets } from "./storage/sparse-set";
 import { Table, TableRow } from "./storage/table";
 import { extend } from "../array-helpers";
-import { World } from "./world";
 import { entry } from "../util";
 import { Prettify, TODO } from "joshkaposh-iterator/src/util";
 

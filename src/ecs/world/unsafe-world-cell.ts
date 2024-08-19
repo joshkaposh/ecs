@@ -1,5 +1,5 @@
+import { Option, is_some } from "joshkaposh-option";
 import { Archetype, Component, ComponentId, Entity, EntityLocation, StorageType, World } from "..";
-import { Option, is_some } from "joshkaposh-iterator";
 
 export class UnsafeEntityCell {
     #world: World;

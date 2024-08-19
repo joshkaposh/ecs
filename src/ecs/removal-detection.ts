@@ -1,4 +1,4 @@
-import { Option } from "joshkaposh-iterator";
+import { Option } from "joshkaposh-option";
 import { Component, ComponentId } from "./component";
 import { Entity } from "./entity";
 import { SparseSet } from "./storage/sparse-set";

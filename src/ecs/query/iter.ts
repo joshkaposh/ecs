@@ -1,4 +1,5 @@
-import { ErrorExt, Iterator, Option, Range, done, is_error, is_some, iter, iter_item, range } from "joshkaposh-iterator";
+import { Iterator, Range, done, iter, iter_item, range } from "joshkaposh-iterator";
+import { Option, ErrorExt, is_error, is_some } from "joshkaposh-option";
 import { EntityList, QueryData, QueryFilter, QueryState } from ".";
 import { Archetype, ArchetypeEntity, Archetypes } from "../archetype";
 import { Table, Tables } from "../storage/table";

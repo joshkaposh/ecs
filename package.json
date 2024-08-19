@@ -19,7 +19,8 @@
     "vitest": "^1.4.0"
   },
   "dependencies": {
-    "joshkaposh-iterator": "^1.0.7",
+    "joshkaposh-iterator": "^1.0.9",
+    "joshkaposh-option": "^1.0.2",
     "uuid": "^9.0.1"
   }
 }

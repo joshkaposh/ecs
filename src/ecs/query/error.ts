@@ -1,4 +1,4 @@
-import { Err, ErrorExt } from "joshkaposh-iterator";
+import { Err, ErrorExt } from "joshkaposh-option";
 import { Entity } from "../entity";
 
 export type QueryEntityError = {

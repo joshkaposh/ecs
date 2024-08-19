@@ -1,4 +1,5 @@
-import { type Option, is_some, once, iter, Iterator, Result, ErrorExt } from "joshkaposh-iterator";
+import { once, iter, Iterator } from "joshkaposh-iterator";
+import { type Option, type Result, is_some, ErrorExt } from "joshkaposh-option";
 import { TODO, assert } from "joshkaposh-iterator/src/util";
 import { StorageType, Storages } from "../storage";
 import { type Component } from "../component";

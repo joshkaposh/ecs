@@ -1,4 +1,4 @@
-import { Option } from "joshkaposh-iterator";
+import { Option } from "joshkaposh-option";
 import { clamp_unchecked } from "..";
 import { int_div } from "./shared";
 import { NumberTrait, SizeKey } from "./types";

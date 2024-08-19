@@ -1,4 +1,4 @@
-import { Option } from "joshkaposh-iterator";
+import { Option } from "joshkaposh-option";
 
 export type BITS = 8 | 16 | 32;
 

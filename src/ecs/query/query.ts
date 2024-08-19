@@ -1,4 +1,4 @@
-import { Result, is_error } from "joshkaposh-iterator";
+import { Result, is_error } from "joshkaposh-option";
 import { Entity } from "../entity";
 import { World } from "../world";
 import { type Unit } from "../../util";

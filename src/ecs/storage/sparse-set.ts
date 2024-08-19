@@ -1,8 +1,8 @@
-import { Iterator, Option, is_some, iter } from "joshkaposh-iterator";
-import { Component, ComponentId, ComponentInfo } from "../component";
+import { Iterator, iter } from "joshkaposh-iterator";
+import { Option, is_some } from 'joshkaposh-option'
+import { ComponentId, ComponentInfo } from "../component";
 import { Entity, EntityId } from "../entity";
 import { Column, TableRow } from "./table";
-import { TODO } from "joshkaposh-iterator/src/util";
 import { swap_remove } from "../../array-helpers";
 
 type EntityIndex = EntityId;

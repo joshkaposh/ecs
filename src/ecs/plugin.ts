@@ -1,6 +1,6 @@
 import { TODO } from "joshkaposh-iterator/src/util";
 import { App } from "../ecs-app";
-import { is_error } from "joshkaposh-iterator";
+import { is_error } from "joshkaposh-option";
 import { v4 } from "uuid";
 
 // type PluginGroup = any;
@@ -49,7 +49,7 @@ export abstract class Plugin {
     }
 
     add_to_app(app: App) {
-        const err = app.add_plugin(this);
+        const err = app.add_plugins(this);
         if (is_error(err)) {
             const plugin_name = err.get();
             throw new Error(`Error adding plugin ${plugin_name} : plugin was already added in application`)

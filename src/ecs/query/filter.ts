@@ -1,4 +1,4 @@
-import { Option } from "joshkaposh-iterator";
+import { Option } from "joshkaposh-option";
 import { UNIT, type Unit } from "../../util";
 import { Archetype } from "../archetype";
 import { Component, ComponentId } from "../component";

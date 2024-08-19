@@ -1,4 +1,4 @@
-import { Option } from "joshkaposh-iterator";
+import { Option } from "joshkaposh-option";
 import { FixedBitSet } from "../../../fixed-bit-set";
 import { World } from "../../world";
 import { Condition, System } from "../../system/system";

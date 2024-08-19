@@ -1,8 +1,8 @@
-import { Option } from "joshkaposh-iterator";
+import { Option } from "joshkaposh-option";
 import { int_div } from "./shared";
 import { NumberTrait, SizeKey } from "./types";
 
-export type UintSizeKey = SizeKey<'i'>;
+export type IntSizeKey = SizeKey<'i'>;
 
 export const INT_SIZE = {
     i8: [-128, 127] as [number, number],

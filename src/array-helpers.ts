@@ -1,4 +1,4 @@
-import { is_some, type Option } from "joshkaposh-iterator";
+import { is_some, type Option } from "joshkaposh-option";
 import { unused } from "joshkaposh-iterator/src/util";
 
 export function swap<T>(array: T[], from_index: number, to_index: number) {

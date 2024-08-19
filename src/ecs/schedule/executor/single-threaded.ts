@@ -1,4 +1,5 @@
-import { Option, is_error, is_some, iter, range, result } from "joshkaposh-iterator";
+import { iter, range } from "joshkaposh-iterator";
+import { Option, is_error, is_some, result } from "joshkaposh-option";
 import { ExecutorKind, SystemExecutor, SystemSchedule, is_apply_deferred } from ".";
 import { FixedBitSet } from "../../../fixed-bit-set";
 import { World } from "../../world";

@@ -1,7 +1,8 @@
+import { ExactSizeDoubleEndedIterator, Iterator, Range, done, drain, iter, iter_item, range } from "joshkaposh-iterator";
 import { TODO, assert, resize } from "joshkaposh-iterator/src/util";
+import { Err, ErrorExt, Option, Result, is_error, is_some } from 'joshkaposh-option';
 import { ArchetypeId, ArchetypeRow } from "./archetype";
 import { TableId, TableRow } from "./storage/table";
-import { Err, ErrorExt, ExactSizeDoubleEndedIterator, Iterator, Option, Range, Result, done, drain, is_error, is_some, iter, iter_item, range } from "joshkaposh-iterator";
 import { extend, reserve, swap_remove } from "../array-helpers";
 import { IdKind, Identifier, IdentifierError, IdentifierErrorType } from "./identifier";
 import { u32, u8 } from "../Intrinsics";
@@ -100,7 +101,7 @@ export class Entity {
     /// This method is the fallible counterpart to [`Entity::from_bits`].
     // bits: u64
     static try_from_bits(bits: number): Result<Entity, Err<ReturnType<IdentifierErrorType>>> {
-        const id = Identifier.try_from_bits(bits);
+        const id = Identifier.try_from_bits(bits) as Identifier;
         if (!is_error(id)) {
             // let kind = id.kind() as u8;
             const kind = u8.from(id.kind());

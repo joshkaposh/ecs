@@ -1,4 +1,5 @@
-import { is_some, iter, Iterator, range, type Option } from "joshkaposh-iterator";
+import { iter, Iterator, range } from "joshkaposh-iterator";
+import { is_some, type Option } from 'joshkaposh-option'
 import { ComponentId } from "./component";
 import { TableId, type TableRow } from "./storage/table";
 import { Entity, EntityLocation } from "./entity";

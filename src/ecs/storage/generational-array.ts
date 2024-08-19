@@ -1,5 +1,5 @@
-import { DoubleEndedIterator, iter, type Option } from "joshkaposh-iterator";
-
+import { DoubleEndedIterator, iter } from "joshkaposh-iterator";
+import type { Option } from "joshkaposh-option";
 export type GenKey = {
     readonly index: number,
     generation: number

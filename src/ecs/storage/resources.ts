@@ -1,4 +1,5 @@
-import { Iterator, Option, is_some } from "joshkaposh-iterator";
+import { Iterator } from "joshkaposh-iterator";
+import { Option, is_some } from "joshkaposh-option";
 import { Component, ComponentId, Components } from "../component";
 import { SparseSet } from "./sparse-set";
 import { ArchetypeComponentId } from "../archetype";

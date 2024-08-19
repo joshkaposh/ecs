@@ -1,4 +1,5 @@
-import { ErrorExt, Iterator, type Option, type Result, is_some, is_none, drain, range, iter, is_error, once } from "joshkaposh-iterator";
+import { Iterator, drain, range, iter, once } from "joshkaposh-iterator";
+import { type Option, type Result, is_some, is_none, is_error, ErrorExt, } from 'joshkaposh-option'
 import { type Condition, type System } from "../system/system";
 import { World } from "../world";
 import { Enum, UNIT, Unit, get_short_name, writeln } from "../../util";

@@ -1,21 +1,21 @@
-import { TODO } from "joshkaposh-iterator/src/util";
-import { Component, ComponentId } from "./component";
-import { Entity } from "./entity";
-import { SparseSet } from "./storage/sparse-set";
+import { DoubleEndedIterator, ExactSizeIterator, Iterator, done, drain, iter, iter_item, range } from "joshkaposh-iterator";
+import { Option, is_none, is_some } from 'joshkaposh-option';
 import { extend } from "../array-helpers";
-import { DoubleEndedIterator, ExactSizeIterator, Iterator, Option, done, drain, is_none, is_some, iter, iter_item, range } from "joshkaposh-iterator";
 import { u32 } from "../Intrinsics";
 
+// @ts-ignore
 type Res<T> = any;
+// @ts-ignore
 type ResMut<T> = any;
 
 export type Event = new (...args: any[]) => any;
 
+// @ts-ignore
 export type EventId<T = any> = number;
 
+// @ts-ignore
 export type ComponentIdFor<T> = any;
 export type Local<T> = T;
-
 
 type EventInstance<E extends Event> = {
     event_id: EventId<E>;

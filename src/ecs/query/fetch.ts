@@ -1,7 +1,8 @@
-import { Option } from "joshkaposh-iterator";
+import { Option } from "joshkaposh-option";
 import { UNIT, Unit } from "../../util";
 import { Archetype } from "../archetype";
-import { Entity, EntityRef } from "../entity";
+import { Entity } from "../entity";
+import { EntityRef } from '../world';
 import { Table, TableRow } from "../storage/table";
 import { EntityWorldMut, World } from "../world";
 import { FilteredAccess } from "./access";

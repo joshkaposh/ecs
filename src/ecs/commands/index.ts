@@ -1,4 +1,5 @@
-import { Iterator, Ok, Option } from "joshkaposh-iterator";
+import { iter, Iterator } from "joshkaposh-iterator";
+import { Ok, Option } from 'joshkaposh-option'
 import { Bundle } from "../bundle";
 import { Entities, Entity } from "../entity";
 import { World } from "../world";
@@ -25,7 +26,7 @@ export class Commands {
      * Take all commands from 'other' and append them to 'this', leaving 'other' empty.
      */
     append(other: CommandQueue) {
-        this.#queue.append(other);
+        this.#queue.push(other.drain());
     }
 
     spawn_empty(): EntityCommands {
@@ -67,15 +68,15 @@ export class Commands {
     }
 
     init_resource(resource: any) {
-        this.#queue.push(init_resource.bind(null, resource));
+        this.#queue.push(init_resource.bind(null as any, resource));
     }
 
-    insert_resource(resouce: any) {
+    insert_resource(resource: any) {
         this.#queue.push(insert_resource(resource))
     }
 
     remove_resource(resource: any) {
-        this.#queue.push(remove_resource.bind(null, resource));
+        this.#queue.push(remove_resource.bind(null as any, resource));
     }
 
     add(command: Command) {
@@ -86,7 +87,10 @@ export class Commands {
 type EntityCommandTrait<Marker = Ok> = {
     apply(id: Entity, world: World): void;
     with_entity(entity: Entity): WithEntity<Marker, EntityCommandTrait<Marker>>;
-} | ((id: Entity, world: World) => void);
+} | (((id: Entity, world: World) => void) & {
+    apply(id: Entity, world: World): void;
+    with_entity(entity: Entity): WithEntity<Marker, EntityCommandTrait<Marker>>;
+});
 
 class WithEntity<Marker, C extends EntityCommandTrait<Marker>> implements Command {
     #cmd: C;
@@ -122,24 +126,24 @@ export class EntityCommands {
     }
 
     remove(bundle: Bundle): this {
-        return this.add(remove.bind(null, bundle))
+        return this.add(remove.bind(null, bundle) as any)
     }
 
     despawn() {
-        this.add(despawn)
+        this.add(despawn as any)
     }
 
     add(command: EntityCommandTrait): this {
-        this.__commands.add(command.with_entity(this.__entity));
+        this.#commands.add(command.with_entity(this.#entity));
         return this;
     }
 
     retain(bundle: Bundle): this {
-        return this.add(retain(bundle))
+        return this.add(retain.bind(null, bundle) as any)
     }
 
     log_components() {
-        this.add(log_components())
+        this.add(log_components.bind(null, this.#entity) as any)
     }
 }
 
@@ -153,7 +157,7 @@ function spawn_batch(bundles: Iterator<Bundle>): Command {
 
 function insert_or_spawn_batch(bundles: Iterator<[Entity, Bundle]>): Command {
     return (world: World) => {
-        const invalid = world.insert_or_spawn_batch(bundles);
+        const invalid = world.insert_or_spawn_batch(bundles as any);
         if (invalid instanceof Error) {
             console.error(`Failed to 'insert or spawn' bundle into the following invalid entities: ${invalid}`)
         }
@@ -192,7 +196,6 @@ function init_resource(this: Resource<Component>, world: World) {
     world.init_resource(this);
 }
 
-
 function remove_resource(this: Resource<Component>, world: World) {
     world.remove_resource(this);
 }
@@ -204,9 +207,7 @@ function insert_resource(resource: Resource): Command {
 }
 
 function log_components(entity: Entity, world: World) {
-    console.log('Entity index = %d, generation = %d, component names = ', entity.index(), entity.generation(), world
-        .inspect_entity()
-        .into_iter()
+    console.log('Entity index = %d, generation = %d, component names = ', entity.index(), entity.generation(), iter(world.inspect_entity(entity))
         .map(component_info => component_info.name())
         .collect()
     );

@@ -1,7 +1,7 @@
 import { assert, expect, test } from "vitest";
 import { SparseSet, SparseSets } from "../src/ecs/storage/sparse-set";
 import { Entity, Component, ComponentDescriptor, ComponentInfo, define_component } from "../src/ecs";
-import { is_none } from "joshkaposh-iterator";
+import { is_none } from "joshkaposh-option";
 import { StorageType } from "../src/ecs/storage";
 
 class Foo { constructor(public value: number) { } }

@@ -1,7 +1,7 @@
-import { ErrorExt, Result } from 'joshkaposh-iterator';
+import { ErrorExt, Result } from 'joshkaposh-option';
+import { TODO } from 'joshkaposh-iterator/src/util';
 import { IdKindType } from './kinds';
 import { IdentifierMask } from './mask';
-import { TODO } from 'joshkaposh-iterator/src/util';
 
 export * from './mask';
 export * from './kinds';

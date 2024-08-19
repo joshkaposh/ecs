@@ -1,5 +1,6 @@
 import { assert, test } from 'vitest'
 import { World, StorageType, Component, Resource, define_component, define_resource } from '../src/ecs'
+import { iter, once } from 'joshkaposh-iterator'
 
 class A { constructor(public value = 'A') { } }
 define_component(A)
@@ -17,6 +18,14 @@ define_component(Marker, StorageType.SparseSet);
 class Counter { }
 define_resource(Counter);
 
+function spawn(count: number) {
+    const comps: any[] = [];
+    for (let i = 0; i < count; i++) {
+        comps.push([new A(), new B(), new C()],)
+    }
+    return comps
+}
+
 test('world', () => {
     const w = World.default();
 
@@ -29,4 +38,10 @@ test('world', () => {
     assert(idm === 3);
     const idr = w.init_resource(Counter as Resource<Component>);
     assert(idr === 4);
+
+    for (let i = 0; i < 200; i++) {
+        w.spawn([new A(), new B(), new C()])
+    }
+    assert(w.entities().total_count() === 200)
+    // w.spawn_batch(spawn(10))
 })

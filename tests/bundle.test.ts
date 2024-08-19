@@ -1,5 +1,5 @@
 import { assert, expect, test } from 'vitest'
-import { is_none, is_some } from 'joshkaposh-iterator';
+import { is_none, is_some } from 'joshkaposh-option';
 import { BundleImpl, Component, World, define_bundle, define_component } from '../src/ecs';
 
 class A { constructor(public value = 'A') { } }

@@ -1,4 +1,4 @@
-import { MustReturn } from "joshkaposh-iterator/src/iter/shared";
+import { MustReturn } from 'joshkaposh-iterator'
 import { World } from "../world";
 
 export type Condition = (...args: any[]) => boolean;

@@ -1,5 +1,6 @@
+import { Iterator, Range, iter, range, done, IterInputType } from "joshkaposh-iterator";
+import { is_some } from 'joshkaposh-option'
 import { carrot_left, clear, set, set_to, trailing_zeros } from "./bit";
-import { Iterator, Range, iter, range, done, IterInputType, is_some } from "joshkaposh-iterator";
 import { assert, resize, split_first } from 'joshkaposh-iterator/src/util';
 import { u32 } from "./Intrinsics";
 

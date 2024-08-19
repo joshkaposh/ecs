@@ -1,4 +1,5 @@
-import { is_some, iter, type Option } from "joshkaposh-iterator";
+import { iter } from "joshkaposh-iterator";
+import { is_some, type Option } from 'joshkaposh-option';
 import { StorageType, Storages } from "./storage";
 import { World } from "./world";
 

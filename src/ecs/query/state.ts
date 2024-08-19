@@ -1,4 +1,4 @@
-import { ErrorExt, Option, Result, is_error, is_none, is_some } from "joshkaposh-iterator";
+import { ErrorExt, Option, Result, is_error, is_none, is_some } from "joshkaposh-option";
 import { UNIT, Unit } from "../../util";
 import { Archetype, ArchetypeGeneration, ArchetypeId } from "../archetype";
 import { ComponentId } from "../component";

@@ -1,4 +1,4 @@
-import { ErrorExt } from "joshkaposh-iterator";
+import { ErrorExt } from "joshkaposh-option";
 import { Command } from ".";
 import { Bundle } from "../bundle";
 import { Entity } from "../entity";
