@@ -151,14 +151,6 @@ test('event_reader_len_current', () => {
     assert(!reader.is_empty(events));
 })
 
-// test('rec', () => {
-// const arr = [1, 2, 3, 4, 5];
-
-// for (let i = arr.length - 1; i >= 0; i--) {
-//     const element = arr[i];
-//     console.log(element);
-// }
-// })
 
 test('event_reader_len_update', () => {
     const events = Events.default(TestEvent);
@@ -170,7 +162,5 @@ test('event_reader_len_update', () => {
     events.send(new TestEvent(0));
     assert(reader.len(events) === 3)
     events.update();
-    // console.log(reader.len(events));
-    // assert(reader.len(events) === 1);
 })
 

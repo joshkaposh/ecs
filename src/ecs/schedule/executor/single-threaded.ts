@@ -56,7 +56,7 @@ export class SingleThreadedExecutor implements SystemExecutor {
         }
 
         for (const system_index of range(0, schedule.__systems.length)) {
-            const name = schedule.__systems[system_index].name();
+            // const name = schedule.__systems[system_index].name();
 
             let should_run = !this.#completed_systems.contains(system_index);
             for (const set_idx of schedule.__sets_with_conditions_of_systems[system_index].ones()) {
@@ -107,6 +107,8 @@ export class SingleThreadedExecutor implements SystemExecutor {
         this.#evaluated_sets.clear();
         this.#completed_systems.clear();
     }
+
+    apply_deferred(_schedule: SystemSchedule, _world: World) { }
 
     set_apply_final_deferred(apply_final_deferred: boolean): void {
         this.#apply_final_deferred = apply_final_deferred;

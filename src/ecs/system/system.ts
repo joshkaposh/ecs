@@ -1,48 +1,51 @@
-import { MustReturn } from 'joshkaposh-iterator'
+import { DoubleEndedIterator, iter } from "joshkaposh-iterator";
+import { NodeId } from "../schedule";
 import { World } from "../world";
 
-export type Condition = (...args: any[]) => boolean;
-export type BoxedCondition = any;
-// @ts-expect-error
-export type System<In, Out> = any;
-export type BoxedSystem = any;
-export type SystemId = number;
 
-class PipeSystem {
-    constructor(system_a: any, system_b: any, name: any) { }
+export type SystemFn<In extends any[] = any[], Out extends boolean | void = boolean | void> = (...args: In) => Out;
+export type ConditionFn<In extends any[] = any[]> = (...args: In) => boolean;
+export type Condition<In extends any[] = any[], Out extends boolean = boolean> = System<In, Out>;
+export type BoxedCondition<In extends any[] = any[]> = Condition<In>;
+
+export interface IntoConfig {
+    before(config: IntoConfig): IntoConfig;
+    after(config: IntoConfig): IntoConfig;
+
+    run_if(condition: Condition): IntoConfig
+
+    dependencies(): DoubleEndedIterator<readonly [System, System]>;
+    conditions(): DoubleEndedIterator<readonly [System, System]>
+}
+export interface System<In extends any[] = any[], Out = void | boolean> extends IntoConfig {
+    name(): string;
+    params(): In;
+    into_config(): IntoConfig;
+
+    initialize(world: World): void;
+
+    run(...args: In): Out;
+
+    run_if(condition: Condition): IntoConfig
+    before(system: System): IntoConfig;
+    after(system: System): IntoConfig
 };
 
-export abstract class IntoSystem<In, Out> {
-    #system: System<In, Out>;
 
-    constructor(system: System<In, Out>) {
-        this.#system = system;
-    }
+export type BoxedSystem<In extends any[] = any[], Out = void | boolean> = System<In, Out>;
+export type SystemId = number;
 
-    abstract into_system(): System<In, Out>;
+class SystemSet { }
 
-    pipe<Final>(system: IntoSystem<Out, Final>): PipeSystem {
-        const system_a = this.into_system();
-        const system_b = system.into_system();
-        const name = `Pipe(${system_a.name()}, ${system_b.name()})`;
-        // TODO: Cow::owned(name);
-        return new PipeSystem(system_a, system_b, name)
-    }
 
-    map<T>(fn: MustReturn<(out: Out) => T>): AdapterSystem<MustReturn<(out: Out) => T>, System<In, Out>> {
-        const system = this.into_system();
-        const name = system.name();
-        return new AdapterSystem(fn, system, name);
-    }
-
-    system_type_id() {
-        return this.#system.type_id;
+export class AnonymousSet {
+    #id: NodeId;
+    constructor(id: NodeId) {
+        this.#id = id;
     }
 }
 
-export function assert_is_system(system: IntoSystem<any, any>) {
-    const sys = system.into_system();
-
+export function assert_is_system(system: System<any, any>) {
     const world = World.default();
-    sys.initialize(world);
+    system.initialize(world);
 }

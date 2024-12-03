@@ -334,7 +334,7 @@ export class BundleInfo {
                 sparse_set_components = new_sparse_set_components;
             }
 
-            const new_archetype_id = archetypes.__get_id_or_insert(table_id, table_components, sparse_set_components);
+            const new_archetype_id = archetypes.__get_id_or_insert(components, table_id, table_components, sparse_set_components);
             archetypes.get(archetype_id)!.edges().__insert_add_bundle(
                 this.#id,
                 new_archetype_id,

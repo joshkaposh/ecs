@@ -33,7 +33,8 @@ export class RemovedComponentReader<T extends Component> {
         return this.#reader.read(events)
     }
 
-    read_with_id(events: Events<typeof Entity>): EventIter<typeof Entity> {
+
+    read_with_id(events: Events<typeof Entity>) {
         return this.#reader.read_with_id(events)
     }
 
@@ -103,30 +104,30 @@ export class RemovedComponents<T extends Component> {
     read() {
         const tuple = this.reader_mut_with_events();
         if (tuple) {
-            const [reader, events] = tuple;
-            return reader.reader
+            const [reader, events] = tuple
+            return reader
                 .read(events)
                 .flatten()
-                .map((e: Entity) => e.clone());
+                .map((e) => e.clone());
         }
         return;
     }
 
     len() {
         const events = this.events();
-        return events ? this.#reader.reader.len(events) : 0
+        return events ? this.#reader.len(events) : 0
     }
 
     is_empty() {
         const events = this.events()
-        return events ? this.#reader.reader.is_empty(events) : true;
+        return events ? this.#reader.is_empty(events) : true;
     }
 
     clear() {
         const tuple = this.reader_mut_with_events();
         if (tuple) {
             const [reader, events] = tuple;
-            reader.reader.clear(events);
+            reader.clear(events);
         }
     }
 

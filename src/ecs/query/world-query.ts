@@ -5,9 +5,15 @@ import { Entity } from "../entity";
 import { Table, type TableRow } from "../storage/table";
 import { World } from "../world";
 import { FilteredAccess } from "./access";
-import { type ComponentId } from "../component";
+import { Components, type ComponentId } from "../component";
+
+export type QueryData<Item = Unit, Fetch = Unit, State = Unit> = WorldQuery<Item, Fetch, State>
 
 export abstract class WorldQuery<Item, Fetch = Unit, State = Unit> {
+    __item!: Item;
+    __fetch!: Fetch;
+    __state!: State;
+
 
     abstract readonly IS_DENSE: boolean;
 
@@ -25,7 +31,8 @@ export abstract class WorldQuery<Item, Fetch = Unit, State = Unit> {
 
     abstract init_state(world: World): any;
 
-    abstract get_state(world: World): Option<State>;
+    abstract get_state(components: Components): Option<State>;
 
     abstract matches_component_set(state: State, set_contains_id: (component_id: ComponentId) => boolean): boolean;
 };
+

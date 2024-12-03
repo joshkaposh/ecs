@@ -12,8 +12,8 @@ export class SystemMeta {
     #has_deferred: boolean;
 
     constructor(type: any) {
-        const name = type_name(type); //std::any::type_name<T>();
-        this.__name = name;
+        // const name = type_name(type); //std::any::type_name<T>();
+        this.__name = type.name;
         this.__archetype_component_access = Access.default();
         this.__component_access_set = FilteredAccessSet.default();
         this.#is_send = true;
@@ -53,9 +53,10 @@ class SystemState<Param extends SystemParam<any, any>> {
 
     constructor(world: World, type: any) {
         const meta = new SystemMeta(type);
-        const param_state = Param.init_state(world, meta);
+        // const param_state = Param.init_state(world, meta);
         this.#meta = meta;
-        this.#param_state = param_state;
+        this.#param_state = undefined as any
+        // this.#param_state = param_state;
         this.#world_id = world.id();
         this.#archetype_generation = ArchetypeGeneration.initial();
     }
@@ -68,10 +69,10 @@ class SystemState<Param extends SystemParam<any, any>> {
      * @summary Retrieve the [`SystemParam`] values. This can only be called when all parameters are read-only.
      */
     get(world: World) {
-        this.validate_world(world.id());
+        // this.validate_world(world.id());
 
-        this.update_archetypes(world);
+        // this.update_archetypes(world);
 
-        return this.get_unchecked_manual(world);
+        // return this.get_unchecked_manual(world);
     }
 }

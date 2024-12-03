@@ -79,8 +79,8 @@ test('archetype', () => {
     assert(is_some(sparse_set_ma))
     assert(is_some(sparse_set_mb))
 
-    const arch_a_id = archetypes.__get_id_or_insert(table_id, columns, sparse_ids_ma);
-    const arch_b_id = archetypes.__get_id_or_insert(table_id, columns, sparse_ids_mb);
+    const arch_a_id = archetypes.__get_id_or_insert(components, table_id, columns, sparse_ids_ma);
+    const arch_b_id = archetypes.__get_id_or_insert(components, table_id, columns, sparse_ids_mb);
     const arch_a = archetypes.get(arch_a_id)!;
     const arch_b = archetypes.get(arch_b_id)!;
 

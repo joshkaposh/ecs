@@ -4,6 +4,7 @@ import { World } from "../../world";
 import { Condition, System } from "../../system/system";
 import { TODO } from "joshkaposh-iterator/src/util";
 import { Enum } from "../../../util";
+import { NodeId } from "../schedule";
 
 export type SystemExecutor = {
     kind(): ExecutorKind;
@@ -18,8 +19,6 @@ export const ExecutorKind = {
     Simple: 1,
     MultiThreaded: 2,
 } as const;
-
-type NodeId = any;
 
 export class SystemSchedule {
     __systems: System[];
@@ -52,6 +51,10 @@ export class SystemSchedule {
         this.__system_dependents = system_dependents;
         this.__sets_with_conditions_of_systems = sets_with_conditions_of_systems;
         this.__systems_in_sets_with_conditions = systems_in_sets_with_conditions;
+    }
+
+    run() {
+
     }
 
     static default() {

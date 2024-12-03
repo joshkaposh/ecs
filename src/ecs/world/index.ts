@@ -1,4 +1,4 @@
-import { ExactSizeDoubleEndedIterator, ExactSizeIterator, Iterator, from_fn, iter, once } from "joshkaposh-iterator";
+import { ExactSizeDoubleEndedIterator, ExactSizeIterator, Iterator, done, from_fn, iter, once } from "joshkaposh-iterator";
 import { TODO } from "joshkaposh-iterator/src/util";
 import { Err, Option, Result, is_error, is_none, is_some, ErrorExt } from 'joshkaposh-option';
 import { UNIT, Unit } from '../../util';
@@ -7,13 +7,14 @@ import { Component, ComponentId, ComponentInfo, Components, Resource, TypeId } f
 import { Storages } from "../storage";
 import { AllocAtWithoutReplacement, Entities, Entity, EntityLocation } from "../entity";
 import { Bundle, BundleInserter, Bundles, DynamicBundle } from "../bundle";
-import { QueryData, QueryEntityError, QueryFilter, QueryState } from "../query";
+import { QueryData, QueryEntityError, QueryFilter, QueryState, WorldQuery } from "../query";
 import { RemovedComponentEvents } from "../removal-detection";
 import { Event, EventId, Events, SendBatchIds } from "../event";
 import { Schedule, ScheduleLabel, Schedules } from "../schedule";
 import { EntityRef, EntityMut, EntityWorldMut } from './entity-ref'
 import { SpawnBatchIter } from "./spawn-batch";
 import { UnsafeEntityCell } from "./unsafe-world-cell";
+import { System } from "../system";
 
 export { EntityRef, EntityWorldMut, EntityMut }
 
@@ -33,15 +34,26 @@ export class World {
     #bundles: Bundles;
     #removed_components: RemovedComponentEvents;
     // #archetype_component_access: ArchetypeComponentAccess
+    #schedules: Schedules;
 
-    private constructor(id: number, entities: Entities, components: Components, archetypes: Archetypes, storages: Storages, bundles: Bundles, removed_components: RemovedComponentEvents) {
-        this.#id = id; // WorldId.new().expect("...")
+    constructor(
+        id: number = 0,
+        entities: Entities = new Entities(),
+        components: Components = Components.default(),
+        archetypes: Archetypes = new Archetypes(),
+        storages: Storages = new Storages(),
+        bundles: Bundles = new Bundles(),
+        removed_components: RemovedComponentEvents = RemovedComponentEvents.default(),
+        schedules: Schedules = new Schedules()
+    ) {
+        this.#id = id;
         this.#entities = entities;
         this.#components = components;
         this.#archetypes = archetypes;
         this.#storage = storages;
         this.#bundles = bundles;
         this.#removed_components = removed_components;
+        this.#schedules = schedules
     }
 
     static default() {
@@ -51,7 +63,8 @@ export class World {
             new Archetypes(),
             Storages.default(),
             new Bundles(),
-            RemovedComponentEvents.default()
+            RemovedComponentEvents.default(),
+            new Schedules()
         )
     }
 
@@ -77,6 +90,10 @@ export class World {
 
     bundles(): Bundles {
         return this.#bundles;
+    }
+
+    schedules(): Schedules {
+        return this.#schedules
     }
 
     removed_components(): RemovedComponentEvents {
@@ -252,11 +269,12 @@ export class World {
         return new EntityWorldMut(this, entity, location);
     }
 
+    // @ts-expect-error
     get_many_entities_mut(entities: Entity[]): Result<EntityWorldMut[], QueryEntityError> {
         for (let i = 0; i < entities.length; i++) {
             for (let j = 0; j < i; j++) {
                 if (`${entities[i]}` === `${entities[j]}`) {
-                    return QueryEntityError.AliasedMutability(entities[i])
+                    return QueryEntityError.AliasedMutability(entities[i]) as any
                 }
             }
         }
@@ -265,18 +283,41 @@ export class World {
         return this.#get_entities_mut_unchecked(entities);
     }
 
-
+    // @ts-expect-error
     #get_entities_mut_unchecked(entities: Entity[]): Result<EntityWorldMut[], QueryEntityError> {
         const refs: EntityWorldMut[] = []
         const w = this;
         for (let i = 0; i < entities.length; i++) {
             const ref = w.get_entity_mut(entities[i]);
             if (!ref) {
-                return QueryEntityError.NoSuchEntity(entities[i])
+                return QueryEntityError.NoSuchEntity(entities[i]) as any
             }
             refs.push(ref);
         }
         return refs;
+    }
+
+    run() {
+        for (const [_, schedule] of this.#schedules.iter()) {
+            schedule.run(this);
+        }
+    }
+
+    add_schedule(schedule: Schedule): Option<Schedule> {
+        return this.#schedules.insert(schedule)
+    }
+
+    get_schedule(label: ScheduleLabel) {
+        return this.#schedules.get(label);
+    }
+
+    add_systems(label: ScheduleLabel | Schedule, systems: System[]) {
+        label = label instanceof Schedule ? label.label() : label
+        const schedule = this.#schedules.get(label)
+        if (!schedule) {
+            throw new Error('Cannot add systems to non-existing Schedule' + label)
+        }
+        schedule.add_systems(systems)
     }
 
     spawn_empty() {
@@ -348,13 +389,13 @@ export class World {
         return false;
     }
 
-    query<const D extends QueryData<{}>>(data: D): QueryState<D, QueryFilter<Unit>> {
-        // @ts-expect-error
-        return this.query_filtered(data, UNIT);
+    query<const D extends Component[]>(data: D): QueryState<QueryData, QueryFilter> {
+        return this.query_filtered(data, []) as QueryState<any, any>;
     }
 
-    query_filtered<const D extends QueryData<{}>, const F extends QueryFilter<{}>>(data: D, filter: F): QueryState<D, F> {
-        return QueryState.new(this, data, filter as any);
+    query_filtered<const D extends Component[], const F extends Component[]>(data: D, filter: F): QueryState<QueryData, QueryFilter> {
+        // @ts-expect-error
+        return QueryState.new(data, filter, this) as QueryState<D, F>;
     }
 
     removed(type: Component) {
@@ -365,7 +406,7 @@ export class World {
                 .flatten()
         }
 
-        return from_fn(() => { })
+        return from_fn(() => { return done() })
     }
 
     removed_with_id(component_id: ComponentId): Iterator<any> {
@@ -376,11 +417,10 @@ export class World {
                 .into_iter()
                 .flatten()
                 // TODO
-                // @ts-expect-error
-                .map(e => e.into())
+                .map(e => e)
         }
 
-        return from_fn(() => { })
+        return from_fn(() => { return done() })
     }
 
     insert_resource(resource: Resource<Component>): void {

@@ -4,7 +4,7 @@ import { capacity, reserve, swap_remove, swap_remove_unchecked } from "../../arr
 import { ComponentId, ComponentInfo, Components } from "../component";
 import { SparseSet } from "./sparse-set";
 import { Entity } from "../entity";
-import { TODO } from "joshkaposh-iterator/src/util";
+import { split_at, TODO } from "joshkaposh-iterator/src/util";
 import { u32 } from "../../Intrinsics";
 
 export type TableId = number;
@@ -48,6 +48,10 @@ export class Column {
         } else {
             return null;
         }
+    }
+
+    get_data_slice(len: number) {
+        return this.data.slice(0, len);
     }
 
     get_data_unchecked(row: TableRow) {
@@ -114,6 +118,10 @@ export class Table {
 
     get_column(component_id: ComponentId): Option<Column> {
         return this.#columns.get(component_id);
+    }
+
+    get_data_slice_for(component_id: ComponentId) {
+        return this.get_column(component_id)?.get_data_slice(this.entity_count())
     }
 
     has_column(component_id: ComponentId) {
@@ -294,7 +302,7 @@ export class Tables {
     #tables: Table[];
     #table_ids: Map<ComponentId[], TableId>;
 
-    constructor(tables: Table[], table_ids: Map<ComponentId[], TableId>) {
+    constructor(tables: Table[] = [], table_ids: Map<ComponentId[], TableId> = new Map()) {
         this.#tables = tables;
         this.#table_ids = table_ids;
     }
@@ -319,12 +327,11 @@ export class Tables {
     __get_2(a: TableId, b: TableId) {
         if (a < b) {
             // let (b_slice, a_slice) = self.tables.split_at_mut(a);
-            const [b_slice, a_slice] = TODO<[Table[], Table[]]>()
+            const [b_slice, a_slice] = split_at(this.#tables, a) ?? [[], []];
             return [a_slice[0], b_slice[b]] as const;
         } else {
             // let (b_slice, a_slice) = self.tables.split_at_mut(b);
-            const [a_slice, b_slice] = TODO<[Table[], Table[]]>()
-
+            const [a_slice, b_slice] = split_at(this.#tables, b) ?? [[], []];
             return [a_slice[a], b_slice[0]] as const
         }
     }

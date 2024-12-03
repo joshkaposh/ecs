@@ -215,7 +215,6 @@ export class SparseSet<I extends number, V> {
                 this.#sparse.insert(swapped_index, dense_index)
                 // let mut = this.#sparse.get(swapped_index);
                 // mut = dense_index;
-                // console.warn('fix SparseSet::remove')
             }
             return value;
         } else {
@@ -289,7 +288,6 @@ export class SparseSets {
         }
 
         return this.#sets.get(component_info.id())!;
-        // return this.#sets.get_mut(component_info.id());
     }
 
     __clear_entities() {

@@ -29,9 +29,6 @@ test('bundle', () => {
     const arch1 = e2.archetype();
 
     assert(arch0.id() !== arch1.id());
-    console.log(arch0.table_id(), arch1.table_id());
-
-    // console.log('arch0 entities len', arch0.entities().length);
 
     for (const archent of arch0.entities()) {
         const ent = w.get_entity(archent.id())!;
@@ -76,6 +73,5 @@ test('bundle', () => {
     for (const archent of arch0.entities()) {
         const ent = w.get_entity(archent.id())!;
         const compA = ent.get(A as Component<A>)!;
-        console.log(compA.value);
     }
 })

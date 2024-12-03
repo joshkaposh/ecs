@@ -3,11 +3,13 @@ import { is_some, type Option } from 'joshkaposh-option';
 import { StorageType, Storages } from "./storage";
 import { World } from "./world";
 
+export type Class<Inst = any> = new (...args: any[]) => Inst;
+
 export type TypeId = { readonly type_id: UUID }
 export type ComponentMetadata = TypeId & { readonly storage_type: StorageType };
 export type ComponentId = number;
-export type Component<T = any> = (new (...args: any[]) => T) & ComponentMetadata;
-
+export type Component<T = any> = (Class<T>) & ComponentMetadata;
+export type UninitComonent<T = any> = (new (...args: any[]) => T)
 
 export type ResourceId = number;
 export type ResouceMetadata<R extends new (...args: any[]) => any> = { from_world(world: World): InstanceType<R> };

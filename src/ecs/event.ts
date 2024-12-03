@@ -1,4 +1,4 @@
-import { DoubleEndedIterator, ExactSizeIterator, Iterator, done, drain, iter, iter_item, range } from "joshkaposh-iterator";
+import { DoubleEndedIterator, ExactSizeIterator, Iterator, done, drain, iter, item, range } from "joshkaposh-iterator";
 import { Option, is_none, is_some } from 'joshkaposh-option';
 import { extend } from "../array-helpers";
 import { u32 } from "../Intrinsics";
@@ -30,19 +30,18 @@ export class ManualEventReader<E extends Event> {
         this.__last_event_count = last_event_count;
     }
 
-    read(events: Events<E>): EventIterator<E> {
+    read(events: Events<E>): EventIterator<InstanceType<E>> {
         return this.read_with_id(events).without_id();
     }
 
-    read_with_id(events: Events<E>): EventIteratorWithId<E> {
-        return new EventIteratorWithId(this, events);
+    read_with_id(events: Events<E>): EventIteratorWithId<InstanceType<E>> {
+        return new EventIteratorWithId(this, events) as EventIteratorWithId<InstanceType<E>>;
     }
 
     len(events: Events<E>): number {
         const ec = events.event_count;
         const lec = this.__last_event_count;
         const evl = events.len();
-        console.log('event_count: %d, last_event_count: %d, events.len() %d, result: %d', ec, lec, evl, Math.min(u32.saturating_sub(events.event_count, this.__last_event_count), events.len()));
 
         return Math.min(u32.saturating_sub(events.event_count, this.__last_event_count), events.len());
     }
@@ -234,7 +233,6 @@ export class Events<E extends new (...args: any[]) => any> {
 
         const iter = drain(this.#events_b.events, range(0, this.#events_b.events.length))
         this.#events_b.start_event_count = this.#event_count;
-        // @ts-expect-error
         return iter.map(e => e.event);
     }
 
@@ -299,7 +297,6 @@ export class Events<E extends new (...args: any[]) => any> {
 
         return drain(this.#events_a.events, range(0, this.#events_a.events.length))
             .chain(drain(this.#events_b.events, range(0, this.#events_b.events.length)))
-            // @ts-expect-error
             .map(i => i.event);
     }
 
@@ -357,9 +354,9 @@ export class EventIterator<E extends Event> extends ExactSizeIterator<E> {
         return this;
     }
 
-    next(): IteratorResult<E, any> {
+    next(): IteratorResult<InstanceType<E>, any> {
         const n = this.#iter.next();
-        return n.done ? done() : iter_item(n.value[0]);
+        return n.done ? done() : item(n.value[0] as InstanceType<E>);
     }
 
     size_hint(): [number, number] {
@@ -372,7 +369,7 @@ export class EventIterator<E extends Event> extends ExactSizeIterator<E> {
 
     nth(n: number): IteratorResult<E, any> {
         const el = this.#iter.nth(n);
-        return el.done ? done() : iter_item(el.value[0]);
+        return el.done ? done() : item(el.value[0]);
     }
 
     len(): number {
@@ -412,10 +409,10 @@ export class EventIteratorWithId<E extends Event> extends ExactSizeIterator<[E, 
         const n = this.#chain.next();
 
         if (!n.done) {
-            const item = [n.value.event, n.value.event_id] as [E, number];
+            const elt = [n.value.event, n.value.event_id] as [E, number];
             this.#reader.__last_event_count += 1;
             this.#unread -= 1;
-            return iter_item(item);
+            return item(elt);
         }
 
         return done()
@@ -440,7 +437,7 @@ export class EventIteratorWithId<E extends Event> extends ExactSizeIterator<[E, 
             const { event_id, event } = next.value;
             this.#reader.__last_event_count += n + 1;
             this.#unread -= n + 1;
-            return iter_item([event, event_id] as [E, number])
+            return item([event, event_id] as [E, number])
         } else {
             this.#reader.__last_event_count += this.#unread;
             this.#unread = 0;
@@ -472,6 +469,6 @@ export class SendBatchIds<E extends Event> extends ExactSizeIterator<EventId<E>>
 
         this.#last_count += 1;
 
-        return iter_item(result);
+        return item(result);
     }
 }

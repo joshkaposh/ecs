@@ -1,6 +1,7 @@
 import { assert, test } from 'vitest'
-import { World, StorageType, Component, Resource, define_component, define_resource } from '../src/ecs'
-import { iter, once } from 'joshkaposh-iterator'
+import { World, StorageType, Component, Resource, define_component, define_resource, System, Condition } from '../src/ecs'
+import { iter, once, range } from 'joshkaposh-iterator'
+import { Schedule } from '../src/ecs/schedule'
 
 class A { constructor(public value = 'A') { } }
 define_component(A)
@@ -18,14 +19,23 @@ define_component(Marker, StorageType.SparseSet);
 class Counter { }
 define_resource(Counter);
 
-function spawn(count: number) {
-    const comps: any[] = [];
-    for (let i = 0; i < count; i++) {
-        comps.push([new A(), new B(), new C()],)
-    }
-    return comps
-}
+function count() { }
 
+// const Count = define_system(count, () => [] as [])
+// const sysA = define_system(function sysA() { }, () => [] as [])
+// const sysB = define_system(function sysB() { }, () => [] as [])
+// const sysC = define_system(function sysC() { }, () => [] as [])
+let times = 0
+// const RandBool = define_condition(function rand_bool(random: () => number) {
+//     return random() >= 0.5;
+// }, () => {
+//     times += 1
+//     console.log('ran ' + times);
+
+//     return [Math.random()] as any
+// })
+
+const Update = new Schedule('Update')
 test('world', () => {
     const w = World.default();
 
@@ -43,5 +53,4 @@ test('world', () => {
         w.spawn([new A(), new B(), new C()])
     }
     assert(w.entities().total_count() === 200)
-    // w.spawn_batch(spawn(10))
 })

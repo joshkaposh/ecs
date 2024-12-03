@@ -1,4 +1,4 @@
-import { ExactSizeDoubleEndedIterator, Iterator, Range, done, drain, iter, iter_item, range } from "joshkaposh-iterator";
+import { ExactSizeDoubleEndedIterator, Iterator, Range, done, drain, iter, item, range } from "joshkaposh-iterator";
 import { TODO, assert, resize } from "joshkaposh-iterator/src/util";
 import { Err, ErrorExt, Option, Result, is_error, is_some } from 'joshkaposh-option';
 import { ArchetypeId, ArchetypeRow } from "./archetype";
@@ -201,10 +201,10 @@ class ReserveEntitiesIterator extends Iterator<Entity> {
         const n = this.#index_iter.next();
         if (!n.done) {
             const index = n.value;
-            return iter_item(Entity.from_raw_and_generation(index, this.#meta[index].generation))
+            return item(Entity.from_raw_and_generation(index, this.#meta[index].generation))
         } else {
             const n2 = this.#index_range.next();
-            return n2.done ? done() : iter_item(Entity.from_raw(n2.value))
+            return n2.done ? done() : item(Entity.from_raw(n2.value))
         }
     }
 

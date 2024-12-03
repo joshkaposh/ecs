@@ -1,4 +1,4 @@
-import { ExactSizeIterator, done, iter_item } from 'joshkaposh-iterator';
+import { ExactSizeIterator, done, item } from 'joshkaposh-iterator';
 import { Bundle, BundleSpawner, DynamicBundle, Entity, World } from '../index';
 
 export class SpawnBatchIter extends ExactSizeIterator<Entity> {
@@ -34,7 +34,7 @@ export class SpawnBatchIter extends ExactSizeIterator<Entity> {
         if (bundle.done) {
             return done()
         }
-        return iter_item(this.#spawner.spawn(bundle.value));
+        return item(this.#spawner.spawn(bundle.value));
     }
 
     size_hint(): [number, number] {

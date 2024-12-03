@@ -16,7 +16,7 @@ export class Storages {
     readonly sparse_sets: SparseSets;
     readonly resources: Resources;
 
-    constructor(tables: Tables, sparse_sets: SparseSets, resources: Resources) {
+    constructor(tables: Tables = Tables.default(), sparse_sets: SparseSets = new SparseSets(), resources: Resources = new Resources()) {
         this.tables = tables;
         this.sparse_sets = sparse_sets;
         this.resources = resources;
