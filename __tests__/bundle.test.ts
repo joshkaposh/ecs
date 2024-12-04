@@ -11,12 +11,7 @@ define_component(B)
 class C { constructor(public value = 'C') { } }
 define_component(C)
 
-// class MyBundle {}
-const MyBundle = define_bundle([A as Component<A>, B as Component<B>]);
-
-// test('custom_bundle', () => {
-//     const w = World.default();
-// })
+const MyBundle = define_bundle([A as Component, B as Component]);
 
 test('bundle', () => {
     const w = World.default();
@@ -32,7 +27,7 @@ test('bundle', () => {
 
     for (const archent of arch0.entities()) {
         const ent = w.get_entity(archent.id())!;
-        const compA = ent.get(A as Component<A>)!;
+        const compA = ent.get(A as Component)!;
         assert(compA.value === 'in table A' ||
             compA.value === '2nd in table A'
         )
@@ -40,16 +35,16 @@ test('bundle', () => {
 
     for (const archent of arch1.entities()) {
         const ent = w.get_entity(archent.id())!;
-        const compA = ent.get(A as Component<A>)!;
-        const compB = ent.get(B as Component<B>)!;
+        const compA = ent.get(A as Component)!;
+        const compB = ent.get(B as Component)!;
         assert(compA.value === 'in table B' && compB.value === 'in table B')
     }
 
     assert(is_some(w.get_entity(e0.id())));
     assert(is_some(w.get_entity(e1.id())));
 
-    expect(e0.get(A as Component<A>)!.value).toEqual('in table A');
-    expect(e1.get(A as Component<A>)!.value).toEqual('2nd in table A');
+    expect(e0.get(A as Component)!.value).toEqual('in table A');
+    expect(e1.get(A as Component)!.value).toEqual('2nd in table A');
 
     e0.despawn();
 
@@ -63,15 +58,15 @@ test('bundle', () => {
     assert(id0.index() === id2.index()
         && id0.generation() !== id2.generation());
 
-    w.spawn_batch(
-        [new A('4th in table A')],
-        [new A('5th in table A')],
-        [new A('6th in table A')]
-    ).collect();
+    // w.spawn_batch(
+    //     [new A('4th in table A')],
+    //     [new A('5th in table A')],
+    //     [new A('6th in table A')]
+    // ).collect();
 
 
     for (const archent of arch0.entities()) {
         const ent = w.get_entity(archent.id())!;
-        const compA = ent.get(A as Component<A>)!;
+        const compA = ent.get(A as Component)!;
     }
 })

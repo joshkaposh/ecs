@@ -1,5 +1,5 @@
 import { FixedBitSet } from "fixed-bit-set";
-import { Archetype, ArchetypeGeneration, ArchetypeId, ComponentId, Entity, QueryData, QueryComponents, QueryFilter, QueryIter, World, QueryComponentsFilter, QueryComponentsData } from "..";
+import { Archetype, ArchetypeGeneration, ArchetypeId, ComponentId, Entity, QueryData, QueryFilter, QueryIter, World, QueryComponentsFilter, QueryComponentsData } from "..";
 import { TableId } from "../storage/table";
 import { FilteredAccess } from "./access";
 import { ErrorExt, is_some } from "joshkaposh-option";
@@ -11,7 +11,6 @@ export type StorageIdArchetype = {
     archetype_id: ArchetypeId;
 }
 export type StorageId = StorageIdTable | StorageIdArchetype
-
 
 export class QueryState<D extends QueryData<any, any, any>, F extends QueryFilter<any, any, any>> {
 
@@ -56,7 +55,6 @@ export class QueryState<D extends QueryData<any, any, any>, F extends QueryFilte
     }
 
     static new<D extends QueryData, F extends QueryFilter>(data: D, filter: F, world: World): QueryState<D, F> {
-
         const D = new QueryComponentsData(data as any);
         const F = new QueryComponentsFilter(filter as any);
 

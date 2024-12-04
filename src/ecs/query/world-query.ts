@@ -19,7 +19,6 @@ export abstract class WorldQuery<Item, Fetch = Unit, State = Unit> {
     __fetch!: Fetch;
     __state!: State;
 
-
     abstract readonly IS_DENSE: boolean;
 
     abstract init_fetch(world: World, state: State): Fetch;

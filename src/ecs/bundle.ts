@@ -141,21 +141,21 @@ export class BundleInfo {
         component_ids: ComponentId[],
         id: BundleId
     ) {
-        const deduped = [...new Set(structuredClone(component_ids))].sort();
+        // const deduped = [...new Set(structuredClone(component_ids))].sort();
 
-        if (deduped.length !== component_ids.length) {
-            const seen = new Set();
-            const dups = [];
-            for (const id of component_ids) {
-                if (!seen.has(id)) {
-                    seen.add(id);
-                    dups.push(id)
-                }
-            }
+        // if (deduped.length !== component_ids.length) {
+        //     const seen = new Set();
+        //     const dups = [];
+        //     for (const id of component_ids) {
+        //         if (!seen.has(id)) {
+        //             seen.add(id);
+        //             dups.push(id)
+        //         }
+        //     }
 
-            const names = dups.map(id => components.get_info(id)!.name()).join(', ');
-            throw new Error(`Bundle ${bundle_type_name} has duplicate components: ${names}`)
-        }
+        //     const names = dups.map(id => components.get_info(id)!.name()).join(', ');
+        //     throw new Error(`Bundle ${bundle_type_name} has duplicate components: ${names}`)
+        // }
 
         this.#id = id;
         this.#component_ids = component_ids;

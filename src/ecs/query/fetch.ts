@@ -1,17 +1,13 @@
 import type { Option } from "joshkaposh-option";
-import { Archetype, Component, ComponentId, Components, EntityRef, FilteredAccess, StorageType, World } from "..";
+import { Archetype, Component, ComponentId, Components, EntityRef, FilteredAccess, is_component, StorageType, UnsafeEntityCell, World } from "..";
 import { UNIT, Unit } from "../../util";
 import { Entity } from "../entity";
-import { Table } from "../storage/table";
-import { is_dense, WorldQuery } from "./world-query";
+import { Table, TableRow } from "../storage/table";
+import { is_dense, QueryData, WorldQuery } from "./world-query";
 import { assert } from "joshkaposh-iterator/src/util";
 import { ComponentSparseSet } from "../storage/sparse-set";
 
-export class WorldQueryEntity extends WorldQuery<Entity, Unit, Unit> {
-    constructor() {
-        super()
-    }
-
+export class QueryEntity extends WorldQuery<Entity, Unit, Unit> {
     readonly IS_DENSE = true;
 
     init_fetch(_world: World, _state: typeof UNIT): typeof UNIT {
@@ -42,10 +38,11 @@ export class WorldQueryEntity extends WorldQuery<Entity, Unit, Unit> {
     }
 }
 
-export class WorldQueryEntityRef extends WorldQuery<EntityRef, World, Unit> {
+export class QueryEntityRef extends WorldQuery<EntityRef, World, Unit> {
     IS_DENSE = true;
 
     init_fetch(world: World, _state: Unit): World {
+        this.__fetch = world;
         return world
     }
 
@@ -53,8 +50,8 @@ export class WorldQueryEntityRef extends WorldQuery<EntityRef, World, Unit> {
 
     set_table(_fetch: World, _state: typeof UNIT, _table: Table): void { }
 
-    fetch(fetch: World, entity: Entity, _table_row: number): EntityRef {
-        return fetch.get_entity(entity)!
+    fetch(world: World, entity: Entity, _table_row: number): EntityRef {
+        return world.get_entity(entity)!;
     }
 
     update_component_access(_state: Unit, access: FilteredAccess<ComponentId>): void {
@@ -109,24 +106,83 @@ export class StorageSwitch<C extends Component> {
     }
 }
 
-export class ReadFetch<T extends Component> {
+class ReadFetch<T extends Component> {
     __components: StorageSwitch<T>;
     constructor(components: StorageSwitch<T>) {
         this.__components = components;
     }
-
 };
 
-// @ts-expect-error
-export class QueryComponent<T extends Component> extends WorldQuery<T, ReadFetch<T>, ComponentId> {
-    #ty: Component;
+type OptionFetch<T extends WorldQuery<any, any, any>> = {
+    __option_fetch: T['__fetch'];
+    __matches: boolean;
+}
+
+class QueryComponentMaybe<T extends WorldQuery<any, any, any>> extends WorldQuery<Option<T['__item']>, OptionFetch<T>, T['__state']> {
+    #T: T
+    IS_DENSE: boolean;
     constructor(component: Component) {
         super()
-        // @ts-expect-error
+        const qc = new QueryComponent(component) as any;
+        this.#T = qc;
+        this.IS_DENSE = qc.IS_DENSE
+
+    }
+
+    init_fetch(world: World, state: any): any {
+        return {
+            __option_fetch: this.#T.init_fetch(world, state),
+            __matches: false
+        } satisfies OptionFetch<T>;
+    }
+
+    set_archetype(fetch: any, state: any, archetype: Archetype, table: Table): void {
+        fetch.__matches = this.#T.matches_component_set(state, id => archetype.contains(id));
+        if (fetch.__matches) {
+            this.#T.set_archetype(fetch.__option_fetch, state, archetype, table)
+        }
+    }
+
+    set_table(fetch: any, state: any, table: Table): void {
+        fetch.__matches = this.#T.matches_component_set(state, id => table.has_column(id))
+        if (fetch.__matches) {
+            this.#T.set_table(fetch.__option_fetch, state, table)
+        }
+    }
+
+    fetch(fetch: any, entity: Entity, table_row: TableRow) {
+        if (fetch.__matches) {
+            return this.#T.fetch(fetch.__option_fetch, entity, table_row)
+        }
+    }
+
+    update_component_access(state: typeof UNIT, access: FilteredAccess<ComponentId>): void {
+        const intermediate = access.clone();
+        this.#T.update_component_access(state, intermediate);
+        access.extend_access(intermediate);
+    }
+
+    init_state(world: World) {
+        return this.#T.init_state(world);
+    }
+
+    get_state(components: Components): Option<typeof UNIT> {
+        return this.#T.get_state(components)
+    }
+
+    matches_component_set(_state: any, _set_contains_id: (component_id: ComponentId) => boolean): boolean {
+        return true
+    }
+}
+
+export class QueryComponent<T extends Component> extends WorldQuery<T, ReadFetch<T>, ComponentId> {
+    #ty: Component;
+    readonly IS_DENSE: boolean;
+    constructor(component: Component) {
+        super()
         this.IS_DENSE = is_dense(component);
         this.#ty = component;
     }
-
 
     init_fetch(world: World, component_id: number) {
         const fetch = new ReadFetch(
@@ -135,6 +191,7 @@ export class QueryComponent<T extends Component> extends WorldQuery<T, ReadFetch
 
         this.__fetch = fetch;
         return fetch
+
     }
 
     set_archetype(fetch: ReadFetch<T>, component_id: number, _archetype: Archetype, table: Table): void {
@@ -149,7 +206,7 @@ export class QueryComponent<T extends Component> extends WorldQuery<T, ReadFetch
 
     fetch(fetch: ReadFetch<T>, entity: Entity, table_row: number): T {
         return fetch.__components.extract(
-            (table) => table.get_data_slice_for(table_row) as unknown as Component,
+            (table) => table.get_column(this.__state)!.get_data(table_row) as unknown as Component,
             (sparse_set) => sparse_set.get(entity)
         ) as T
     }
@@ -174,13 +231,49 @@ export class QueryComponent<T extends Component> extends WorldQuery<T, ReadFetch
     }
 }
 
-export class QueryComponentsData<T extends Component[]> extends WorldQuery<any, any, any> {
-    #data: T
-    #queries: QueryComponent<Component>[]
-    constructor(data: T) {
+export function EntRef() {
+    return new QueryEntityRef();
+}
+
+export function Ent() {
+    return new QueryEntity();
+}
+
+export function Maybe<T extends Component>(component: T) {
+    const qc = new QueryComponentMaybe(component);
+    return qc;
+}
+
+/**
+ * 
+ * query([A, B])
+ * query([A, B], [Without(C)])
+ * query([Entity, A, B], [Without(C)])
+ * 
+ * 
+ * 
+ */
+
+function to_query_data(ty: any): QueryData<any, any, any> {
+    if (ty instanceof WorldQuery) {
+        return ty
+    }
+
+    return new QueryComponent(ty);
+}
+
+function evaluate_query_data(data: any[]) {
+    return data.map(c => to_query_data(c))
+}
+
+export class QueryComponentsData extends WorldQuery<any, any, any> {
+    #data: any[]
+    #queries: QueryData<any, any, any>[]
+    constructor(data: any[]) {
         super()
         this.#data = data;
-        this.#queries = data.map(c => new QueryComponent(c));
+        this.#queries = evaluate_query_data(data);
+
         this.IS_DENSE = data.every(c => is_dense(c));
     }
 
@@ -192,18 +285,19 @@ export class QueryComponentsData<T extends Component[]> extends WorldQuery<any, 
         return f
     }
 
-    set_archetype(_fetch: any, _state: any, _archetype: Archetype, _table: Table): void {
-        for (let i = 0; i < _fetch.length; i++) {
-            const name = _fetch[i];
+    set_archetype(fetch: any, _state: any, _archetype: Archetype, table: Table): void {
+        for (let i = 0; i < fetch.length; i++) {
+            const name = this.#queries[i];
             const state = _state[i];
-            _fetch[i] = name.matches_component_set(state, (id: any) => _archetype.contains(id))
-            if (_fetch[i]) {
-                name.set_archetype(_fetch[i], state, _archetype, _table)
+            const should_set_archetype = name.matches_component_set(state, (id: any) => _archetype.contains(id))
+            if (should_set_archetype) {
+                name.set_archetype(fetch[i], state, _archetype, table)
             }
         }
     }
 
     set_table(_fetch: any, _state: any, _table: Table): void {
+
         for (let i = 0; i < _fetch.length; i++) {
             const name = this.#queries[i];
             const state = _state[i];
@@ -214,12 +308,8 @@ export class QueryComponentsData<T extends Component[]> extends WorldQuery<any, 
     fetch(_fetch: any, _entity: Entity, _table_row: number): any[] {
         const items: any[] = [];
         for (let i = 0; i < _fetch.length; i++) {
-            const name = _fetch[i] as ReadFetch<Component>;
-            const state = this.__state[i]
-            items.push(name.__components.extract(
-                table => table.get_column(state)!.get_data(_table_row)!,
-                sparse_set => sparse_set.get(_entity)!
-            ))
+            const name = this.#queries[i]
+            items.push(name.fetch(_fetch[i], _entity, _table_row))
         }
         return items
     }

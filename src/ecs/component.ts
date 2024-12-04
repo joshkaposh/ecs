@@ -2,18 +2,103 @@ import { iter } from "joshkaposh-iterator";
 import { is_some, type Option } from 'joshkaposh-option';
 import { StorageType, Storages } from "./storage";
 import { World } from "./world";
+import { u32 } from "../Intrinsics";
 
-export type Class<Inst = any> = new (...args: any[]) => Inst;
+export type Class<Static = {}, Inst = {}> = (new (...args: any[]) => Inst) & Static;
 
 export type TypeId = { readonly type_id: UUID }
 export type ComponentMetadata = TypeId & { readonly storage_type: StorageType };
 export type ComponentId = number;
-export type Component<T = any> = (Class<T>) & ComponentMetadata;
+export type ComponentType<T extends new (...args: any[]) => any> = T extends Component ? T : never;
+export type Component = (new (...args: any[]) => any) & ComponentMetadata;
 export type UninitComonent<T = any> = (new (...args: any[]) => T)
 
 export type ResourceId = number;
 export type ResouceMetadata<R extends new (...args: any[]) => any> = { from_world(world: World): InstanceType<R> };
-export type Resource<R = Component> = R extends Component ? R & ResouceMetadata<R> : never;
+export type Resource<R = Component> = R extends Component ? R & ComponentMetadata & ResouceMetadata<R> : never;
+
+export function is_component(ty: any): ty is Component {
+    return ty && typeof ty === 'object' && ty.type_id
+}
+
+export const MAX_CHANGE_AGE = u32.MAX;
+
+export class Tick {
+    #tick: number;
+    static MAX = new Tick(MAX_CHANGE_AGE)
+    constructor(tick: number) {
+        this.#tick = tick;
+    }
+
+    get() {
+        return this.#tick
+    }
+
+    set(tick: number) {
+        this.#tick = tick;
+    }
+
+    is_newer_than(last_run: Tick, this_run: Tick) {
+        const ticks_since_insert = Math.min(this_run.relative_to(this).#tick, MAX_CHANGE_AGE);
+        const ticks_since_system = Math.min(this_run.relative_to(last_run).#tick, MAX_CHANGE_AGE);
+
+        return ticks_since_system > ticks_since_insert;
+    }
+
+    relative_to(other: Tick) {
+        const tick = u32.wrapping_sub(this.#tick, other.#tick);
+        return new Tick(tick);
+    }
+
+    check_tick(tick: Tick): boolean {
+        const age = tick.relative_to(this);
+        if (age.get() > Tick.MAX.get()) {
+            this.#tick = tick.relative_to(Tick.MAX).#tick;
+            return true;
+        } else {
+            return false;
+        }
+    }
+}
+
+export class ComponentTicks {
+    added: Tick;
+    changed: Tick;
+
+    constructor(added: Tick, changed: Tick) {
+        this.added = added;
+        this.changed = changed;
+    }
+
+    static new(change_tick: Tick) {
+        return new ComponentTicks(change_tick, change_tick)
+    }
+
+    static default() {
+        return ComponentTicks.new(new Tick(0))
+    }
+
+    read(): ComponentTicks {
+        return new ComponentTicks(
+            this.added,
+            this.changed
+        )
+    }
+
+    is_added(last_run: Tick, this_run: Tick) {
+        return this.added.is_newer_than(last_run, this_run);
+    }
+
+
+    is_changed(last_run: Tick, this_run: Tick) {
+        return this.changed.is_newer_than(last_run, this_run);
+    }
+
+    set_changed(change_tick: Tick) {
+        this.changed = change_tick;
+    }
+}
+
 
 export type ComponentDescriptor = {
     readonly type: Component;

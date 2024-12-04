@@ -1,6 +1,6 @@
 import { once, iter, Iterator } from "joshkaposh-iterator";
 import { type Option, type Result, is_some, ErrorExt } from "joshkaposh-option";
-import { TODO, assert } from "joshkaposh-iterator/src/util";
+import { assert } from "joshkaposh-iterator/src/util";
 import { StorageType, Storages } from "../storage";
 import { type Component } from "../component";
 import { World } from ".";
@@ -318,7 +318,6 @@ export class EntityWorldMut {
 
         const bundle_info = this.#world.bundles().__init_info(bundle, components, storages);
         const old_location = this.#location;
-        TODO('EntityWordMut::take')
         const new_archetype_id = remove_bundle_from_archetype(
             archetypes,
             storages,
@@ -330,8 +329,6 @@ export class EntityWorldMut {
         if (!is_some(new_archetype_id)) {
             return null
         }
-
-        // ...
 
         if (new_archetype_id == old_location.archetype_id) {
             return null;

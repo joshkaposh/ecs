@@ -1,7 +1,7 @@
 import { iter } from "joshkaposh-iterator";
 import { Option, is_some } from 'joshkaposh-option'
 import { capacity, reserve, swap_remove, swap_remove_unchecked } from "../../array-helpers";
-import { ComponentId, ComponentInfo, Components } from "../component";
+import { ComponentId, ComponentInfo, Components, ComponentTicks, Tick } from "../component";
 import { SparseSet } from "./sparse-set";
 import { Entity } from "../entity";
 import { split_at, TODO } from "joshkaposh-iterator/src/util";
@@ -73,7 +73,6 @@ export class Column {
         }
 
         this.data[index] = data
-        // this.data
     }
 
     __swap_remove_unchecked(row: TableRow) {
@@ -92,6 +91,91 @@ export class Column {
 
     __push(ptr: {}) {
         this.data.push(ptr);
+    }
+
+    __reserve_exact(additional: number) {
+        reserve(this.data, additional);
+    }
+}
+
+type Data = [{}, ComponentTicks]
+export class Column2 {
+    data: Data[]
+    constructor(data: Data[]) {
+        this.data = data;
+    }
+
+    static with_capacity(_component_info: ComponentInfo, _capacity: number) {
+        return new Column([]);
+    }
+
+    clear() {
+        this.data.length = 0;
+    }
+
+    get(row: TableRow): Option<{}> {
+        if (row < this.data.length) {
+            return this.data[row][0]
+        } else {
+            return null;
+        }
+    }
+
+    get_data(row: TableRow): Option<{}> {
+        if (row < this.data.length) {
+            return this.data[row][0];
+        } else {
+            return null;
+        }
+    }
+
+    get_data_and_change_ticks(row: TableRow): Option<Data> {
+        if (row < this.data.length) {
+            return this.data[row];
+        } else {
+            return null;
+        }
+    }
+
+    get_data_slice(len: number) {
+        return this.data.slice(0, len);
+    }
+
+    get_data_unchecked(row: TableRow) {
+        return this.data[row][0]
+    }
+
+    is_empty() {
+        return this.data.length === 0;
+    }
+
+    len() {
+        return this.data.length;
+    }
+
+    __replace(row: TableRow, data: [{}, ComponentTicks]) {
+        const index = row;
+        if (index >= this.len()) {
+            throw new Error(`Column:__replace - Index ${index} cannot exceed ${this.len()}`)
+        }
+
+        this.data[index] = data
+    }
+
+    __swap_remove_unchecked(row: TableRow) {
+        return swap_remove(this.data, row);
+    }
+
+    __initialize_from_unchecked(other: Column, src_row: TableRow, _dst_row: TableRow) {
+        swap_remove(other.data, src_row)
+    }
+
+    __initialize(row: TableRow, data: {}) {
+        this.data[row] = [data, ComponentTicks.default()];
+    }
+
+    __push(ptr: {}) {
+        this.data.push([ptr, ComponentTicks.default()]);
     }
 
     __reserve_exact(additional: number) {

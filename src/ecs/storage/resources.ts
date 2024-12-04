@@ -59,6 +59,10 @@ export class Resources {
         this.#resources = SparseSet.default();
     }
 
+    clear() {
+        this.#resources.clear();
+    }
+
     len(): number {
         return this.#resources.len();
     }
