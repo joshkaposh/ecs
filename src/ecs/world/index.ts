@@ -326,8 +326,7 @@ export class World {
         return this.#spawn_at_empty_internal(entity);
     }
 
-    spawn(bundle: any[] | (Bundle & DynamicBundle)): EntityWorldMut {
-        this.flush();
+    #spawn_post_flush(bundle: any) {
         const entity = this.#entities.alloc();
         if (Array.isArray(bundle)) {
             bundle = Bundles.dynamic_bundle(bundle);
@@ -336,6 +335,11 @@ export class World {
         const spawner = bundle_info.__get_bundle_spawner(this.#entities, this.#archetypes, this.#components, this.#storage);
         const entity_location = spawner.spawn_non_existent(entity, bundle);
         return new EntityWorldMut(this, entity, entity_location);
+    }
+
+    spawn(bundle: any[] | (Bundle & DynamicBundle)): EntityWorldMut {
+        this.flush();
+        return this.#spawn_post_flush(bundle);
     }
 
     #spawn_at_empty_internal(entity: Entity): EntityWorldMut {
@@ -390,12 +394,11 @@ export class World {
     }
 
     query<const D extends Component[]>(data: D): QueryState<QueryData, QueryFilter> {
-        return this.query_filtered(data, []) as QueryState<any, any>;
+        return this.query_filtered(data, []) as QueryState<QueryData, QueryFilter>;
     }
 
     query_filtered<const D extends Component[], const F extends Component[]>(data: D, filter: F): QueryState<QueryData, QueryFilter> {
-        // @ts-expect-error
-        return QueryState.new(data, filter, this) as QueryState<D, F>;
+        return QueryState.new(data as any, filter as any, this) as QueryState<QueryData, QueryFilter>;
     }
 
     removed(type: Component) {

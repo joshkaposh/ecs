@@ -5,9 +5,14 @@ import { Entity } from "../entity";
 import { Table, type TableRow } from "../storage/table";
 import { World } from "../world";
 import { FilteredAccess } from "./access";
-import { Components, type ComponentId } from "../component";
+import { Component, Components, type ComponentId } from "../component";
+import { StorageType } from "../storage";
 
 export type QueryData<Item = Unit, Fetch = Unit, State = Unit> = WorldQuery<Item, Fetch, State>
+
+export function is_dense(ty: Component) {
+    return ty.storage_type === StorageType.Table
+}
 
 export abstract class WorldQuery<Item, Fetch = Unit, State = Unit> {
     __item!: Item;

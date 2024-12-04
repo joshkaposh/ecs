@@ -1,5 +1,5 @@
 import { FixedBitSet } from "fixed-bit-set";
-import { Archetype, ArchetypeGeneration, ArchetypeId, ComponentId, Entity, QueryData, QueryComponents, QueryFilter, QueryIter, World, QueryComponentsFilter } from "..";
+import { Archetype, ArchetypeGeneration, ArchetypeId, ComponentId, Entity, QueryData, QueryComponents, QueryFilter, QueryIter, World, QueryComponentsFilter, QueryComponentsData } from "..";
 import { TableId } from "../storage/table";
 import { FilteredAccess } from "./access";
 import { ErrorExt, is_some } from "joshkaposh-option";
@@ -57,7 +57,7 @@ export class QueryState<D extends QueryData<any, any, any>, F extends QueryFilte
 
     static new<D extends QueryData, F extends QueryFilter>(data: D, filter: F, world: World): QueryState<D, F> {
 
-        const D = new QueryComponents(data as any);
+        const D = new QueryComponentsData(data as any);
         const F = new QueryComponentsFilter(filter as any);
 
         const state = QueryState.new_uninitialized<D, F>(D as any, F as any, world)
@@ -78,7 +78,7 @@ export class QueryState<D extends QueryData<any, any, any>, F extends QueryFilte
         D.update_component_access(fetch_state, component_access)
 
         const filter_component_access = FilteredAccess.default();
-        // F.update_component_access(filter_state, filter_component_access);
+        F.update_component_access(filter_state, filter_component_access);
 
         component_access.extend(filter_component_access);
 

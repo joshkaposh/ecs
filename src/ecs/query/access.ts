@@ -641,11 +641,16 @@ export class FilteredAccess<T extends SparseSetIndex> {
         )
     }
 
+    set_to_access(access: FilteredAccess<T>) {
+        this.__access = access.__access;
+        this.__filter_sets = access.__filter_sets;
+        this.__required = access.__required;
+    }
+
     clone(): FilteredAccess<T> {
         const sets = Array.from({ length: this.__filter_sets.length }, (_, i) => this.__filter_sets[i].clone());
         return new FilteredAccess<T>(this.__access.clone(), this.__required.clone(), sets)
     }
-
 
     access(): Access<T> {
         return this.__access;

@@ -3,7 +3,7 @@ import { Archetype, Component, ComponentId, Components, EntityRef, FilteredAcces
 import { UNIT, Unit } from "../../util";
 import { Entity } from "../entity";
 import { Table } from "../storage/table";
-import { WorldQuery } from "./world-query";
+import { is_dense, WorldQuery } from "./world-query";
 import { assert } from "joshkaposh-iterator/src/util";
 import { ComponentSparseSet } from "../storage/sparse-set";
 
@@ -103,7 +103,7 @@ export class StorageSwitch<C extends Component> {
     }
 
     set_table(table: Table) {
-        if (this.C.storage_type === StorageType.Table) {
+        if (is_dense(this.C)) {
             this.table = table
         }
     }
@@ -123,7 +123,7 @@ export class QueryComponent<T extends Component> extends WorldQuery<T, ReadFetch
     constructor(component: Component) {
         super()
         // @ts-expect-error
-        this.IS_DENSE = component.storage_type === StorageType.Table;
+        this.IS_DENSE = is_dense(component);
         this.#ty = component;
     }
 
@@ -174,14 +174,14 @@ export class QueryComponent<T extends Component> extends WorldQuery<T, ReadFetch
     }
 }
 
-export class QueryComponents<T extends Component[]> extends WorldQuery<any, any, any> {
+export class QueryComponentsData<T extends Component[]> extends WorldQuery<any, any, any> {
     #data: T
     #queries: QueryComponent<Component>[]
     constructor(data: T) {
         super()
         this.#data = data;
         this.#queries = data.map(c => new QueryComponent(c));
-        this.IS_DENSE = data.every(c => c.storage_type === StorageType.Table);
+        this.IS_DENSE = data.every(c => is_dense(c));
     }
 
     IS_DENSE: boolean;
@@ -196,8 +196,7 @@ export class QueryComponents<T extends Component[]> extends WorldQuery<any, any,
         for (let i = 0; i < _fetch.length; i++) {
             const name = _fetch[i];
             const state = _state[i];
-            // @ts-expect-error
-            _fetch[i] = name.matches_component_set(state, (id) => _archetype.contains(id))
+            _fetch[i] = name.matches_component_set(state, (id: any) => _archetype.contains(id))
             if (_fetch[i]) {
                 name.set_archetype(_fetch[i], state, _archetype, _table)
             }

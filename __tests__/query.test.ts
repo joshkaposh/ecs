@@ -1,11 +1,16 @@
-import { test } from 'vitest'
-import { define_component, World } from '../src/ecs'
+import { assert, test } from 'vitest'
+import { define_component, define_marker, With, Without, World } from '../src/ecs'
+import { is_some } from 'joshkaposh-option'
+is_some
 
-const A = define_component(class A { constructor(public value = 'hello world!') { } })
+class A { constructor(public value = 'hello world!') { } }
+define_component(A)
+class B { constructor(public value = 'getting groovy!') { } }
+define_component(B)
+class C { }
+define_component(C)
 
-const B = define_component(class B { constructor(public value = 'getting groovy!') { } })
-
-const C = define_component(class C { })
+const Blue = define_marker();
 
 test('query', () => {
 
@@ -14,20 +19,44 @@ test('query', () => {
     w.spawn([new A(), new B()])
     w.spawn([new A('second a'), new B('second b')])
 
-    const q = w.query([A, B]);
+    const qab = w.query([A, B]);
+    const qa = w.query([A]);
 
-
-    let it = q.iter(w);
-    console.log(it.next().value);
-    console.log(it.next().value);
-    console.log(it.next().value);
+    assert(qa.iter(w).count() === 2);
 
     w.spawn([new A('third a'), new B('third b')])
+    w.spawn([new A('lonely a')])
 
-    it = q.iter(w);
+    assert(qab.iter(w).count() === 3);
+    assert(qa.iter(w).count() === 4);
 
-    console.log(it.next().value);
-    console.log(it.next().value);
-    console.log(it.next().value);
+})
+
+test('query_with', () => {
+    const w = new World();
+    w.spawn([new A('with_b'), new B()]);
+    w.spawn([new A('with_b'), new B()]);
+    w.spawn([new A()]);
+    w.spawn([new A()]);
+
+    const qa_with_b = w.query_filtered([A], [With(B)]);
+    assert(qa_with_b.iter(w).count() === 2)
+})
+
+test('query_without', () => {
+    const w = new World();
+    w.spawn([new A('with_b'), new B()]);
+    w.spawn([new A('with_b'), new B()]);
+    w.spawn([new A('only a')]);
+    w.spawn([new A('only a')]);
+    w.spawn([new A('with bc'), new B(), new C()]);
+
+    const qa_without_b = w.query_filtered([A], [Without(B)]);
+
+    assert(qa_without_b.iter(w).count() === 2);
+    w.spawn([new A()])
+    w.spawn([new A()])
+    w.spawn([new A()])
+    assert(qa_without_b.iter(w).count() === 5);
 
 })
