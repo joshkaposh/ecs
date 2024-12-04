@@ -100,7 +100,7 @@ export class QueryFilterWith extends QueryFilter<Unit, Unit, ComponentId> {
     }
 
     matches_component_set(id: number, set_contains_id: (component_id: ComponentId) => boolean): boolean {
-        return set_contains_id(id)
+        return !set_contains_id(id)
     }
 
     filter_fetch(_fetch: null, _entity: Entity, _table_row: number): boolean {
@@ -146,21 +146,12 @@ export class QueryFilterWithout extends QueryFilter<Unit, Unit, ComponentId> {
     }
 
     matches_component_set(id: number, set_contains_id: (component_id: ComponentId) => boolean): boolean {
-        return !set_contains_id(id)
+        return set_contains_id(id)
     }
 
     filter_fetch(_fetch: null, _entity: Entity, _table_row: number): boolean {
         return true
     }
-}
-
-
-export function Without<T extends Component>(type: T) {
-    return new QueryFilterWithout(type)
-}
-
-export function With<T extends Component>(type: T) {
-    return new QueryFilterWith(type);
 }
 
 type OrFetch<T extends WorldQuery<any>> = {
@@ -273,18 +264,25 @@ export class QueryComponentsFilter<F extends QueryFilter[]> extends QueryFilter<
             return true;
         }
 
-        for (let i = 0; i < state.length; i++) {
-            const filter = this.#data[i];
-            if (filter.matches_component_set(state[i], set_contains_id)) {
-                return true;
-            };
-        }
+        let matches = false;
 
-        return false
+        for (let i = 0; i < state.length; i++) {
+            // @ts-expect-error
+            matches ^= this.#data[i].matches_component_set(state[i], set_contains_id)
+        }
+        return Boolean(!matches);
     }
 
 
     filter_fetch(fetch: any, entity: Entity, table_row: number): boolean {
         return this.fetch(fetch, entity, table_row);
     }
+}
+
+export function Without<T extends Component>(type: T) {
+    return new QueryFilterWithout(type)
+}
+
+export function With<T extends Component>(type: T) {
+    return new QueryFilterWith(type);
 }
