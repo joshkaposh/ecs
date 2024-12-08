@@ -1,22 +1,7 @@
 import { TODO } from "joshkaposh-iterator/src/util";
-import { App } from "../ecs-app";
+import { App } from "./app";
 import { is_error } from "joshkaposh-option";
 import { v4 } from "uuid";
-
-// type PluginGroup = any;
-// impl<P: PluginGroup> Plugins<PluginGroupMarker> for P {
-//     #[track_caller]
-//     fn add_to_app(self, app: &mut App) {
-//         self.build().finish(app);
-//     }
-// }
-
-// type AppError = any;
-// const AppError = {
-//     DuplicatePlugin(data: any): { plugin_name: string } {
-//         return TODO();
-//     }
-// }
 
 export abstract class Plugin {
 
@@ -33,7 +18,6 @@ export abstract class Plugin {
     finish(_app: App) { }
 
     cleanup(_app: App) { }
-
 
     name(): string {
         return TODO('Plugin::name()')

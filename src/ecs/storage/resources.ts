@@ -1,6 +1,6 @@
 import { Iterator } from "joshkaposh-iterator";
 import { Option, is_some } from "joshkaposh-option";
-import { Component, ComponentId, Components } from "../component";
+import { Component, ComponentId, Components, Tick } from "../component";
 import { SparseSet } from "./sparse-set";
 import { ArchetypeComponentId } from "../archetype";
 
@@ -57,6 +57,10 @@ export class Resources {
     #resources: SparseSet<ComponentId, ResourceData>;
     constructor() {
         this.#resources = SparseSet.default();
+    }
+
+    check_change_ticks(change_tick: Tick) {
+        // this.#resources.check_change_ticks(change_tick);
     }
 
     clear() {

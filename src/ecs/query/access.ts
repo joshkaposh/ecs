@@ -558,7 +558,7 @@ export class Access<T extends SparseSetIndex = SparseSetIndex> {
 
 }
 
-class AccessConflicts {
+export class AccessConflicts {
     static All = new AccessConflicts();
     static Individual(ty: FixedBitSet) {
         return new AccessConflicts(ty);
@@ -592,7 +592,7 @@ class AccessConflicts {
     }
 
     is_empty() {
-        return this.#type === 0 ? false : this.#conflicts?.is_empty()
+        return this.#type === 0 ? false : Boolean(this.#conflicts?.is_empty())
     }
 
     iter() {
@@ -606,8 +606,6 @@ class AccessConflicts {
     [Symbol.iterator]() {
         return this.iter();
     }
-
-
 }
 
 export class FilteredAccess<T extends SparseSetIndex> {

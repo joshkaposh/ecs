@@ -23,7 +23,7 @@
     "joshkaposh-graph": "^1.0.11",
     "joshkaposh-heap": "^1.1.0",
     "joshkaposh-index-map": "^1.0.5",
-    "joshkaposh-iterator": "^1.1.3",
+    "joshkaposh-iterator": "^1.1.9",
     "joshkaposh-option": "^1.0.2",
     "uuid": "^9.0.1"
   }

@@ -2,48 +2,10 @@ import { ArchetypeComponentId, ArchetypeGeneration } from "../archetype";
 import { ComponentId } from "../component";
 import { Access, FilteredAccessSet } from "../query";
 import { World, WorldId } from "../world";
+import { SystemMeta } from "./system";
 import { SystemParam } from "./system-param";
 
-export class SystemMeta {
-    __name: string; // Cow<str>;
-    __component_access_set: FilteredAccessSet<ComponentId>;
-    __archetype_component_access: Access<ArchetypeComponentId>;
-    #is_send: boolean;
-    #has_deferred: boolean;
 
-    constructor(type: any) {
-        // const name = type_name(type); //std::any::type_name<T>();
-        this.__name = type.name;
-        this.__archetype_component_access = Access.default();
-        this.__component_access_set = FilteredAccessSet.default();
-        this.#is_send = true;
-        this.#has_deferred = false;
-    }
-
-    name(): string {
-        return this.__name;
-    }
-
-    is_send(): boolean {
-        return this.#is_send
-    }
-
-    set_non_send(): void {
-        this.#is_send = false;
-    }
-
-    has_deferred(): boolean {
-        return this.#has_deferred;
-    }
-
-    set_has_deferred(): void {
-        this.#has_deferred = true;
-    }
-
-
-    clone() {
-    }
-}
 
 class SystemState<Param extends SystemParam<any, any>> {
     #meta: SystemMeta;

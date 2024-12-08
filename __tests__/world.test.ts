@@ -46,16 +46,10 @@ test('world', () => {
         w.spawn([new A(), new B(), new C()])
     }
     assert(w.entities().total_count() === 200)
+    w.spawn_batch(Array.from({ length: 100 }, () => [new A(), new B(), new C()]))
+    console.log(w.entities().total_count());
 
-    w.spawn_batch([
-        [new A(), new B(), new C()],
-    ]).collect()
+    // assert(w.entities().total_count() === 300)
 
-    w.spawn_batch([
-        [new A(), new B(), new C()],
-    ]).collect()
-
-
-    console.log(w.entities().total_count())
 
 })

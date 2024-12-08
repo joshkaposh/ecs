@@ -3,6 +3,7 @@ import { is_some, type Option } from 'joshkaposh-option';
 import { StorageType, Storages } from "./storage";
 import { World } from "./world";
 import { u32 } from "../Intrinsics";
+import { MAX_CHANGE_AGE } from "./change_detection";
 
 export type Class<Static = {}, Inst = {}> = (new (...args: any[]) => Inst) & Static;
 
@@ -21,13 +22,18 @@ export function is_component(ty: any): ty is Component {
     return ty && typeof ty === 'object' && ty.type_id
 }
 
-export const MAX_CHANGE_AGE = u32.MAX;
-
 export class Tick {
     #tick: number;
-    static MAX = new Tick(MAX_CHANGE_AGE)
+    static get MAX() {
+        return new Tick(MAX_CHANGE_AGE)
+    }
+
     constructor(tick: number) {
         this.#tick = tick;
+    }
+
+    clone() {
+        return new Tick(this.#tick);
     }
 
     get() {
@@ -78,17 +84,9 @@ export class ComponentTicks {
         return ComponentTicks.new(new Tick(0))
     }
 
-    read(): ComponentTicks {
-        return new ComponentTicks(
-            this.added,
-            this.changed
-        )
-    }
-
     is_added(last_run: Tick, this_run: Tick) {
         return this.added.is_newer_than(last_run, this_run);
     }
-
 
     is_changed(last_run: Tick, this_run: Tick) {
         return this.changed.is_newer_than(last_run, this_run);
@@ -98,8 +96,6 @@ export class ComponentTicks {
         this.changed = change_tick;
     }
 }
-
-
 export type ComponentDescriptor = {
     readonly type: Component;
     readonly storage_type: StorageType;
@@ -160,6 +156,14 @@ export class Components {
 
     has_resource_type_id(type_id: UUID): boolean {
         return this.#resource_indices.has(type_id)
+    }
+
+    register_component(type: Component) {
+
+    }
+
+    register_resource(type: Resource) {
+
     }
 
     get_info(id: ComponentId): Option<ComponentInfo> {

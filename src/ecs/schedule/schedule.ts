@@ -6,12 +6,14 @@ import { type Option, type Result, is_some, is_none, is_error, ErrorExt, } from 
 import { IntoConfig, type Condition, type System } from "../system/system";
 import { World } from "../world";
 import { UNIT, Unit } from "../../util";
-import { Component, Components, Resource, type ComponentId } from '../component'
+import { Component, Components, Resource, Tick, type ComponentId } from '../component'
 import { ExecutorKind, SystemSchedule } from "./executor";
 import { FixedBitSet } from "../../fixed-bit-set";
 import { Directed, TarjanScc, Undirected, UnGraphMap, Incoming, Outgoing, DiGraphMap, GraphMap, Topo, toposort } from "joshkaposh-graph";
 import { extend } from "../../array-helpers";
 import { Configs, IntoSytemSetConfigs, NodeConfig, NodeConfigs, SystemConfig, SystemSet } from "./config";
+import { define_resource } from "../definitions";
+import { StorageType } from "../storage";
 
 // * --- TEMP Variables and Types ---
 
@@ -19,12 +21,6 @@ import { Configs, IntoSytemSetConfigs, NodeConfig, NodeConfigs, SystemConfig, Sy
 // type CheckGraphResults<T> = any; //* Maybe not ECS ?
 
 type Dependency = any
-
-type GraphInfo = {
-    hierarchy: SystemSet[];
-    dependencies: Dependency[];
-};
-
 type SystemExecutor = any;
 
 // @ts-expect-error
@@ -383,6 +379,9 @@ export class ScheduleGraph {
 export class Schedules {
     #schedules: Map<ScheduleLabel, Schedule>;
     #ignored_scheduling_ambiguities: Heap<ComponentId>;
+    static readonly type_id: UUID;
+    static readonly storage_type: StorageType;
+    static from_world: (world: World) => Schedules;
 
     constructor() {
         this.#schedules = new Map();
@@ -391,6 +390,10 @@ export class Schedules {
 
     get ignored_scheduling_ambiguities(): Heap<ComponentId> {
         return this.#ignored_scheduling_ambiguities;
+    }
+
+    check_change_ticks(change_tick: Tick) {
+
     }
 
     /**
@@ -443,3 +446,4 @@ export class Schedules {
         this.#schedules.set(label, schedule);
     }
 };
+define_resource(Schedules);

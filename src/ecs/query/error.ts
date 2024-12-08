@@ -1,5 +1,6 @@
 import { Err, ErrorExt } from "joshkaposh-option";
 import { Entity } from "../entity";
+import { World } from "..";
 
 export type QueryEntityError = {
     readonly type: 0;
@@ -12,8 +13,8 @@ export type QueryEntityError = {
     readonly entity: Entity;
 };
 export const QueryEntityError = {
-    QueryDoesNotMatch(entity: Entity) {
-        return new ErrorExt({ type: 0, entity } as const, `The components of entity ${entity} do not match the query`)
+    QueryDoesNotMatch(entity: Entity, world: World) {
+        return new ErrorExt({ type: 0, entity } as const, `The components of entity ${entity} do not match the query from world id${world.id()}`)
     },
     NoSuchEntity(entity: Entity) {
         return new ErrorExt({ type: 1, entity } as const, `The entity ${entity} does not exist`)

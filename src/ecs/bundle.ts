@@ -1,13 +1,15 @@
 import { Option, is_some } from 'joshkaposh-option'
 import { Archetype, ArchetypeId, Archetypes, BundleComponentStatus, ComponentStatus, SpawnBundleStatus } from "./archetype";
-import { Component, ComponentId, Components } from "./component";
+import { Component, ComponentId, Components, Tick } from "./component";
 import { Entities, Entity, EntityLocation } from "./entity";
 import { StorageType, Storages } from "./storage";
 import { SparseSets } from "./storage/sparse-set";
 import { Table, TableRow } from "./storage/table";
 import { extend } from "../array-helpers";
 import { entry } from "../util";
-import { Prettify, TODO } from "joshkaposh-iterator/src/util";
+import { Prettify } from "joshkaposh-iterator/src/util";
+import { AddBundle, TypeId, World } from '.';
+import { iter } from 'joshkaposh-iterator';
 
 export type BundleId = number;
 
@@ -33,30 +35,6 @@ export type DynamicBundle = {
     /// ownership of the component values to `func`.
     get_components(func: (storage_type: StorageType, ptr: {}) => void): void;
 };
-
-export abstract class BundleImpl<T extends readonly any[]> implements Bundle, DynamicBundle {
-    #types: T;
-    constructor(types: T) {
-        this.#types = types;
-    }
-
-    component_ids(components: Components, storages: Storages, ids: (component_id: number) => void): void {
-        for (let i = 0; i < this.#types.length; i++) {
-            ids(components.init_component(this.#types[i], storages));
-        }
-    }
-    from_components<T>(ctx: T, func: (ptr: T) => Bundle): Bundle {
-        return TODO('Bundle::BundleImpl::from_components', ctx, func);
-    }
-
-    get_components(func: (storage_type: StorageType, ptr: {}) => void): void {
-        for (let i = 0; i < this.#types.length; i++) {
-            const type = this.#types[i];
-            func(type.storage_type ?? type.constructor.storage_type, type)
-
-        }
-    }
-}
 
 export function define_bundle(bundle: any[]): Bundle & DynamicBundle {
     const bundles: (Bundle & DynamicBundle)[] = [];
@@ -174,7 +152,8 @@ export class BundleInfo {
         archetypes: Archetypes,
         components: Components,
         storages: Storages,
-        archetype_id: ArchetypeId
+        archetype_id: ArchetypeId,
+        change_tick: Tick,
     ): BundleInserter {
         const new_archetype_id = this.__add_bundle_to_archetype(archetypes, storages, components, archetype_id);
         let archetypes_ptr;
@@ -182,31 +161,34 @@ export class BundleInfo {
             const archetype = archetypes.get(archetype_id)!;
             const table_id = archetype.table_id();
 
-            return new BundleInserter(archetype, entities, this, storages.tables.get(table_id)!, storages.sparse_sets, InsertBundleResult.SameArchetype, archetypes_ptr as any)
+            // @ts-expect-error
+            return new BundleInserter(archetype, entities, this, storages.tables.get(table_id)!, storages.sparse_sets, InsertBundleResult.SameArchetype, archetypes_ptr as any, change_tick)
         } else {
             const [archetype, new_archetype] = archetypes.__get_2_mut(archetype_id, new_archetype_id)
             const table_id = archetype.table_id();
             if (table_id === new_archetype.table_id()) {
-                return new BundleInserter(
-                    archetype,
-                    entities,
-                    this,
-                    storages.tables.get(table_id)!,
-                    storages.sparse_sets,
-                    InsertBundleResult.NewArchetypeSameTable(new_archetype),
-                    archetypes_ptr as any
-                )
+                //     return new BundleInserter(
+                //         bundle,
+
+                //         // entities,
+                //         // this,
+                //         // storages.tables.get(table_id)!,
+                //         // storages.sparse_sets,
+                //         // InsertBundleResult.NewArchetypeSameTable(new_archetype),
+                //         // archetypes_ptr as any
+                //     )
             } else {
                 const [table, new_table] = storages.tables.__get_2(table_id, new_archetype.table_id());
                 return new BundleInserter(
-                    archetype,
-                    entities,
+                    archetype as any,
+                    entities as any,
                     this,
-                    table,
-                    storages.sparse_sets,
-                    InsertBundleResult.NewArchetypeNewTable(new_archetype, new_table),
-                    archetypes_ptr as any
-                )
+                    table as any,
+                    storages.sparse_sets as any,
+                    InsertBundleResult.NewArchetypeNewTable(new_archetype, new_table) as any,
+                    archetypes_ptr as any,
+                    change_tick
+                ) as any
             }
         }
     }
@@ -216,11 +198,12 @@ export class BundleInfo {
         archetypes: Archetypes,
         components: Components,
         storages: Storages,
+        change_tick: Tick,
     ): BundleSpawner {
         const new_archetype_id = this.__add_bundle_to_archetype(archetypes, storages, components, ArchetypeId.EMPTY);
         const archetype = archetypes.get(new_archetype_id)!;
         const table = storages.tables.get(archetype.table_id())!;
-        return new BundleSpawner(archetype, this, entities, table, storages.sparse_sets)
+        return new BundleSpawner(archetype, this, entities, table, storages.sparse_sets, change_tick)
     }
 
     /// This writes components from a given [`Bundle`] to the given entity.
@@ -246,9 +229,10 @@ export class BundleInfo {
         bundle_component_status: BundleComponentStatus,
         entity: Entity,
         table_row: TableRow,
+        change_tick: Tick,
         bundle: T,
+        insert_mode: InsertMode
     ) {
-
         // NOTE: get_components calls this closure on each component in "bundle order".
         // bundle_info.component_ids are also in "bundle order"
         let bundle_component = 0;
@@ -257,17 +241,23 @@ export class BundleInfo {
 
             if (storage_type === StorageType.Table) {
                 const column = table.get_column(component_id)!;
+                const status = bundle_component_status.get_status(bundle_component);
                 if (
-                    ComponentStatus.Added
-                    === bundle_component_status.get_status(bundle_component)
+                    ComponentStatus.Added === status
                 ) {
-                    column.__initialize(table_row, component_ptr);
-                } else {
-                    column.__replace(table_row, component_ptr);
+                    column.__initialize(table_row, component_ptr, change_tick);
+                } else if (ComponentStatus.Existing === status && insert_mode === InsertMode.Replace) {
+                    column.__replace(table_row, component_ptr, change_tick);
+                } else if (ComponentStatus.Existing === status && insert_mode === InsertMode.Keep) {
+                    const drop_fn = table.get_drop_for(component_id);
+                    if (drop_fn) {
+                        drop_fn(component_ptr);
+                    }
+
                 }
             } else if (storage_type === StorageType.SparseSet) {
-                const sparse_set = sparse_sets.get(component_id);
-                sparse_set?.__insert(entity, component_ptr);
+                const sparse_set = sparse_sets.get(component_id)!;
+                sparse_set.__insert(entity, component_ptr, change_tick);
             }
 
             bundle_component += 1;
@@ -290,14 +280,17 @@ export class BundleInfo {
 
         const new_table_components = [];
         const new_sparse_set_components = [];
-        const bundle_status = new Array(this.#component_ids.length);
-
+        const bundle_status = [];
+        const added: any[] = [];
+        const existing = [];
         let current_archetype = archetypes.get(archetype_id)!;
         for (const component_id of this.#component_ids) {
             if (current_archetype.contains(component_id)) {
-                bundle_status.push(ComponentStatus.Mutated)
+                bundle_status.push(ComponentStatus.Existing);
+                existing.push(component_id)
             } else {
                 bundle_status.push(ComponentStatus.Added);
+                existing.push(component_id);
                 const storage_type = components.get_info(component_id)!.descriptor.storage_type;
                 if (storage_type === StorageType.Table) {
                     new_table_components.push(component_id)
@@ -306,81 +299,174 @@ export class BundleInfo {
                 }
             }
         }
-
         if (new_table_components.length === 0 && new_sparse_set_components.length === 0) {
             const edges = current_archetype.edges();
-            edges.__insert_add_bundle(this.#id, archetype_id, bundle_status);
+            edges.__insert_add_bundle(
+                this.#id,
+                archetype_id,
+                bundle_status,
+                added,
+                existing,
+            );
             return archetype_id;
         } else {
             let table_id, table_components, sparse_set_components;
 
-            let current_archetype = archetypes.get(archetype_id)!;
+            (() => {
+                let current_archetype = archetypes.get(archetype_id)!;
 
-            if (new_table_components.length === 0) {
-                table_id = current_archetype.table_id();
-                table_components = current_archetype.table_components().collect();
-            } else {
-                extend(new_table_components, current_archetype.table_components());
-                new_table_components.sort();
-                table_id = storages.tables.__get_id_or_insert(new_table_components, components)
-                table_components = new_table_components;
-            }
+                if (new_table_components.length === 0) {
+                    table_id = current_archetype.table_id();
+                    table_components = current_archetype.table_components().collect();
+                } else {
+                    extend(new_table_components, current_archetype.table_components(), 0);
+                    new_table_components.sort();
+                    table_id = storages.tables.__get_id_or_insert(new_table_components, components);
 
-            if (new_sparse_set_components.length === 0) {
-                sparse_set_components = current_archetype.sparse_set_components().collect();
-            } else {
-                extend(new_sparse_set_components, current_archetype.sparse_set_components());
-                new_sparse_set_components.sort();
-                sparse_set_components = new_sparse_set_components;
-            }
+                    table_components = new_table_components;
+                }
 
-            const new_archetype_id = archetypes.__get_id_or_insert(components, table_id, table_components, sparse_set_components);
+                if (new_sparse_set_components.length === 0) {
+                    sparse_set_components = current_archetype.sparse_set_components().collect()
+                } else {
+                    extend(new_sparse_set_components, current_archetype.sparse_set_components(), 0);
+                    new_sparse_set_components.sort();
+                    sparse_set_components = new_sparse_set_components
+                }
+            })()
+
+            let new_archetype_id = archetypes.__get_id_or_insert(
+                components,
+                table_id,
+                table_components,
+                sparse_set_components
+            )
+
             archetypes.get(archetype_id)!.edges().__insert_add_bundle(
                 this.#id,
                 new_archetype_id,
                 bundle_status,
+                added,
+                existing
             )
             return new_archetype_id;
         }
     }
+
+    iter_components() {
+        return iter(this.#component_ids);
+    }
 }
+
+type InsertMode = 0 | 1
+const InsertMode = {
+    Replace: 0,
+    Keep: 1,
+} as const;
 
 export class BundleInserter {
     constructor(
-        public archetype: Archetype,
-        public entities: Entities,
+        public bundle: Bundle,
+        public world: World,
         public bundle_info: BundleInfo,
+        public add_bundle: AddBundle,
         public table: Table,
-        public sparse_sets: SparseSets,
+        public archetype: Archetype,
         public result: InsertBundleResult,
-        public archetypes_ptr: Archetype
+        public change_tick: Tick
+    ) {
+    }
 
-    ) { }
+    static new(bundle: Bundle, world: World, archetype_id: ArchetypeId, change_tick: Tick) {
+        const bundle_id = world.bundles().register_info(bundle, world.components(), world.storages());
+        return BundleInserter.new_with_id(bundle, world, archetype_id, bundle_id, change_tick);
+    }
 
-    insert(
-        entity: Entity,
-        location: EntityLocation,
-        bundle: DynamicBundle
-    ): EntityLocation {
-        const { type } = this.result;
-        if (type === 'SameArchetype') {
-            const add_bundle = this.archetype.edges().__get_add_bundle_internal(this.bundle_info.id())!
-            this.bundle_info.__write_components(
-                this.table,
-                this.sparse_sets,
+    static new_with_id(bundle: Bundle, world: World, archetype_id: ArchetypeId, bundle_id: BundleId, change_tick: Tick) {
+        const bundle_info = world.bundles().get(bundle_id)!;
+        bundle_id = bundle_info.id();
+        const new_archetype_id = bundle_info.__add_bundle_to_archetype(world.archetypes(), world.storages(), world.components(), archetype_id);
+        if (new_archetype_id === archetype_id) {
+            const archetype = world.archetypes().get(archetype_id)!;
+            const add_bundle = archetype.edges().__get_add_bundle_internal(bundle_id)!;
+            const table_id = archetype.table_id();
+            const table = world.storages().tables.get(table_id)!;
+            return new BundleInserter(
+                bundle,
+                world,
+                bundle_info,
+                add_bundle,
+                table,
+                archetype,
+                InsertBundleResult.SameArchetype,
+                change_tick
+            )
+        } else {
+            const [archetype, new_archetype] = world.archetypes().__get_2_mut(archetype_id, new_archetype_id)
+            const add_bundle = archetype.edges().__get_add_bundle_internal(bundle_id)!;
+            const table_id = archetype.table_id();
+            const new_table_id = new_archetype.table_id();
+            if (table_id === new_table_id) {
+                const table = world.storages().tables.get(table_id)!;
+                return new BundleInserter(
+                    bundle,
+                    world,
+                    bundle_info,
+                    add_bundle,
+                    table,
+                    archetype,
+                    InsertBundleResult.NewArchetypeSameTable(new_archetype),
+                    change_tick
+                )
+            } else {
+                const [table, new_table] = world.storages().tables.__get_2(table_id, new_table_id)
+                return new BundleInserter(
+                    bundle,
+                    world,
+                    bundle_info,
+                    add_bundle,
+                    table,
+                    archetype,
+                    InsertBundleResult.NewArchetypeNewTable(new_archetype, new_table),
+                    change_tick
+                )
+            }
+        }
+    }
+
+    __insert<T extends DynamicBundle>(entity: Entity, location: EntityLocation, bundle: T, insert_mode: InsertMode): EntityLocation {
+        const bundle_info = this.bundle_info
+        const add_bundle = this.add_bundle
+        const table = this.table
+        const archetype = this.archetype
+
+        // if (insert_mode === InsertMode.Replace) {
+        //     this.world.trigger_on_replace(archetype, entity, add_bundle)
+        // }
+
+        let tup: [Archetype, EntityLocation];
+        if (this.result.type === 'SameArchetype') {
+            const sparse_sets = this.world.storages().sparse_sets;
+
+            bundle_info.__write_components(
+                table,
+                sparse_sets,
                 add_bundle,
                 entity,
                 location.table_row,
-                bundle
+                this.change_tick,
+                bundle,
+                InsertMode.Replace
             )
-            return location;
-        } else if (type === 'NewArchetypeSameTable') {
-            const { new_archetype } = this.result;
-            const result = this.archetype.__swap_remove(location.archetype_row);
-            const swapped_entity = result.swapped_entity
-            if (is_some(swapped_entity)) {
-                const swapped_location = this.entities.get(swapped_entity)!;
-                this.entities.__set(swapped_entity.index(), {
+            tup = [archetype, location]
+        } else if (this.result.type === 'NewArchetypeSameTable') {
+            const { new_archetype } = this.result
+            const [sparse_sets, entities] = [this.world.storages().sparse_sets, this.world.entities()]
+            const result = archetype.__swap_remove(location.archetype_row);
+            if (result.swapped_entity) {
+                const { swapped_entity } = result
+                const swapped_location = entities.get(swapped_entity)!
+                entities.__set(swapped_entity.index(), {
                     archetype_id: swapped_location.archetype_id,
                     archetype_row: location.archetype_row,
                     table_id: swapped_location.table_id,
@@ -389,25 +475,31 @@ export class BundleInserter {
             }
 
             const new_location = new_archetype.__allocate(entity, result.table_row);
-            this.entities.__set(entity.index(), new_location);
+            entities.__set(entity.index(), new_location)
 
-            const add_bundle = this.archetype.edges().__get_add_bundle_internal(this.bundle_info.id())!;
-            this.bundle_info.__write_components(
-                this.table,
-                this.sparse_sets,
+            bundle_info.__write_components(
+                table,
+                sparse_sets,
                 add_bundle,
                 entity,
                 result.table_row,
-                bundle
+                this.change_tick,
+                bundle,
+                InsertMode.Replace
             )
-            return new_location;
-        } else {
+
+            tup = [new_archetype, new_location]
+
+        } else if (this.result.type === 'NewArchetypeNewTable') {
             const { new_table, new_archetype } = this.result
-            let result = this.archetype.__swap_remove(location.archetype_row);
-            let swapped_entity = result.swapped_entity;
-            if (swapped_entity) {
-                const swapped_location = this.entities.get(swapped_entity)!;
-                this.entities.__set(swapped_entity.index(), {
+            const [sparse_sets, entities] = [this.world.storages().sparse_sets, this.world.entities()]
+            let archetype_ptr = 0;
+            const result = archetype.__swap_remove(location.archetype_row)
+            if (is_some(result.swapped_entity)) {
+                const { swapped_entity } = result;
+
+                const swapped_location = entities.get(swapped_entity)!;
+                entities.__set(swapped_entity.index(), {
                     archetype_id: swapped_location.archetype_id,
                     archetype_row: location.archetype_row,
                     table_id: swapped_location.table_id,
@@ -415,47 +507,152 @@ export class BundleInserter {
                 })
             }
 
-            const move_result = this.table.__move_to_superset_unchecked(result.table_row, new_table);
+            const move_result = table.__move_to_superset_unchecked(result.table_row, new_table);
             const new_location = new_archetype.__allocate(entity, move_result.new_row);
-            this.entities.__set(entity.index(), new_location);
+            entities.__set(entity.index(), new_location);
 
-            swapped_entity = move_result.swapped_entity;
-            if (swapped_entity) {
-                const swapped_location = this.entities.get(swapped_entity)!;
-                let swapped_archetype!: Archetype;
-                if (this.archetype.id() === swapped_location.archetype_id) {
-                    swapped_archetype = this.archetype
-                } else if (new_archetype.id() === swapped_location.archetype_id) {
-                    swapped_archetype = new_archetype;
-                } else {
-                    console.warn('BundleInserter::insert() - This else branch may not do what is expected')
-                    // self.archetypes_ptr.add(swapped_location.archetype_id.index())
-                    // @ts-expect-error
-                    this.archetypes_ptr += swapped_location.archetype_id;
-                }
-
-                this.entities.__set(swapped_entity.index(), {
+            if (move_result.swapped_entity) {
+                const { swapped_entity } = move_result
+                const swapped_location = entities.get(swapped_entity)!;
+                entities.__set(swapped_entity.index(), {
                     archetype_id: swapped_location.archetype_id,
                     archetype_row: swapped_location.archetype_row,
                     table_id: swapped_location.table_id,
                     table_row: result.table_row,
                 })
 
-                swapped_archetype.__set_entity_table_row(swapped_location.archetype_row, result.table_row);
-
-                const add_bundle = this.archetype.edges().__get_add_bundle_internal(this.bundle_info.id())!
-                this.bundle_info.__write_components(
-                    new_table,
-                    this.sparse_sets,
-                    add_bundle,
-                    entity,
-                    move_result.new_row,
-                    bundle
-                )
+                if (archetype.id() === swapped_location.archetype_id) {
+                    archetype.__set_entity_table_row(swapped_location.archetype_row, result.table_row);
+                } else if (new_archetype.id() === swapped_location.archetype_id) {
+                    new_archetype.__set_entity_table_row(swapped_location.archetype_row, result.table_row)
+                } else {
+                    archetype_ptr += swapped_location.archetype_id;
+                    this.world.archetypes().get(archetype_ptr)!.__set_entity_table_row(swapped_location.archetype_row, result.table_row);
+                }
             }
 
-            return new_location;
+            bundle_info.__write_components(
+                new_table,
+                sparse_sets,
+                add_bundle,
+                entity,
+                move_result.new_row,
+                this.change_tick,
+                bundle,
+                InsertMode.Replace
+            )
+            tup = [new_archetype, new_location]
         }
+        const [new_archetype, new_location] = tup!;
+        const world = this.world;
+        // world.trigger_on_add(new_archetype, entity, add_bundle.iter_added());
+
+        if (insert_mode === InsertMode.Replace) {
+            // world.trigger_on_insert(new_archetype, entity, add_bundle.iter_inserted())
+        } else if (insert_mode === InsertMode.Keep) {
+            // world.trigger_on_insert(new_archetype, entity, add_bundle.iter_addded())
+        }
+        return new_location;
+    }
+
+    __entities() {
+        return this.world.entities();
+    }
+}
+
+export class BundleSpawner2 {
+    constructor(
+        public bundle: Bundle,
+        public world: World,
+        public bundle_info: BundleInfo,
+        public table: Table,
+        public archetype: Archetype,
+        public change_tick: Tick) { }
+
+    static new(bundle: Bundle, world: World, change_tick: Tick) {
+        const bundle_id = world.bundles().register_info(bundle, world.components(), world.storages());
+        return BundleSpawner2.new_with_id(bundle, world, bundle_id, change_tick)
+    }
+
+    static new_with_id(bundle: Bundle, world: World, bundle_id: BundleId, change_tick: Tick) {
+        const bundle_info = world.bundles().get(bundle_id)!;
+        const new_archetype_id = bundle_info.__add_bundle_to_archetype(
+            world.archetypes(),
+            world.storages(),
+            world.components(),
+            ArchetypeId.EMPTY
+        )
+
+        const archetype = world.archetypes().get(new_archetype_id)!;
+        const table = world.storages().tables.get(archetype.table_id())!;
+
+        return new BundleSpawner2(
+            bundle,
+            world,
+            bundle_info,
+            table,
+            archetype,
+            change_tick
+        )
+    }
+
+    __reserve_storage(additional: number) {
+        this.archetype.__reserve(additional);
+        this.table.__reserve(additional);
+    }
+
+    spawn_non_existent(entity: Entity, bundle: DynamicBundle): EntityLocation {
+        const bundle_info = this.bundle_info;
+        const location = (() => {
+            let table = this.table;
+            let archetype = this.archetype;
+
+            let sparse_sets = this.world.storages().sparse_sets, entities = this.world.entities();
+            let table_row = table.__allocate(entity);
+            let location = archetype.__allocate(entity, table_row);
+            bundle_info.__write_components(
+                table,
+                sparse_sets,
+                SpawnBundleStatus,
+                entity,
+                table_row,
+                this.change_tick,
+                bundle,
+                InsertMode.Replace
+            )
+
+            entities.__set(entity.index(), location);
+            return location;
+        })()
+
+        const archetype = this.archetype;
+        // this.world.trigger_on_add(
+        //     archetype,
+        //     entity,
+        //     bundle_info.iter_contributed_components()
+        // )
+
+        // this.world.trigger_on_insert(
+        //     archetype,
+        //     entity,
+        //     bundle_info.iter_contributed_components()
+        // )
+
+        return location;
+    }
+
+    spawn(bundle: Bundle & DynamicBundle): Entity {
+        const entity = this.__entities().__alloc();
+        this.spawn_non_existent(entity, bundle);
+        return entity;
+    }
+
+    __entities() {
+        return this.world.entities();
+    }
+
+    __flush_commands() {
+        this.world.flush();
     }
 }
 
@@ -465,19 +662,22 @@ export class BundleSpawner {
     #bundle_info: BundleInfo;
     #table: Table;
     #sparse_sets: SparseSets;
+    #change_tick: Tick;
 
     constructor(
         archetype: Archetype,
         bundle_info: BundleInfo,
         entities: Entities,
         table: Table,
-        sparse_sets: SparseSets
+        sparse_sets: SparseSets,
+        change_tick: Tick,
     ) {
         this.__archetype = archetype;
         this.#bundle_info = bundle_info;
         this.__entities = entities;
         this.#table = table;
         this.#sparse_sets = sparse_sets;
+        this.#change_tick = change_tick;
     }
 
     reserve_storage(additional: number) {
@@ -490,7 +690,16 @@ export class BundleSpawner {
     spawn_non_existent(entity: Entity, bundle: DynamicBundle): EntityLocation {
         const table_row = this.#table.__allocate(entity);
         const location = this.__archetype.__allocate(entity, table_row);
-        this.#bundle_info.__write_components(this.#table, this.#sparse_sets, SpawnBundleStatus, entity, table_row, bundle)
+        this.#bundle_info.__write_components(
+            this.#table,
+            this.#sparse_sets,
+            SpawnBundleStatus,
+            entity,
+            table_row,
+            this.#change_tick,
+            bundle,
+            InsertMode.Replace
+        )
         this.__entities.__set(entity.index(), location);
         return location;
     }
@@ -535,22 +744,24 @@ const InsertBundleResult = {
     }
 } as const;
 
-
 export class Bundles {
     #bundle_infos: BundleInfo[];
-    // Cache static `BundleId`
-    // TypeIdMap<BundleId>
     #bundle_ids: Map<string, BundleId>;
     // Cache dynamic `BundleId` with multiple components
     #dynamic_bundle_ids: Map<ComponentId[], [BundleId, Array<StorageType>]>;
     // Cache optimized dynamic `BundleId` with single component
     #dynamic_component_bundle_ids: Map<ComponentId, [BundleId, StorageType]>;
+    #dynamic_component_storages: Map<BundleId, StorageType>;
+    #dynamic_bundle_storages: Map<BundleId, StorageType[]>;
+
 
     constructor() {
         this.#bundle_infos = [];
         this.#bundle_ids = new Map();
         this.#dynamic_bundle_ids = new Map();
         this.#dynamic_component_bundle_ids = new Map();
+        this.#dynamic_component_storages = new Map();
+        this.#dynamic_bundle_storages = new Map();
     }
 
     static dynamic_bundle(bundle: any[]): Bundle & DynamicBundle {
@@ -559,6 +770,36 @@ export class Bundles {
 
     get(bundle_id: BundleId): Option<BundleInfo> {
         return this.#bundle_infos[bundle_id];
+    }
+
+    get_storage_unchecked(id: BundleId) {
+        return this.#dynamic_component_storages.get(id)!;
+    }
+
+
+    get_storages_unchecked(id: BundleId) {
+        return this.#dynamic_bundle_storages.get(id)!;
+    }
+
+    get_id(type_id: TypeId) {
+        return this.#bundle_ids.get(type_id.type_id);
+    }
+
+    register_info(bundle: Bundle, components: Components, storages: Storages): BundleId {
+        const bundle_infos = this.#bundle_infos;
+        let id: number;
+        if (this.#bundle_ids.has(bundle.type_id)) {
+            id = this.#bundle_ids.get(bundle.type_id)!
+        } else {
+            const component_ids: number[] = [];
+            bundle.component_ids(components, storages, id => component_ids.push(id))
+            let _id = bundle_infos.length;
+            const bundle_info = new BundleInfo(bundle.name, components, component_ids, _id)
+            bundle_infos.push(bundle_info)
+            this.#bundle_ids.set(bundle.type_id, _id);
+            id = _id;
+        }
+        return id;
     }
 
     __init_info(bundle: Bundle, components: Components, storages: Storages): BundleInfo {
@@ -606,8 +847,6 @@ export class Bundles {
         const bundle_info = bundle_infos[bundle_id];
         return [bundle_info, storage_types]
     }
-
-
 }
 
 // Asserts that all components are part of of `Components`

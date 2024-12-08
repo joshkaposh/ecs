@@ -15,31 +15,6 @@ define_component(MarkerA, StorageType.SparseSet);
 class MarkerB { }
 define_component(MarkerB, StorageType.SparseSet);
 
-function alloc_entity(entity: Entity, archetype: Archetype, components: Components, storages: Storages) {
-    const table = storages.tables.get(archetype.table_id())!;
-    const row = table.__allocate(entity);
-    // archetype is needed for querying
-    archetype.__allocate(entity, row);
-
-
-    for (const id of archetype.components()) {
-
-        const type = components.get_info(id)!.type();
-        const value = new type();
-        if (archetype.get_storage_type(id) === StorageType.Table) {
-            assert(is_some(table.get_column(id)))
-            table.get_column(id)!.__initialize(row, value);
-        } else {
-            const sparse_set = storages.sparse_sets.get(id)!
-            sparse_set.__insert(entity, value);
-        }
-    }
-}
-
-function query_entity(entity: Entity, archetype: Archetype, components: Components, storages: Storages) {
-    // return archetype.enti
-}
-
 test('archetype', () => {
     const archetypes = new Archetypes();
 
@@ -86,21 +61,4 @@ test('archetype', () => {
 
     assert(is_some(arch_a_id) && arch_a_id === arch_a.id())
     assert(is_some(arch_b_id) && arch_b_id === arch_b.id())
-
-    const table_components_a = arch_a.table_components();
-    const sparse_components_a = arch_a.sparse_set_components();
-
-    // table_components_a.for_each(id => console.log(components.get_name(id)))
-    // sparse_components_a.for_each(id => console.log(components.get_name(id)))
-
-    const ma_entities = range(0, 100).map(i => Entity.from_raw(i)).collect();
-    const mb_entities = range(100, 200).map(i => Entity.from_raw(i)).collect();
-
-    //! alloc_entity creates class and inserts it into Table / SparseSet
-    ma_entities.forEach(entity => alloc_entity(entity, arch_a, components, storages))
-    mb_entities.forEach(entity => alloc_entity(entity, arch_b, components, storages))
-
-    assert(arch_a.entities().length === 100)
-    assert(arch_b.entities().length === 100)
-
 });

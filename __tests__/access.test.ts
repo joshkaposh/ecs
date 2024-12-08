@@ -1,52 +1,34 @@
 import { assert, expect, test } from "vitest";
-// import { Access, FilteredAccess, FilteredAccessSet, AccessFilters } from '../src/ecs/query/access';
-// import { FixedBitSet } from "fixed-bit-set";
+import { Access, AccessConflicts, } from '../src/ecs/query/access';
 
 test('read_all_access_conflicts', () => {
-    //     // read_all / single write
-    //     let access_a = Access.default();
-    //     access_a.grow(10);
-    //     access_a.add_write(0);
+    // read_all / single write
+    let access_a = Access.default();
+    access_a.add_component_write(0);
 
-    //     let access_b = Access.default();
-    //     access_b.read_all();
-    //     assert(!access_b.is_compatible(access_a));
+    let access_b = Access.default();
+    access_b.read_all();
+    assert(!access_b.is_compatible(access_a));
 
-    //     // read_all / read_all
-    //     access_a = Access.default();
-    //     access_a.grow(10);
-    //     access_a.read_all();
+    // read_all / read_all
+    access_a = Access.default();
+    access_a.read_all();
 
-    //     access_b = Access.default();
-    //     access_b.read_all();
+    access_b = Access.default();
+    access_b.read_all();
 
-    //     assert(access_b.is_compatible(access_a));
-    // })
+    // assert(access_b.is_compatible(access_a));
+})
 
-    // test('access_get_conflicts', () => {
-    //     const access_a = Access.default();
-    //     access_a.add_read(0);
-    //     access_a.add_read(1);
+test('access_get_conflicts', () => {
+    const access_a = Access.default();
+    access_a.add_component_read(0);
+    access_a.add_component_read(1);
 
-    //     const access_b = Access.default();
-    //     access_b.add_read(0);
-    //     access_b.add_write(1);
+    const access_b = Access.default();
+    access_b.add_component_read(0);
+    access_b.add_component_write(1);
 
-    //     expect(access_a.get_conflicts(access_b)).toEqual([1])
-
-    //     const access_c = Access.default();
-    //     access_c.add_write(0);
-    //     access_c.add_write(1);
-
-    //     expect(access_a.get_conflicts(access_c)).toEqual([0, 1])
-    //     expect(access_b.get_conflicts(access_c)).toEqual([0, 1])
-
-    //     const access_d = Access.default();
-    //     access_d.add_read(0);
-
-    //     expect(access_d.get_conflicts(access_a)).toEqual([]);
-    //     expect(access_d.get_conflicts(access_b)).toEqual([]);
-    //     expect(access_d.get_conflicts(access_c)).toEqual([0]);
 })
 
 // test('filtered_combined_access', () => {

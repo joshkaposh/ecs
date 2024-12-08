@@ -1,5 +1,5 @@
 import { is_some, type Option } from "joshkaposh-option";
-import { unused } from "joshkaposh-iterator/src/util";
+import { assert, unused } from "joshkaposh-iterator/src/util";
 
 export function swap<T>(array: T[], from_index: number, to_index: number) {
     const temp = array[to_index];
@@ -20,6 +20,11 @@ export function swap_remove_unchecked<T>(array: T[], i: number): Option<T> {
     swap(array, i, array.length - 1)
     return array.pop()
 
+}
+
+export function replace(array: any[], index: number, value: any) {
+    assert(index < array.length);
+    array[index] = value;
 }
 
 export function reserve(array: any[], additional: number) {

@@ -1,10 +1,10 @@
 import { iter } from "joshkaposh-iterator";
 import { Option, is_some } from 'joshkaposh-option'
-import { capacity, reserve, swap_remove, swap_remove_unchecked } from "../../array-helpers";
+import { capacity, replace, reserve, swap_remove, swap_remove_unchecked } from "../../array-helpers";
 import { ComponentId, ComponentInfo, Components, ComponentTicks, Tick } from "../component";
 import { SparseSet } from "./sparse-set";
 import { Entity } from "../entity";
-import { split_at, TODO } from "joshkaposh-iterator/src/util";
+import { assert, split_at } from "joshkaposh-iterator/src/util";
 import { u32 } from "../../Intrinsics";
 
 export type TableId = number;
@@ -19,27 +19,55 @@ export const TableRow = {
 } as const;
 
 export class Column {
-    data: {}[]
-    constructor(data: {}[]) {
-        this.data = data;
+
+    constructor(public data: {}[], public added_ticks: Tick[], public changed_ticks: Tick[]) { }
+
+    static default() {
+        return new Column([], [], []);
     }
 
-    static with_capacity(_component_info: ComponentInfo, _capacity: number) {
-        return new Column([]);
+    is_empty() {
+        return this.data.length === 0;
     }
 
-    clear() {
-        this.data.length = 0;
+    len() {
+        return this.data.length;
     }
 
-    get(row: TableRow): Option<{}> {
+    __swap_remove_unchecked(row: TableRow) {
+        swap_remove_unchecked(this.data, row)
+        swap_remove_unchecked(this.added_ticks, row)
+        swap_remove_unchecked(this.changed_ticks, row)
+    }
+
+    __push(ptr: {}, ticks: ComponentTicks) {
+        this.data.push(ptr);
+        this.added_ticks.push(ticks.added);
+        this.changed_ticks.push(ticks.changed);
+    }
+
+    get_data_slice() {
+        return this.data.slice();
+    }
+
+    get_added_ticks_slice() {
+        return this.added_ticks;
+    }
+
+    get_changed_ticks_slice() {
+        return this.changed_ticks;
+    }
+
+    get(row: TableRow): Option<[{}, ComponentTicks]> {
         if (row < this.data.length) {
-            return {
-                data: this.data[row]
-            }
+            return [this.data[row], new ComponentTicks(this.added_ticks[row], this.changed_ticks[row])]
         } else {
             return null;
         }
+    }
+
+    get_data_unchecked(row: TableRow) {
+        return this.data[row]
     }
 
     get_data(row: TableRow): Option<{}> {
@@ -50,33 +78,54 @@ export class Column {
         }
     }
 
-    get_data_slice(len: number) {
-        return this.data.slice(0, len);
+    get_added_tick(row: number): Option<Tick> {
+        return this.added_ticks[row];
     }
 
-    get_data_unchecked(row: TableRow) {
-        return this.data[row]
+    get_changed_tick(row: number): Option<Tick> {
+        return this.changed_ticks[row]
     }
 
-    is_empty() {
-        return this.data.length === 0;
+    get_with_ticks(row: number): Option<[{}, ComponentTicks]> {
+        const d = this.get_data(row);
+        const t = this.get_ticks(row);
+
+        return d && t ? [d, t] : undefined;
     }
 
-    len() {
-        return this.data.length;
+    get_ticks(row: number): Option<ComponentTicks> {
+        if (row < this.data.length) {
+            return this.get_ticks_unchecked(row)
+        } else {
+            return
+        }
     }
 
-    __replace(row: TableRow, data: {}) {
-        const index = row;
-        if (index >= this.len()) {
-            throw new Error(`Column:__replace - Index ${index} cannot exceed ${this.len()}`)
+    get_ticks_unchecked(row: number) {
+        return new ComponentTicks(this.added_ticks[row], this.changed_ticks[row]);
+    }
+
+    clear() {
+        this.data.length = 0;
+        this.added_ticks.length = 0;
+        this.changed_ticks.length = 0;
+    }
+
+    check_change_ticks(change_tick: Tick) {
+        for (let i = 0; i < this.added_ticks.length; i++) {
+            const component_ticks = this.added_ticks[i];
+            component_ticks.check_tick(change_tick);
         }
 
-        this.data[index] = data
+        for (let i = 0; i < this.changed_ticks.length; i++) {
+            const component_ticks = this.changed_ticks[i];
+            component_ticks.check_tick(change_tick);
+        }
     }
 
-    __swap_remove_unchecked(row: TableRow) {
-        return swap_remove(this.data, row);
+    __replace(row: TableRow, data: {}, change_tick: Tick) {
+        replace(this.data, row, data);
+        this.changed_ticks[row].set(change_tick.get());
     }
 
     __initialize_from_unchecked(other: Column, src_row: TableRow, _dst_row: TableRow) {
@@ -85,97 +134,10 @@ export class Column {
         swap_remove(other.data, src_row)
     }
 
-    __initialize(row: TableRow, data: {}) {
+    __initialize(row: TableRow, data: {}, change_tick: Tick) {
         this.data[row] = data;
-    }
-
-    __push(ptr: {}) {
-        this.data.push(ptr);
-    }
-
-    __reserve_exact(additional: number) {
-        reserve(this.data, additional);
-    }
-}
-
-type Data = [{}, ComponentTicks]
-export class Column2 {
-    data: Data[]
-    constructor(data: Data[]) {
-        this.data = data;
-    }
-
-    static with_capacity(_component_info: ComponentInfo, _capacity: number) {
-        return new Column([]);
-    }
-
-    clear() {
-        this.data.length = 0;
-    }
-
-    get(row: TableRow): Option<{}> {
-        if (row < this.data.length) {
-            return this.data[row][0]
-        } else {
-            return null;
-        }
-    }
-
-    get_data(row: TableRow): Option<{}> {
-        if (row < this.data.length) {
-            return this.data[row][0];
-        } else {
-            return null;
-        }
-    }
-
-    get_data_and_change_ticks(row: TableRow): Option<Data> {
-        if (row < this.data.length) {
-            return this.data[row];
-        } else {
-            return null;
-        }
-    }
-
-    get_data_slice(len: number) {
-        return this.data.slice(0, len);
-    }
-
-    get_data_unchecked(row: TableRow) {
-        return this.data[row][0]
-    }
-
-    is_empty() {
-        return this.data.length === 0;
-    }
-
-    len() {
-        return this.data.length;
-    }
-
-    __replace(row: TableRow, data: [{}, ComponentTicks]) {
-        const index = row;
-        if (index >= this.len()) {
-            throw new Error(`Column:__replace - Index ${index} cannot exceed ${this.len()}`)
-        }
-
-        this.data[index] = data
-    }
-
-    __swap_remove_unchecked(row: TableRow) {
-        return swap_remove(this.data, row);
-    }
-
-    __initialize_from_unchecked(other: Column, src_row: TableRow, _dst_row: TableRow) {
-        swap_remove(other.data, src_row)
-    }
-
-    __initialize(row: TableRow, data: {}) {
-        this.data[row] = [data, ComponentTicks.default()];
-    }
-
-    __push(ptr: {}) {
-        this.data.push([ptr, ComponentTicks.default()]);
+        this.added_ticks[row] = change_tick;
+        this.changed_ticks[row] = change_tick;
     }
 
     __reserve_exact(additional: number) {
@@ -196,8 +158,16 @@ export class Table {
         this.#entities = entities;
     }
 
+    check_change_ticks(change_tick: Tick) {
+        this.#columns.iter().for_each(([_, c]) => c.check_change_ticks(change_tick))
+    }
+
     entities() {
         return this.#entities;
+    }
+
+    get(component_id: ComponentId) {
+        return this.get_column(component_id)?.get(this.entity_count())
     }
 
     get_column(component_id: ComponentId): Option<Column> {
@@ -205,7 +175,18 @@ export class Table {
     }
 
     get_data_slice_for(component_id: ComponentId) {
+        // @ts-expect-error
         return this.get_column(component_id)?.get_data_slice(this.entity_count())
+    }
+
+    get_changed_ticks_slice_for(component_id: ComponentId) {
+        // @ts-expect-error
+        return this.get_column(component_id)?.get_changed_ticks_slice(this.entity_count())
+    }
+
+    get_added_ticks_slice_for(component_id: ComponentId) {
+        // @ts-expect-error
+        return this.get_column(component_id)?.get_changed_ticks_slice(this.entity_count())
     }
 
     has_column(component_id: ComponentId) {
@@ -240,7 +221,6 @@ export class Table {
             column.clear();
         }
     }
-
 
     __reserve(additional: number) {
         // this.#entities.capacity() - this.#entities.length < additional
@@ -373,7 +353,7 @@ export class TableBuilder {
     }
 
     add_column(component_info: ComponentInfo) {
-        this.#columns.insert(component_info.id(), Column.with_capacity(component_info, this.#capacity))
+        this.#columns.insert(component_info.id(), Column.default())
         return this
     }
 
@@ -394,6 +374,12 @@ export class Tables {
     static default() {
         const empty_table = TableBuilder.with_capacity(0, 0).build()
         return new Tables([empty_table], new Map())
+    }
+
+    check_change_ticks(change_tick: Tick) {
+        for (let i = 0; i < this.#tables.length; i++) {
+            this.#tables[i].check_change_ticks(change_tick);
+        }
     }
 
     len(): number {

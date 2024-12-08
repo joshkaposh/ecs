@@ -6,10 +6,11 @@ import { type Component } from "../component";
 import { World } from ".";
 import { Entities, Entity, type EntityLocation } from "../entity";
 import { BundleFromComponent, BundleInfo, BundleInserter, type Bundle, type DynamicBundle } from "../bundle";
-import { Access, Archetype, ArchetypeId, Archetypes, ComponentId, Components } from "..";
+import { Access, Archetype, ArchetypeId, Archetypes, ComponentId, Components, ComponentTicks } from "..";
 import { UnsafeEntityCell } from "./unsafe-world-cell";
 import { RemovedComponentEvents } from "../removal-detection";
 import { Enum } from "../../util";
+import { $readonly } from "../change_detection";
 
 export class EntityRef {
     #cell: UnsafeEntityCell;
@@ -79,12 +80,18 @@ export class EntityRef {
         if (component.storage_type === StorageType.Table) {
             const table = this.#cell.world().storages().tables.get(this.#cell.location().table_id)!;
             assert(is_some(table));
-            return table.get_column(this.#cell.world().component_id(component)!)?.get_data(this.#cell.location().table_row) as Option<InstanceType<T>>
+
+            const elt = table.get_column(this.#cell.world().component_id(component)!)?.get_data(this.#cell.location().table_row) as Option<InstanceType<T>>
+            return $readonly(elt)
         } else {
             const sparse_set = this.#cell.world().storages().sparse_sets.get(this.#cell.world().component_id(component)!)!;
             assert(is_some(sparse_set));
             return sparse_set.get(this.#cell.id()) as Option<InstanceType<T>>;
         }
+    }
+
+    get_change_ticks(type: Component): Option<ComponentTicks> {
+        return this.#cell.get_change_ticks(type);
     }
 
     get_by_id(component_id: ComponentId): Option<object> {

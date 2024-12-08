@@ -1,8 +1,9 @@
 import { FixedBitSet } from "fixed-bit-set";
-import { Archetype, ArchetypeGeneration, ArchetypeId, ComponentId, Entity, QueryData, QueryFilter, QueryIter, World, QueryComponentsFilter, QueryComponentsData } from "..";
+import { Archetype, ArchetypeGeneration, ArchetypeId, ComponentId, Entity, QueryData, QueryFilter, QueryIter, World, QueryDataTuple, QueryFilterTuple, ArchetypeComponentId, QueryEntityError, All } from "..";
 import { TableId } from "../storage/table";
-import { FilteredAccess } from "./access";
+import { Access, FilteredAccess } from "./access";
 import { ErrorExt, is_some } from "joshkaposh-option";
+import { assert } from "joshkaposh-iterator/src/util";
 
 export type StorageIdTable = {
     table_id: TableId;
@@ -12,8 +13,11 @@ export type StorageIdArchetype = {
 }
 export type StorageId = StorageIdTable | StorageIdArchetype
 
-export class QueryState<D extends QueryData<any, any, any>, F extends QueryFilter<any, any, any>> {
+function from_tuples(fetch: any[], filter: any[]) {
+    return [QueryDataTuple.from_data(fetch), All(...filter)]
+}
 
+export class QueryState<D extends QueryData<any, any, any>, F extends QueryFilter<any, any, any>> {
     #world_id: number;
     __archetype_generation: ArchetypeGeneration;
     __matched_tables: FixedBitSet;
@@ -24,7 +28,6 @@ export class QueryState<D extends QueryData<any, any, any>, F extends QueryFilte
     __filter_state: F['__state'];
 
     is_dense: boolean;
-
     D: D;
     F: F;
 
@@ -55,13 +58,26 @@ export class QueryState<D extends QueryData<any, any, any>, F extends QueryFilte
     }
 
     static new<D extends QueryData, F extends QueryFilter>(data: D, filter: F, world: World): QueryState<D, F> {
-        const D = new QueryComponentsData(data as any);
-        const F = new QueryComponentsFilter(filter as any);
-
+        const [D, F] = from_tuples(data as any, filter as any)
         const state = QueryState.new_uninitialized<D, F>(D as any, F as any, world)
-
         state.update_archetypes(world);
         return state;
+    }
+
+    static new_with_access<D extends QueryData<any, any, any>, F extends QueryFilter<any, any, any>>(data: D, filter: F, world: World, access: Access<ArchetypeComponentId>): QueryState<D, F> {
+        const state = QueryState.new_uninitialized(data, filter, world);
+        for (const archetype of world.archetypes().iter()) {
+            state.#new_archetype_internal(archetype);
+            state.update_archetype_component_access(archetype, access);
+
+            if (state.#new_archetype_internal(archetype)) {
+                state.update_archetype_component_access(archetype, access);
+            }
+        }
+
+        state.__archetype_generation = world.archetypes().generation();
+        return state;
+
     }
 
     static new_uninitialized<D extends QueryData, F extends QueryFilter>(D: D, F: F, world: World): QueryState<D, F> {
@@ -94,6 +110,79 @@ export class QueryState<D extends QueryData<any, any, any>, F extends QueryFilte
             component_access,
             FixedBitSet.default(),
             FixedBitSet.default()
+        )
+    }
+
+    join(world: World, other: QueryState<QueryData<any, any, any>, QueryFilter<any, any, any>>) {
+        return this.join_filtered(world, other)
+    }
+
+    join_filtered<OtherD extends QueryData<any, any, any>, OtherF extends QueryFilter<any, any, any>, NewD extends QueryData<any, any, any>, NewF extends QueryFilter<any, any, any>>(world: World, other: QueryState<OtherD, OtherF>): QueryState<NewD, NewF> {
+        if (this.#world_id !== other.#world_id) {
+            throw new Error('Join queries initialized on different worlds is not allowed.')
+        }
+        const new_d = other.D as unknown as NewD;
+        const new_f = other.F as unknown as NewF;
+
+
+        this.validate_world(world.id());
+        const component_access = FilteredAccess.default();
+        const new_fetch_state = new_d.get_state(world.components());
+        if (!is_some(new_fetch_state)) {
+            throw new Error('could not creat fetch_state. Initialize all referenced components before joining')
+        }
+
+        const new_filter_state = new_f.get_state(world.components());
+        if (!is_some(new_filter_state)) {
+            throw new Error('could not creat filter_state. Initialize all referenced components before joining')
+        }
+
+        new_d.set_access(new_fetch_state, this.__component_access);
+        new_d.update_component_access(new_fetch_state, component_access);
+
+        const new_filter_component_access = FilteredAccess.default();
+        new_f.update_component_access(new_filter_state, new_filter_component_access);
+
+        component_access.extend(other.__component_access);
+        const joined_component_access = this.__component_access.clone();
+        joined_component_access.extend(other.__component_access);
+
+        assert(component_access.is_subset(joined_component_access));
+
+        if (this.__archetype_generation !== other.__archetype_generation) {
+            console.warn('You have tried to join queries with different archetype generations. This could lead to unpredictable results.')
+        }
+
+        const is_dense = this.is_dense && other.is_dense;
+
+        const matched_tables = this.__matched_tables.clone()
+        const matched_archetypes = this.__matched_archetypes.clone()
+
+        matched_tables.intersect_with(other.__matched_tables);
+        matched_archetypes.intersect_with(other.__matched_archetypes);
+
+        const matched_storage_ids: StorageId[] = is_dense ?
+            matched_tables
+                .ones()
+                .map(id => ({ table_id: id }))
+                .collect() :
+            matched_archetypes
+                .ones()
+                .map(id => ({ archetype_id: id }))
+                .collect();
+
+        return new QueryState(
+            new_d,
+            new_f,
+            this.#world_id,
+            this.__archetype_generation,
+            matched_storage_ids,
+            is_dense,
+            new_fetch_state,
+            new_filter_state,
+            joined_component_access,
+            matched_tables,
+            matched_archetypes
         )
     }
 
@@ -131,6 +220,38 @@ export class QueryState<D extends QueryData<any, any, any>, F extends QueryFilte
         this.__archetype_generation = world.archetypes().generation();
     }
 
+    update_archetype_component_access(archetype: Archetype, access: Access<ArchetypeComponentId>) {
+        const [component_reads_and_writes, comonent_reads_and_writes_inverted] = this.__component_access.access().component_reads_and_writes();
+        const [component_writes, component_writes_inverted] = this.__component_access.access().component_writes();
+        if (!comonent_reads_and_writes_inverted && !component_writes_inverted) {
+            component_reads_and_writes.for_each(id => {
+                id = archetype.get_archetype_component_id(id)!
+                if (is_some(id)) {
+                    access.add_component_read(id);
+                }
+            })
+
+            component_writes.for_each(id => {
+                id = archetype.get_archetype_component_id(id)!
+                if (is_some(id)) {
+                    access.add_component_write(id);
+                }
+            })
+
+            return;
+        }
+
+        for (const [component_id, archetype_component_id] of archetype.__components_with_archetype_component_id()) {
+            if (this.__component_access.access().has_component_read(component_id)) {
+                access.add_component_read(archetype_component_id);
+            }
+
+            if (this.__component_access.access().has_component_write(component_id)) {
+                access.add_component_write(archetype_component_id);
+            }
+        }
+    }
+
     validate_world(world_id: number) {
         if (this.#world_id !== world_id) {
             throw new Error('Encountered a mismatched World. This QueryState was created from ' + this.#world_id)
@@ -155,31 +276,6 @@ export class QueryState<D extends QueryData<any, any, any>, F extends QueryFilte
                 .ones()
                 .all(index => !set_contains_id(index))
         ))
-    }
-
-    get(world: World, entity: Entity) {
-        this.update_archetypes(world);
-
-        return this.get_unchecked_manual(world, entity);
-    }
-
-    get_unchecked_manual(world: World, entity: Entity) {
-        const location = world.entities().get(entity) ?? new ErrorExt(entity, 'No such Entity');
-        if (location instanceof ErrorExt) {
-            throw location
-        }
-
-        if (!this.__matched_archetypes.contains(location.archetype_id)) {
-            return new ErrorExt({ entity, world }, 'Query does not match')
-        }
-
-        const archetype = world.archetypes().get(location.archetype_id)!;
-        const fetch = this.D.init_fetch(world, this.__fetch_state);
-        const filter = this.F.init_fetch(world, this.__filter_state);
-
-        const table = world.storages().tables.get(location.table_id)!;
-        this.D.set_archetype(fetch, this.__fetch_state, archetype, table)
-        this.D.set_archetype(filter, this.__filter_state, archetype, table)
     }
 
     #new_archetype_internal(archetype: Archetype) {
@@ -220,6 +316,6 @@ export class QueryState<D extends QueryData<any, any, any>, F extends QueryFilte
     }
 
     iter_unchecked_manual(world: World) {
-        return new QueryIter(world, this)
+        return QueryIter.new(world, this, world.last_change_tick(), world.change_tick())
     }
 }

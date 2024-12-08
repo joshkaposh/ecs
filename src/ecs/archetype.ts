@@ -27,7 +27,7 @@ export const ArchetypeId = {
 export type ComponentStatus = Enum<typeof ComponentStatus>
 export const ComponentStatus = {
     Added: 0,
-    Mutated: 1
+    Existing: 1,
 } as const;
 
 export type BundleComponentStatus = {
@@ -66,11 +66,12 @@ export class Edges {
         const bundle = this.__get_add_bundle_internal(bundle_id);
         return bundle ? bundle.archetype_id : null
     }
+
     __get_add_bundle_internal(bundle_id: BundleId): Option<AddBundle> {
         return this.#add_bundle.get(bundle_id);
     }
 
-    __insert_add_bundle(bundle_id: BundleId, archetype_id: ArchetypeId, bundle_status: ComponentStatus[]) {
+    __insert_add_bundle(bundle_id: BundleId, archetype_id: ArchetypeId, bundle_status: ComponentStatus[], added: any[], existing: any[]) {
         this.#add_bundle.insert(bundle_id, new AddBundle(archetype_id, bundle_status))
     }
 
@@ -235,12 +236,49 @@ export class Archetype {
         return this.#edges;
     }
 
-    __edges_mut() {
-        // return this.#edges;
+    len() {
+        return this.#entities.length;
+    }
+
+    /**
+     * @returns Returns true if and only if no `Component`s are in this `Archetype`
+     */
+    is_empty(): boolean {
+        return this.#entities.length === 0;
+    }
+
+    /**
+     * @summary Checks if the archetype contains a specific component. This runs in `O(1)` time.
+     */
+    contains(component_id: ComponentId) {
+        return this.#components.contains(component_id)
+    }
+
+    /**
+     * @description
+     * Gets the type of storage where a component in the archetype can be found.
+     * Returns `None` if the component is not part of the archetype.
+     * This runs in `O(1)` time.
+     */
+
+    get_storage_type(component_id: ComponentId): Option<StorageType> {
+        return this.#components.get(component_id)?.storage_type
+    }
+
+    /**
+     * @summary Gets the `ArchetypeComponentId` for the given `ComponentId`.
+     * @returns Returns None if component is not in archetype.
+     */
+    get_archetype_component_id(component_id: ComponentId): Option<ArchetypeComponentId> {
+        return this.#components.get(component_id)?.archetype_component_id;
     }
 
     entity_table_row(row: ArchetypeRow) {
         return this.#entities[row].table_row;
+    }
+
+    __components_with_archetype_component_id() {
+        return this.#components.iter().map(([component_id, info]) => [component_id, info.archetype_component_id])
     }
 
     __set_entity_table_row(row: ArchetypeRow, table_row: TableRow) {
@@ -283,43 +321,6 @@ export class Archetype {
             swapped_entity: is_last ? null : this.#entities[row].entity,
             table_row: entity!.table_row
         }
-    }
-
-    len() {
-        return this.#entities.length;
-    }
-
-    /**
-     * @returns Returns true if and only if no `Component`s are in this `Archetype`
-     */
-    is_empty(): boolean {
-        return this.#entities.length === 0;
-    }
-
-    /**
-     * @summary Checks if the archetype contains a specific component. This runs in `O(1)` time.
-     */
-    contains(component_id: ComponentId) {
-        return this.#components.contains(component_id)
-    }
-
-    /**
-     * @description
-     * Gets the type of storage where a component in the archetype can be found.
-     * Returns `None` if the component is not part of the archetype.
-     * This runs in `O(1)` time.
-     */
-
-    get_storage_type(component_id: ComponentId): Option<StorageType> {
-        return this.#components.get(component_id)?.storage_type
-    }
-
-    /**
-     * @summary Gets the `ArchetypeComponentId` for the given `ComponentId`.
-     * @returns Returns None if component is not in archetype.
-     */
-    get_archetype_component_id(component_id: ComponentId): Option<ArchetypeComponentId> {
-        return this.#components.get(component_id)?.archetype_component_id;
     }
 
     __clear_entities() {
@@ -409,6 +410,37 @@ export class Archetypes {
         return this.#archetypes[ArchetypeId.EMPTY];
     }
 
+
+    /**
+     * @summary Gets a reference to an `Archetype` by its `ArchetypeId`.
+     * @returns Returns a reference to an `Archetype` or None if it doesn't exist.
+     */
+    get(archetype_id: ArchetypeId): Option<Archetype> {
+        return this.#archetypes[archetype_id];
+    }
+
+
+    /**
+     * @returns Returns an iterator over all the `Archetype`s contained in `Archetypes`
+     */
+    iter(): Iterator<Archetype> {
+        return iter(this.#archetypes);
+    }
+
+
+    archetype_components_len() {
+        return this.#archetype_component_count;
+    }
+
+    iter_range(from = 0, to = this.#archetypes.length) {
+        return range(from, to).map(i => this.#archetypes[i]);
+    }
+    __clear_entities() {
+        for (const archetype of this.#archetypes) {
+            archetype.__clear_entities();
+        }
+    }
+
     __new_archetype_component_id(): ArchetypeComponentId {
         const id = this.#archetype_component_count;
         const count = u32.checked_add(this.#archetype_component_count, 1);
@@ -417,14 +449,6 @@ export class Archetypes {
         }
         this.#archetype_component_count = count;
         return id;
-    }
-
-    /**
-     * @summary Gets a reference to an `Archetype` by its `ArchetypeId`.
-     * @returns Returns a reference to an `Archetype` or None if it doesn't exist.
-     */
-    get(archetype_id: ArchetypeId): Option<Archetype> {
-        return this.#archetypes[archetype_id];
     }
 
     __get_2_mut(a: ArchetypeId, b: ArchetypeId): [Archetype, Archetype] {
@@ -438,13 +462,6 @@ export class Archetypes {
     }
 
     /**
-     * @returns Returns an iterator over all the `Archetype`s contained in `Archetypes`
-     */
-    iter(): Iterator<Archetype> {
-        return iter(this.#archetypes);
-    }
-
-    /**
      * @description
      *  Gets the archetype id matching the given inputs or inserts a new one if it doesn't exist.
      * `table_components` and `sparse_set_components` must be sorted
@@ -453,7 +470,6 @@ export class Archetypes {
      * 
      * [`TableId`] must exist in tables
      */
-
     __get_id_or_insert(components: Components, table_id: TableId, table_components: ComponentId[], sparse_set_components: ComponentId[]): ArchetypeId {
         const archetype_identity: ArchetypeComponents = {
             sparse_set_components: structuredClone(sparse_set_components),
@@ -490,17 +506,4 @@ export class Archetypes {
         return archetype_id;
     }
 
-    archetype_components_len() {
-        return this.#archetype_component_count;
-    }
-
-    __clear_entities() {
-        for (const archetype of this.#archetypes) {
-            archetype.__clear_entities();
-        }
-    }
-
-    iter_range(from = 0, to = this.#archetypes.length) {
-        return range(from, to).map(i => this.#archetypes[i]);
-    }
 }

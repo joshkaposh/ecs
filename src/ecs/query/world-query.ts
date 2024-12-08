@@ -1,27 +1,25 @@
 import { type Option } from "joshkaposh-option";
-import { type Unit } from "../../util";
+import { unit } from "../../util";
 import { Archetype } from "../archetype";
 import { Entity } from "../entity";
 import { Table, type TableRow } from "../storage/table";
 import { World } from "../world";
 import { FilteredAccess } from "./access";
-import { Component, Components, type ComponentId } from "../component";
+import { Component, Components, Tick, type ComponentId } from "../component";
 import { StorageType } from "../storage";
-
-export type QueryData<Item = Unit, Fetch = Unit, State = Unit> = WorldQuery<Item, Fetch, State>
 
 export function is_dense(ty: Component) {
     return ty.storage_type === StorageType.Table
 }
 
-export abstract class WorldQuery<Item, Fetch = Unit, State = Unit> {
+export abstract class WorldQuery<Item, Fetch = unit, State = unit> {
     __item!: Item;
     __fetch!: Fetch;
     __state!: State;
 
     abstract readonly IS_DENSE: boolean;
 
-    abstract init_fetch(world: World, state: State): Fetch;
+    abstract init_fetch(world: World, state: State, last_run: Tick, this_run: Tick): Fetch;
 
     abstract set_archetype(fetch: Fetch, state: State, archetype: Archetype, table: Table): void;
 
@@ -40,3 +38,37 @@ export abstract class WorldQuery<Item, Fetch = Unit, State = Unit> {
     abstract matches_component_set(state: State, set_contains_id: (component_id: ComponentId) => boolean): boolean;
 };
 
+export class NoopWorldQuery extends WorldQuery<unit, unit, unit> {
+
+    readonly IS_DENSE = true;
+
+    init_fetch(_world: World, _state: unit): unit {
+        this.__fetch = unit;
+        return unit
+    }
+
+    set_archetype(_fetch: unit, _state: unit, _archetype: Archetype, _table: Table): void { }
+
+    set_table(_fetch: unit, _state: unit, _table: Table): void { }
+
+    fetch(_fetch: unit, _entity: Entity, _table_row: TableRow): unit {
+        return unit;
+    };
+
+    update_component_access(_state: unit, _access: FilteredAccess<ComponentId>) { }
+
+    init_state(_world: World): unit {
+        this.__state = unit;
+        return unit
+    };
+
+    get_state(_components: Components): unit {
+        return unit
+    };
+
+    matches_component_set(_state: unit, _set_contains_id: (component_id: ComponentId) => boolean): boolean {
+        return true;
+    };
+
+
+}
