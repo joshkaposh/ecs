@@ -213,8 +213,8 @@ export class Res<T extends Resource> extends DetectChanges<InstanceType<T>> {
 
 export class ResMut<T extends Resource> {
     value: InstanceType<T>;
-    ticks: Ticks;
-    constructor(type: InstanceType<T>, ticks: Ticks) {
+    ticks: TicksMut;
+    constructor(type: InstanceType<T>, ticks: TicksMut) {
         this.value = type;
         this.ticks = ticks;
     }

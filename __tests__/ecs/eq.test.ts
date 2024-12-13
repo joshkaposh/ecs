@@ -1,6 +1,6 @@
 import { test, expect, assert } from 'vitest';
-import { eq } from '../src/util';
-import { Entity } from '../src/ecs';
+import { eq } from '../../src/util';
+import { Entity } from '../../src/ecs';
 
 test('eq', () => {
     const e1 = Entity.from_raw_and_generation(0, 1);

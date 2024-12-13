@@ -1,12 +1,12 @@
 import { assert, expect, test } from 'vitest'
-import { Events, ManualEventReader } from '../src/ecs';
+import { Events, ManualEventReader } from '../../src/ecs';
 
 class TestEvent {
     constructor(public i: number) { }
 }
 
 test('events', () => {
-    const events = Events.default<typeof TestEvent>(TestEvent);
+    const events = Events.default(TestEvent);
     const event_0 = new TestEvent(0)
     const event_1 = new TestEvent(1)
     const event_2 = new TestEvent(2)

@@ -57,8 +57,6 @@ const AppError = {
     }
 }
 
-
-
 export type PluginsState = 0 | 1 | 2 | 3;
 export const PluginsState = {
     Adding: 0,
@@ -77,19 +75,11 @@ function run_once(app: App): AppExit {
 }
 type RunnerFn = (app: App) => AppExit;
 
+type SystemInput<T = any> = any;
 
 export class App {
     #sub_apps: SubApps;
     #runner: RunnerFn
-    // world: World;
-    // runner: (app: App) => void;
-    // main_schedule_label: ScheduleLabel;
-    // #sub_apps: Map<AppLabel, SubApp>;
-    // #plugin_registry: Plugin[];
-    // #plugin_name_added: Set<string>;
-    // // a private counter to prevent incorrect calls to `App::run()` from `Plugin::build()`
-    // #building_plugin_depth: number;
-    // #plugins_state: PluginsState;
     constructor(
         sub_apps: SubApps,
         runner: RunnerFn
@@ -105,12 +95,6 @@ export class App {
     static default() {
         const app = App.empty();
         // app.#sub_apps.main.update_schedule = Main.intern();
-
-        // feature Reflect
-        // app.init_resource(AppTypeRegistry) 
-
-        // feature ReflectFunctions
-        // app.init_resource(AppFunctionRegistry)
 
         // app.add_plugins(MainSchedulePlugin);
         // app.add_systems(First,

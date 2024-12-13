@@ -1,5 +1,5 @@
 import { assert, expect, test } from "vitest";
-import { clamp_unchecked, lerp, u8, u16, u32 } from '../src/Intrinsics';
+import { clamp_unchecked, lerp, u8, u16, u32 } from '../../src/Intrinsics';
 
 test('size', () => {
 

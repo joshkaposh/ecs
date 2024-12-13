@@ -12,7 +12,7 @@ import { FixedBitSet } from "../../fixed-bit-set";
 import { Directed, TarjanScc, Undirected, UnGraphMap, Incoming, Outgoing, DiGraphMap, GraphMap, Topo, toposort } from "joshkaposh-graph";
 import { extend } from "../../array-helpers";
 import { Configs, IntoSytemSetConfigs, NodeConfig, NodeConfigs, SystemConfig, SystemSet } from "./config";
-import { define_resource } from "../definitions";
+import { define_resource } from "../define";
 import { StorageType } from "../storage";
 
 // * --- TEMP Variables and Types ---

@@ -1,5 +1,5 @@
 import { iter } from "joshkaposh-iterator";
-import { is_some, type Option } from 'joshkaposh-option';
+import { is_none, is_some, type Option } from 'joshkaposh-option';
 import { StorageType, Storages } from "./storage";
 import { World } from "./world";
 import { u32 } from "../Intrinsics";
@@ -16,7 +16,7 @@ export type UninitComonent<T = any> = (new (...args: any[]) => T)
 
 export type ResourceId = number;
 export type ResouceMetadata<R extends new (...args: any[]) => any> = { from_world(world: World): InstanceType<R> };
-export type Resource<R = Component> = R extends Component ? R & ComponentMetadata & ResouceMetadata<R> : never;
+export type Resource<R extends Component = Component> = R extends Component ? R & Component & ResouceMetadata<R> : never;
 
 export function is_component(ty: any): ty is Component {
     return ty && typeof ty === 'object' && ty.type_id
@@ -158,12 +158,12 @@ export class Components {
         return this.#resource_indices.has(type_id)
     }
 
-    register_component(type: Component) {
-
+    register_component(type: Component, storages: Storages) {
+        return this.init_component(type, storages);
     }
 
     register_resource(type: Resource) {
-
+        return this.init_resource(type)
     }
 
     get_info(id: ComponentId): Option<ComponentInfo> {
@@ -180,6 +180,14 @@ export class Components {
 
     get_id_type_id(type_id: UUID): Option<ComponentId> {
         return this.#indices.get(type_id);
+    }
+
+    resource_id(type: Resource): number {
+        const id = this.#resource_indices.get(type.type_id);
+        if (is_none(id)) {
+            throw new Error(`Requested Resource ${type.name} was not found in Components`)
+        }
+        return id;
     }
 
     get_resource_id(type: TypeId): Option<ResourceId> {

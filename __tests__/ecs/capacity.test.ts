@@ -1,5 +1,5 @@
 import { assert, expect, test } from "vitest";
-import { capacity, extend, extend_map } from "../src/array-helpers";
+import { capacity, extend, extend_map } from "../../src/array-helpers";
 
 test('capacity', () => {
     const arr = [];

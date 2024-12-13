@@ -1,6 +1,6 @@
 import { assert, test } from "vitest";
-import { HIGH_MASK, IdKind, IdentifierMask } from '../src/ecs/identifier';
-import { u32 } from "../src/Intrinsics";
+import { HIGH_MASK, IdKind, IdentifierMask } from '../../src/ecs/identifier';
+import { u32 } from "../../src/Intrinsics";
 const NON_ZERO_U32_MIN = 1;
 
 function assert_eq(a: any, b: any) {

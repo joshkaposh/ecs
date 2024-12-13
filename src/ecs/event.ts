@@ -116,25 +116,16 @@ type EventSequence<E extends Event> = {
 
 // the events for a given type
 export class Events<E extends new (...args: any[]) => any> {
-    #events_a: EventSequence<InstanceType<E>>;
-    #events_b: EventSequence<InstanceType<E>>;
+    __events_a: EventSequence<InstanceType<E>>;
+    __events_b: EventSequence<InstanceType<E>>;
     #event_count: number;
     #ty: E;
     private constructor(events_a: EventSequence<InstanceType<E>>, events_b: EventSequence<InstanceType<E>>, event_count: number, ty: E) {
-        this.#events_a = events_a;
-        this.#events_b = events_b;
+        this.__events_a = events_a;
+        this.__events_b = events_b;
         this.#event_count = event_count;
         this.#ty = ty;
     }
-
-    get __events_a() {
-        return this.#events_a
-    }
-
-    get __events_b() {
-        return this.#events_b
-    }
-
 
     static default<E extends Event>(ty: E): Events<E> {
         return new Events<E>(
@@ -153,7 +144,7 @@ export class Events<E extends new (...args: any[]) => any> {
      * @returns Returns the index of the oldest event stored in the event buffer.
      */
     oldest_event_count(): number {
-        return Math.min(this.#events_a.start_event_count, this.#events_b.start_event_count)
+        return Math.min(this.__events_a.start_event_count, this.__events_b.start_event_count)
         // return this.#events_a.start_event_count.min(this.#events_b.start_event_count)
     }
 
@@ -170,7 +161,7 @@ export class Events<E extends new (...args: any[]) => any> {
             event_id, event
         }
 
-        this.#events_b.events.push(event_instance);
+        this.__events_b.events.push(event_instance);
         this.#event_count += 1;
 
         return event_id;
@@ -227,36 +218,36 @@ export class Events<E extends new (...args: any[]) => any> {
     }
 
     update_drain(): DoubleEndedIterator<E> {
-        const temp = this.#events_b;
-        this.#events_b = this.#events_a;
-        this.#events_a = temp;
+        const temp = this.__events_b;
+        this.__events_b = this.__events_a;
+        this.__events_a = temp;
 
-        const iter = drain(this.#events_b.events, range(0, this.#events_b.events.length))
-        this.#events_b.start_event_count = this.#event_count;
+        const iter = drain(this.__events_b.events, range(0, this.__events_b.events.length))
+        this.__events_b.start_event_count = this.#event_count;
         return iter.map(e => e.event);
     }
 
     reset_start_event_count(): void {
-        this.#events_a.start_event_count = this.#event_count;
-        this.#events_b.start_event_count = this.#event_count;
+        this.__events_a.start_event_count = this.#event_count;
+        this.__events_b.start_event_count = this.#event_count;
     }
 
     clear(): void {
         this.reset_start_event_count();
-        this.#events_a.events.length = 0;
-        this.#events_b.events.length = 0;
+        this.__events_a.events.length = 0;
+        this.__events_b.events.length = 0;
     }
 
     debug() {
         return [
-            this.#events_a.events,
-            this.#events_b.events
+            this.__events_a.events,
+            this.__events_b.events
         ]
     }
 
     len(): number {
-        const a = this.#events_a.events;
-        const b = this.#events_b.events;
+        const a = this.__events_a.events;
+        const b = this.__events_b.events;
 
         let len_a = a.length, len_b = b.length;
 
@@ -282,8 +273,8 @@ export class Events<E extends new (...args: any[]) => any> {
     }
 
     is_empty(): boolean {
-        const a = this.#events_a.events;
-        const b = this.#events_b.events;
+        const a = this.__events_a.events;
+        const b = this.__events_b.events;
 
         if (a.length === 0 && b.length === 0) {
             return true
@@ -295,14 +286,14 @@ export class Events<E extends new (...args: any[]) => any> {
     drain(): Iterator<E> {
         this.reset_start_event_count();
 
-        return drain(this.#events_a.events, range(0, this.#events_a.events.length))
-            .chain(drain(this.#events_b.events, range(0, this.#events_b.events.length)))
+        return drain(this.__events_a.events, range(0, this.__events_a.events.length))
+            .chain(drain(this.__events_b.events, range(0, this.__events_b.events.length)))
             .map(i => i.event);
     }
 
     iter_current_update_events(): ExactSizeIterator<E> {
         // @ts-expect-error
-        return iter(this.#events_b.events).map(i => i.event)
+        return iter(this.__events_b.events).map(i => i.event)
     }
 
     get_event(id: number): Option<[event: E, index: number]> {
@@ -318,13 +309,13 @@ export class Events<E extends new (...args: any[]) => any> {
     }
 
     oldest_id() {
-        return this.#events_a.start_event_count;
+        return this.__events_a.start_event_count;
     }
 
     sequence(id: number) {
-        return id < this.#events_b.start_event_count ?
-            this.#events_a :
-            this.#events_b;
+        return id < this.__events_b.start_event_count ?
+            this.__events_a :
+            this.__events_b;
     }
 
     extend(iterable: Iterable<E>) {
@@ -336,7 +327,7 @@ export class Events<E extends new (...args: any[]) => any> {
             return { event_id, event } as EventInstance<E>;
         }).collect();
 
-        extend(this.#events_b.events, events as any)
+        extend(this.__events_b.events, events as any)
         this.#event_count = event_count;
     }
 }

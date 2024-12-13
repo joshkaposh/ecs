@@ -1,5 +1,5 @@
 import { assert, expect, test } from 'vitest'
-import { define_component, define_marker, With, Without, World, TypeId, StorageType, Maybe, Added, Write, Read, ReadRef, EntityRef, Changed } from '../src/ecs'
+import { define_component, define_marker, With, Without, World, TypeId, StorageType, Maybe, Added, Write, Read, ReadRef, EntityRef, Changed } from '../../src/ecs'
 
 class A {
     static type_id: TypeId['type_id'];

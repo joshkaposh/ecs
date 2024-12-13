@@ -1,7 +1,7 @@
 import { test, assert } from 'vitest'
 import { iter, range } from 'joshkaposh-iterator';
-import { Entity, Components, Storages, } from '../src/ecs'
-import { TableBuilder, TableRow } from '../src/ecs/storage/table';
+import { Entity, Components, Storages, Tick, } from '../../src/ecs'
+import { TableBuilder, TableRow } from '../../src/ecs/storage/table';
 
 class W {
     constructor(public table_row: TableRow) { }
@@ -24,7 +24,7 @@ test('Table', () => {
     for (const entity of entities) {
         const row = table.__allocate(entity);
         const value = new W(row);
-        table.get_column(component_id!)?.__initialize(row, value)
+        table.get_column(component_id!)?.__initialize(row, value, new Tick(0))
     }
 
     assert(table.entity_capacity() === 256)

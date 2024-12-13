@@ -7,6 +7,18 @@ export const unit = Symbol('Unit');
 
 type Hint = 'string' | 'number' | 'default';
 
+function swap_elements_container<T extends PropertyKey>(get_a: () => T, get_b: () => T, a: Record<PropertyKey, any>) {
+    let temp = a[get_b()];
+    a[get_a()] = a[get_b()];
+    a[get_b()] = temp;
+}
+
+export function memswap<T extends PropertyKey>(get_a: () => T, get_b: () => T, containers: [Record<PropertyKey, any>, Record<PropertyKey, any>]) {
+    const [a, b] = containers
+    swap_elements_container(get_a, get_b, a);
+    swap_elements_container(get_a, get_b, b);
+}
+
 export type DeepReadonly<T> = Readonly<{
     [K in keyof T]:
     // Is it a primitive? Then make it readonly

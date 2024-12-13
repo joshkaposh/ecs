@@ -1,5 +1,5 @@
 import { assert, expect, test } from "vitest";
-import { Access, AccessConflicts, } from '../src/ecs/query/access';
+import { Access, AccessConflicts, } from '../../src/ecs/query/access';
 
 test('read_all_access_conflicts', () => {
     // read_all / single write

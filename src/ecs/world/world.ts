@@ -1,8 +1,8 @@
 import { Iterator, done, from_fn, iter, once } from "joshkaposh-iterator";
 import { assert, TODO } from "joshkaposh-iterator/src/util";
 import { Err, Option, Result, is_error, is_none, is_some, ErrorExt } from 'joshkaposh-option';
-import { ArchetypeComponentId, Archetypes } from "../archetype";
-import { Component, ComponentId, ComponentInfo, Components, Resource, ResourceId, Tick, TypeId } from "../component";
+import { ArchetypeComponentId, ArchetypeGeneration, Archetypes } from "../archetype";
+import { Component, ComponentId, ComponentInfo, Components, ComponentTicks, Resource, ResourceId, Tick, TypeId } from "../component";
 import { Storages } from "../storage";
 import { AllocAtWithoutReplacement, Entities, Entity, EntityLocation } from "../entity";
 import { Bundle, BundleInserter, Bundles, BundleSpawner, DynamicBundle } from "../bundle";
@@ -13,12 +13,12 @@ import { EntityMut, EntityRef, EntityWorldMut } from './entity-ref'
 import { SpawnBatchIter } from "./spawn-batch";
 import { UnsafeEntityCell } from "./unsafe-world-cell";
 import { CommandQueue } from "./command_queue";
-import { define_component } from "../definitions";
-import { RunSystemOnce } from "../system";
+import { define_component } from "../define";
+import { FunctionSystem, IntoSystemTrait, RunSystemError, RunSystemOnce, System, SystemInput, SystemMeta, SystemParam, SystemParamFunction } from "../system";
 import { unit } from "../../util";
 import { u32 } from "../../Intrinsics";
-import { CHECK_TICK_THRESHOLD } from "../change_detection";
-import { Schedules } from "../schedule";
+import { CHECK_TICK_THRESHOLD, TicksMut } from "../change_detection";
+import { Schedule, ScheduleLabel, Schedules } from "../schedule";
 
 export type WorldId = number;
 
@@ -39,7 +39,11 @@ define_component(OnInsert);
 define_component(OnReplace);
 define_component(OnRemove);
 
-export class World implements RunSystemOnce {
+class TryRunScheduleError extends ErrorExt {
+
+}
+
+export class World {
     #id: WorldId;
     #entities: Entities;
     #components: Components;
@@ -102,16 +106,6 @@ export class World implements RunSystemOnce {
         return world;
     }
 
-    // @ts-expect-error
-    run_system_once<Out, Marker, T extends IntoSystem<unit, Out, Marker>>(system: T): void {
-        this.run_system_once_with(system)
-    }
-
-    // @ts-expect-error
-    run_system_once_with<Out, Marker, T extends IntoSystem<unit, Out, Marker>>(system: T): void {
-
-    }
-
     id() {
         return this.#id;
     }
@@ -150,8 +144,7 @@ export class World implements RunSystemOnce {
     }
 
     register_resource(type: Resource): number {
-        this.#components.register_resource(type);
-        return this.init_resource(type);
+        return this.#components.register_resource(type);
     }
 
     // I: SystemInput, system: IntoSystem<I, O, M>
@@ -214,24 +207,6 @@ export class World implements RunSystemOnce {
         return is_some(id) ? this.#components.get_info(id) : null;
     }
 
-    many_entities(entities: Entity[]): EntityRef[] {
-        const refs = this.get_many_entities(entities);
-        if (is_error(refs)) {
-            throw new Error(`Entity ${refs.get()} does not exist`)
-        }
-
-        return refs as EntityRef[];
-    }
-
-    many_entities_mut(entities: Entity[]): EntityWorldMut[] {
-        const refs = this.get_many_entities_mut(entities);
-        if (is_error(refs)) {
-            throw new Error(`Entity ${refs.get()} does not exist`)
-        }
-
-        return refs as EntityWorldMut[];
-    }
-
     inspect_entity(entity: Entity): ComponentInfo[] {
         const location = this.#entities.get(entity);
         if (!location) {
@@ -276,71 +251,6 @@ export class World implements RunSystemOnce {
         // ! Additionally, Entities.get() returns the correct EntityLocation if the Entity exists.
         // UnsafeEntityCell // { self.as_unsafe_world_cell_readonly, entity, location }
         return new EntityWorldMut(this, entity, location);
-    }
-
-    get_many_entities(entities: Entity[]): Result<EntityRef[], Err<Entity>> {
-        const refs: EntityRef[] = [];
-        for (let i = 0; i < entities.length; i++) {
-            const ref = this.get_entity(entities[i]);
-            if (is_none(ref)) {
-                return new ErrorExt(entities[i]);
-            }
-            refs[i] = ref;
-        }
-        return refs;
-    }
-
-    /**
- *@summary
- Returns an Iterator (element type = Entity) of current entities.
-
- This is useful in contexts where you have read-only access to the World
- */
-    iter_entities(): Iterator<EntityRef> {
-        return this.#archetypes.iter().flat_map(archetype => iter(archetype.entities())
-            .enumerate()
-            .map(([archetype_row, archetype_entity]) => {
-                const entity = archetype_entity.id();
-                const location = {
-                    archetype_id: archetype.id(),
-                    archetype_row: archetype_row,
-                    table_id: archetype.table_id(),
-                    table_row: archetype_entity.table_row
-                }
-                return new EntityRef(new UnsafeEntityCell(this, entity, location));
-            })
-        )
-    }
-
-    iter_entities_mut(): Iterator<EntityWorldMut> {
-        return this.archetypes().iter().flat_map(archetype => {
-            return iter(archetype.entities())
-                .enumerate()
-                .map(([archetype_row, archetype_entity]) => {
-                    const entity = archetype_entity.id();
-                    const location: EntityLocation = {
-                        archetype_id: archetype.id(),
-                        archetype_row: archetype_row,
-                        table_id: archetype.table_id(),
-                        table_row: archetype_entity.table_row
-                    }
-                    return new EntityWorldMut(this, entity, location)
-                })
-        }) as any
-    }
-
-    // @ts-expect-error
-    get_many_entities_mut(entities: Entity[]): Result<EntityWorldMut[], QueryEntityError> {
-        for (let i = 0; i < entities.length; i++) {
-            for (let j = 0; j < i; j++) {
-                if (`${entities[i]}` === `${entities[j]}`) {
-                    return QueryEntityError.AliasedMutability(entities[i]) as any
-                }
-            }
-        }
-
-        // ! Safety: Each entity is unique.
-        return this.#get_entities_mut_unchecked(entities);
     }
 
     spawn_empty() {
@@ -439,12 +349,12 @@ export class World implements RunSystemOnce {
         return from_fn(() => { return done() })
     }
 
-    insert_resource(resource: Resource<Component>): void {
+    insert_resource(resource: Resource): void {
         const component_id = this.#components.init_resource(resource);
         this.insert_resource_by_id(component_id, resource);
     }
 
-    remove_resource<R extends Resource<Component>>(resource: R): Option<R> {
+    remove_resource<R extends Resource>(resource: R): Option<R> {
         const component_id = this.#components.get_resource_id(resource);
         if (is_none(component_id)) {
             return null
@@ -454,7 +364,7 @@ export class World implements RunSystemOnce {
         return res;
     }
 
-    contains_resource(resource: Resource<Component>): boolean {
+    contains_resource(resource: Resource): boolean {
         const id = this.#components.get_resource_id(resource);
         if (is_none(id)) {
             return false
@@ -462,18 +372,18 @@ export class World implements RunSystemOnce {
         return this.#storages.resources.get(id)?.is_present() ?? false;
     }
 
-    resource<R extends Resource<Component>>(resource: R): InstanceType<R> {
+    resource<R extends Resource>(resource: R): InstanceType<R> {
         const res = this.get_resource(resource);
         if (!res) {
-            throw new Error("Requested resource does not exist in the `World`. Did you forget to add it using `app.insert_resource` / `app.init_resource`? Resource<Component>s are also implicitly added via `app.add_event and can be added by plugins.`")
+            throw new Error("Requested resource does not exist in the `World`. Did you forget to add it using `app.insert_resource` / `app.init_resource`? Resources are also implicitly added via `app.add_event and can be added by plugins.`")
         }
         return res;
     }
 
-    resource_mut<R extends Resource<Component>>(resource: R): Option<InstanceType<R>> {
+    resource_mut<R extends Resource>(resource: R): InstanceType<R> {
         const res = this.get_resource_mut(resource);
         if (!res) {
-            throw new Error("Requested resource does not exist in the `World`. Did you forget to add it using `app.insert_resource` / `app.init_resource`? Resource<Component>s are also implicitly added via `app.add_event and can be added by plugins.`")
+            throw new Error("Requested resource does not exist in the `World`. Did you forget to add it using `app.insert_resource` / `app.init_resource`? Resources are also implicitly added via `app.add_event and can be added by plugins.`")
         }
         return res;
     }
@@ -488,8 +398,9 @@ export class World implements RunSystemOnce {
     Note that any resource with the [`Default`] trait automatically implements [`FromWorld`],
     and those default values will be here instead.
      */
-    init_resource(resource: Resource<Component>): ComponentId {
+    init_resource(resource: Resource): ComponentId {
         const component_id = this.#components.init_resource(resource);
+
         const r = this.#storages.resources.get(component_id)
         if (!r || !r.is_present()) {
             const v = resource.from_world(this);
@@ -498,26 +409,63 @@ export class World implements RunSystemOnce {
         return component_id;
     }
 
-    insert_resource_by_id(component_id: ComponentId, value: TypeId) {
-        this.#initialize_resource_internal(component_id).insert(value)
-    }
-
-    get_resource<R extends Resource<Component>>(resource: R): Option<InstanceType<R>> {
-        return this.#storages.resources.get(this.#components.component_id(resource)!) as Option<InstanceType<R>>;
-    }
-
-    get_resource_mut<R extends Resource<Component>>(resource: R): Option<InstanceType<R>> {
-        return this.#storages.resources.get(this.#components.component_id(resource)!) as Option<InstanceType<R>>;
-    }
-
-    get_resource_or_insert_with<R extends Resource<Component>>(resource: R, func: () => R): R {
-        const component_id = this.#components.init_resource(resource);
-        const data = this.#initialize_resource_internal(component_id);
-        if (!data.is_present()) {
-            data.insert(func())
+    get_resource<R extends Resource>(resource: R): Option<InstanceType<R>> {
+        const id = this.#components.resource_id(resource);
+        if (!is_some(id)) {
+            return
         }
 
-        return data.get_data() as R;
+        return this.#storages.resources.get(id)?.get()
+    }
+
+    get_resource_mut<R extends Resource>(resource: R): Option<InstanceType<R>> {
+        const id = this.#components.resource_id(resource);
+        if (is_none(id)) {
+            return
+        }
+
+        return this.#storages.resources.get(id)?.get_mut(this.last_change_tick(), this.change_tick());
+
+    }
+
+    get_resource_by_id<R extends Resource>(component_id: ComponentId): Option<InstanceType<R>> {
+        return this.#storages.resources.get(component_id)?.get()
+    }
+
+    get_resource_mut_by_id<R extends Resource>(component_id: ComponentId): Option<[InstanceType<R>, TicksMut]> {
+        return this.#storages.resources.get(component_id)?.get_mut(this.last_change_tick(), this.change_tick())
+    }
+
+    get_resource_with_ticks<R extends Resource>(component_id: ComponentId): Option<[InstanceType<R>, ComponentTicks]> {
+        return this.#storages.resources.get(component_id)?.get_with_ticks();
+    }
+
+    get_resource_or_insert_with<R extends Resource>(resource: R, func: () => R): R {
+        const component_id = this.#components.init_resource(resource);
+        const data = this.__initialize_resource_internal(component_id);
+        if (!data.is_present()) {
+            data.insert(func(), this.change_tick())
+        }
+
+        return data.get() as R;
+    }
+
+    insert_resource_by_id(component_id: ComponentId, value: TypeId) {
+        this.__initialize_resource_internal(component_id).insert(value, this.change_tick());
+    }
+
+    get_resource_or_init<R extends Resource>(resource: R): InstanceType<R> {
+        const change_tick = this.change_tick();
+        const last_change_tick = this.last_change_tick();
+
+        const component_id = this.register_resource(resource);
+        if (this.#storages.resources.get(component_id)) {
+            const ptr = resource.from_world(this);
+            this.insert_resource_by_id(component_id, ptr)
+        }
+
+        const data = this.#storages.resources.get_mut(component_id)!;
+        return data.get()
     }
 
     insert_or_spawn_batch(iterable: Iterable<[Entity, Bundle]> & ArrayLike<[Entity, Bundle]>) {
@@ -647,6 +595,57 @@ export class World implements RunSystemOnce {
         this.#storages.resources.clear()
     }
 
+    resource_scope() { }
+
+    add_schedule(schedule: Schedule) {
+        const schedules = this.get_resource_or_init(Schedules) as Schedules;
+        schedules.insert(schedule);
+    }
+
+    try_schedule_scope<R>(label: ScheduleLabel, scope: (world: World, schedule: Schedule) => R): Result<R, TryRunScheduleError> {
+        const schedule = this.get_resource_mut(Schedules)?.remove(label);
+        if (!schedule) {
+            return new TryRunScheduleError(label);
+        }
+        const value = scope(this, schedule);
+        const old = this.resource_mut(Schedules)?.insert(schedule);
+        if (is_some(old)) {
+            console.warn(`Schedule ${label} was inserted during a call to World.try_schedule_scope`);
+        }
+        return value;
+    }
+
+    schedule_scope(label: ScheduleLabel, scope: (world: World, schedule: Schedule) => void) {
+        const res = this.try_schedule_scope(label, scope)
+        if (res instanceof TryRunScheduleError) {
+            throw new Error(res.get())
+        }
+        return res;
+    }
+
+    try_run_schedule(label: ScheduleLabel) {
+        return this.try_schedule_scope(label, (world, sched) => sched.run(world))
+    }
+
+    run_schedule(label: ScheduleLabel) {
+        this.schedule_scope(label, (world, sched) => sched.run(world))
+    }
+
+
+    run_system_once<In extends SystemInput, Out, Marker, T extends IntoSystemTrait<In, Out, Marker>>(system: T): Result<Out, RunSystemError> {
+        return this.run_system_once_with(system, unit)
+    }
+
+    run_system_once_with<In extends SystemInput, Out, Marker, T extends System<In, Out>>(system: T, input: any): Result<Out, RunSystemError> {
+        system = IntoSystemTrait.into_system(system as unknown as IntoSystemTrait<In, Out, Marker>) as T;
+        system.initialize(this);
+        if (system.validate_param(this)) {
+            return system.run(input, this)
+        } else {
+            return RunSystemError.InvalidParams(system.name())
+        }
+    }
+
     __last_trigger_id() {
         return this.#last_trigger_id;
     }
@@ -671,6 +670,11 @@ export class World implements RunSystemOnce {
 
     __get_resource_archetype_component_id(component_id: ComponentId): Option<ArchetypeComponentId> {
         return this.#storages.resources.get(component_id)?.id();
+    }
+
+    __initialize_resource_internal(component_id: ComponentId) {
+        const archetypes = this.#archetypes;
+        return this.#storages.resources.__initialize_with(component_id, this.#components, () => archetypes.__new_archetype_component_id())
     }
 
     #bootstrap() {
@@ -711,10 +715,5 @@ export class World implements RunSystemOnce {
         const location = archetype.__allocate(entity, table_row);
         this.#entities.__set(entity.index(), location);
         return new EntityWorldMut(this, entity, location);
-    }
-
-    #initialize_resource_internal(component_id: ComponentId) {
-        const archetypes = this.#archetypes;
-        return this.#storages.resources.__initialize_with(component_id, this.#components, () => archetypes.__new_archetype_component_id())
     }
 }

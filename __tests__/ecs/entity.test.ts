@@ -1,5 +1,5 @@
 import { expect, test, assert } from "vitest";
-import { Entities, Entity } from "../src/ecs";
+import { Entities, Entity } from "../../src/ecs";
 
 // test('entity_bits_roundtrip', () => {
 //     const e = Entity.from_raw_and_generation(0xDEADBEEF, 0x5AADF00D);

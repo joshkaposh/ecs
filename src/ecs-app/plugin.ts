@@ -1,4 +1,3 @@
-import { TODO } from "joshkaposh-iterator/src/util";
 import { App } from "./app";
 import { is_error } from "joshkaposh-option";
 import { v4 } from "uuid";
@@ -6,8 +5,6 @@ import { v4 } from "uuid";
 export abstract class Plugin {
 
     static readonly type_id: UUID;
-    abstract readonly type_id: UUID;
-
 
     abstract build(app: App): void;
 
@@ -20,7 +17,7 @@ export abstract class Plugin {
     cleanup(_app: App) { }
 
     name(): string {
-        return TODO('Plugin::name()')
+        return this.constructor.name;
     }
 
     /**
