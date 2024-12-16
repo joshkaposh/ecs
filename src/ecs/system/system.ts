@@ -1,10 +1,12 @@
 import { DoubleEndedIterator } from "joshkaposh-iterator";
-import { NodeId } from "../schedule";
+import { NodeId } from "../schedule/graph";
 import { World } from "../world";
-import { Access, FilteredAccessSet } from "../query";
-import { ArchetypeComponentId, ComponentId, Tick } from "..";
+import { Access } from "../query";
+import { ArchetypeComponentId, ComponentId, define_type, IntoSystemTrait, SystemInput, Tick } from "..";
 import { unit } from "../../util";
 import { ErrorExt } from "joshkaposh-option";
+import { SystemTypeSet } from "../schedule/set";
+import { v4 } from "uuid";
 
 export type SystemFn<In extends any[] = any[], Out extends boolean | void = boolean | void> = (...args: In) => Out;
 export type ConditionFn<In extends any[] = any[]> = (...args: In) => boolean;
@@ -59,7 +61,9 @@ export abstract class System<In, Out> {
     }
 
     default_system_sets(): any[] {
-        return [];
+        return [
+            // schedule
+        ];
     }
 
     abstract type_id(): UUID;
@@ -96,9 +100,6 @@ export const RunSystemError = {
 export type BoxedSystem<In extends any[] = any[], Out = void | boolean> = System<In, Out>;
 export type SystemId = number;
 
-class SystemSet { }
-
-
 export class AnonymousSet {
     #id: NodeId;
     constructor(id: NodeId) {
@@ -109,4 +110,75 @@ export class AnonymousSet {
 export function assert_is_system(system: System<any, any>) {
     const world = World.default();
     system.initialize(world);
+}
+
+const acc = new Access();
+export class ApplyDeferred extends System<unit, unit> {
+    static readonly type_id: UUID = v4() as UUID;
+
+    type_id(): UUID {
+        return ApplyDeferred.type_id;
+    }
+
+    name(): string {
+        return 'joshkaposh-ecs: apply_deferred'
+    }
+
+    component_access(): Access<ComponentId> {
+        return acc;
+    }
+
+    archetype_component_access(): Access<ArchetypeComponentId> {
+        return acc;
+    }
+
+    is_send(): boolean {
+        return false
+    }
+
+    is_exclusive(): boolean {
+        return true
+    }
+
+    has_deferred(): boolean {
+        return false
+    }
+
+    // @ts-expect-error
+    run_unsafe(_input: SystemIn<System<unit, unit>>, _world: World): unit {
+        return unit;
+    }
+
+    // @ts-expect-error
+    run(_input: SystemIn<System<unit, unit>>, _world: World): unit {
+        return unit
+    }
+
+    apply_deferred(_world: World): void { }
+
+    queue_deferred(_world: World): void { }
+
+    validate_param_unsafe(_world: World): boolean {
+        return true
+    }
+
+    initialize(_world: World): void { }
+
+    update_archetype_component_access(_world: World): void { }
+
+    check_change_tick(_change_tick: Tick): void { }
+
+    default_system_sets(): any[] {
+        return [new SystemTypeSet(this)];
+    }
+
+    get_last_run(): Tick {
+        return Tick.MAX
+    }
+
+    set_last_run(_last_run: Tick): void { }
+
+    into_system_set() {
+        return new SystemTypeSet(this);
+    }
 }

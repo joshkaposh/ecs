@@ -14,14 +14,13 @@ import { SpawnBatchIter } from "./spawn-batch";
 import { UnsafeEntityCell } from "./unsafe-world-cell";
 import { CommandQueue } from "./command_queue";
 import { define_component } from "../define";
-import { FunctionSystem, IntoSystemTrait, RunSystemError, RunSystemOnce, System, SystemInput, SystemMeta, SystemParam, SystemParamFunction } from "../system";
+import { IntoSystemTrait, RunSystemError, System, SystemInput } from "../system";
 import { unit } from "../../util";
 import { u32 } from "../../Intrinsics";
 import { CHECK_TICK_THRESHOLD, TicksMut } from "../change_detection";
 import { Schedule, ScheduleLabel, Schedules } from "../schedule";
 
 export type WorldId = number;
-
 
 type AllTuples<T> = T | T[] | T[][]
 
@@ -464,8 +463,8 @@ export class World {
             this.insert_resource_by_id(component_id, ptr)
         }
 
-        const data = this.#storages.resources.get_mut(component_id)!;
-        return data.get()
+        const data = this.#storages.resources.get(component_id)!;
+        return data.get_mut(last_change_tick, change_tick)
     }
 
     insert_or_spawn_batch(iterable: Iterable<[Entity, Bundle]> & ArrayLike<[Entity, Bundle]>) {
@@ -631,12 +630,14 @@ export class World {
         this.schedule_scope(label, (world, sched) => sched.run(world))
     }
 
-
-    run_system_once<In extends SystemInput, Out, Marker, T extends IntoSystemTrait<In, Out, Marker>>(system: T): Result<Out, RunSystemError> {
+    run_system_once<In extends SystemInput, Out, T extends System<In, Out>>(system: T): Result<Out, RunSystemError> {
         return this.run_system_once_with(system, unit)
     }
 
     run_system_once_with<In extends SystemInput, Out, Marker, T extends System<In, Out>>(system: T, input: any): Result<Out, RunSystemError> {
+        // TODO make function arguments  dynamic
+        // TODO instead of statically user defined
+        // * See ``
         system = IntoSystemTrait.into_system(system as unknown as IntoSystemTrait<In, Out, Marker>) as T;
         system.initialize(this);
         if (system.validate_param(this)) {
@@ -691,9 +692,10 @@ export class World {
         for (let i = 0; i < entities.length; i++) {
             const ref = w.get_entity_mut(entities[i]);
             if (!ref) {
-                return QueryEntityError.NoSuchEntity(entities[i]) as any
+                // @ts-expect-error
+                return new ErrorExt(QueryEntityError.NoSuchEntity(entities[i]))
             }
-            refs.push(ref);
+            refs[i] = ref;
         }
         return refs;
     }

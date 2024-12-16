@@ -116,10 +116,6 @@ export class Resources {
         return this.#resources.get(component_id)
     }
 
-    get_mut(component_id: ComponentId) {
-        return this.#resources.get(component_id)
-    }
-
     /**
      * 
      *  @description

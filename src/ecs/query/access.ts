@@ -559,10 +559,6 @@ export class Access<T extends SparseSetIndex = SparseSetIndex> {
 }
 
 export class AccessConflicts {
-    static All = new AccessConflicts();
-    static Individual(ty: FixedBitSet) {
-        return new AccessConflicts(ty);
-    }
     #conflicts: Option<FixedBitSet>;
     #type: 0 | 1;
     constructor(conflicts?: FixedBitSet) {
@@ -570,16 +566,23 @@ export class AccessConflicts {
         this.#conflicts = conflicts;
     }
 
+    static get All() { return new AccessConflicts() };
+    static Individual(ty: FixedBitSet) {
+        return new AccessConflicts(ty);
+    }
+    static empty() {
+        return AccessConflicts.Individual(new FixedBitSet())
+    }
+
+    /**
+     * If type == 0, then instance is All
+     */
     type() {
         return this.#type
     }
 
     conflicts() {
         return this.#conflicts
-    }
-
-    static empty() {
-        return AccessConflicts.Individual(new FixedBitSet())
     }
 
     add(other: AccessConflicts) {
@@ -595,6 +598,10 @@ export class AccessConflicts {
         return this.#type === 0 ? false : Boolean(this.#conflicts?.is_empty())
     }
 
+    ones() {
+        return this.#conflicts?.ones();
+    }
+
     iter() {
         if (this.#type === 0) {
             return iter<number[]>([])
@@ -606,6 +613,7 @@ export class AccessConflicts {
     [Symbol.iterator]() {
         return this.iter();
     }
+
 }
 
 export class FilteredAccess<T extends SparseSetIndex> {

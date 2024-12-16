@@ -4,7 +4,7 @@ import { is_some } from "joshkaposh-option";
 import { define_resource, define_type, Resource, StorageType, World } from "../ecs";
 import { Plugin } from "./plugin";
 import { App } from "./app";
-import { ExecutorKind } from "../ecs/schedule/executor";
+import { ExecutorKind } from "../ecs/executor";
 
 export const $Main = 'Main';
 export const $PreStartup = 'PreStartup';

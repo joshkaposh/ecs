@@ -3,6 +3,7 @@
   "version": "1.0.0",
   "description": "",
   "main": "src/index.ts",
+  "type": "module",
   "scripts": {
     "dev": "vite",
     "test": "vitest",
@@ -20,7 +21,7 @@
   },
   "dependencies": {
     "fixed-bit-set": "^1.0.1",
-    "joshkaposh-graph": "^1.0.11",
+    "joshkaposh-graph": "^1.0.16",
     "joshkaposh-heap": "^1.1.0",
     "joshkaposh-index-map": "^1.0.5",
     "joshkaposh-iterator": "^1.1.9",

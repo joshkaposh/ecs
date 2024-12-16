@@ -13,6 +13,7 @@ export * from './system-param';
 export * from './input';
 export * from './system';
 export * from './function-system';
+export * from './schedule_system';
 
 export abstract class IntoSystemTrait<In extends SystemInput, Out, Marker> {
     #system: System<In, Out>
@@ -39,7 +40,7 @@ export abstract class IntoSystemTrait<In extends SystemInput, Out, Marker> {
     }
 }
 
-export function define_params<P extends any>(params: P) {
+export function define_params<P extends readonly any[]>(...params: P) {
     class ParamImpl extends SystemParam<any, any> {
         State: any;
         Item: any;
@@ -96,7 +97,6 @@ export function define_system<F extends (...args: any[]) => void, P extends Para
             this.#params = define_params(...params);
             this.#system_meta = SystemMeta.new(fn)
             this.#name = fn.name;
-
         }
         has_deferred(): boolean {
             return false
@@ -119,7 +119,6 @@ export function define_system<F extends (...args: any[]) => void, P extends Para
         }
 
         initialize(world: World): void {
-
             if (this.#state) {
                 assert(this.#state.matches_world(world.id()), 'System built with a different world than the one it was added to');
             } else {
@@ -165,11 +164,28 @@ export function define_system<F extends (...args: any[]) => void, P extends Para
         }
 
         run(input: SystemIn<System<any, any>>, world: World) {
-            return this.#fn(input);
+            return this.run_unsafe(input, world);
         }
 
         run_unsafe(input: SystemIn<System<any, any>>, world: World) {
+            const change_tick = world.increment_change_tick();
+            if (!this.#state) {
+                throw new Error(`System's state was not found. Did you forget to initialize this system before running it?`)
+            }
 
+
+            // const param_state = this.#state.get(world);
+            // console.log('run_unsafe param_state', param_state);
+            const params = this.#state.get(world);
+            const out = this.#fn(...params);
+            // const params = this.#func.Param.get_param(param_state, this.#system_meta, world, change_tick);
+            // const out = this.#func.run(input, params);
+            // this.#system_meta.last_run = change_tick;
+            // return out;
+
+
+
+            return this.#fn(input)
         }
 
         validate_param(world: World): boolean {

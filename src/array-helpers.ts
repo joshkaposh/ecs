@@ -1,6 +1,10 @@
 import { is_some, type Option } from "joshkaposh-option";
 import { assert, unused } from "joshkaposh-iterator/src/util";
 
+export function truncate(array: any[], len: number) {
+    array.length = Math.min(array.length, len);
+}
+
 export function swap<T>(array: T[], from_index: number, to_index: number) {
     const temp = array[to_index];
     array[to_index] = array[from_index];

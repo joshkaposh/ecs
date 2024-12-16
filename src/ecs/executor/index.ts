@@ -1,10 +1,10 @@
 import { Option } from "joshkaposh-option";
-import { FixedBitSet } from "../../../fixed-bit-set";
-import { World } from "../../world";
-import { Condition, System } from "../../system/system";
+import { FixedBitSet } from "fixed-bit-set";
+import { World } from "../world";
+import { Condition, System, ApplyDeferred } from "../system";
 import { TODO } from "joshkaposh-iterator/src/util";
-import { Enum } from "../../../util";
-import { NodeId } from "../schedule";
+import { Enum } from "../../util";
+import { NodeId } from "../schedule/graph";
 
 export type SystemExecutor = {
     kind(): ExecutorKind;
@@ -21,18 +21,18 @@ export const ExecutorKind = {
 } as const;
 
 export class SystemSchedule {
-    __systems: System[];
+    __systems: System<any, any>[];
     __system_conditions: Array<Condition>[];
     __set_conditions: Array<Condition>[];
     __system_ids: NodeId[];
     __set_ids: NodeId[];
-    __system_dependencies: number[]; // usize
-    __system_dependents: Array<number>[]; //usize
+    __system_dependencies: number[];
+    __system_dependents: Array<number>[];
     __sets_with_conditions_of_systems: FixedBitSet[];
     __systems_in_sets_with_conditions: FixedBitSet[];
 
     constructor(
-        systems: System[],
+        systems: System<any, any>[],
         system_conditions: Array<Condition>[],
         set_conditions: Array<Condition>[],
         system_ids: NodeId[],
@@ -53,10 +53,6 @@ export class SystemSchedule {
         this.__systems_in_sets_with_conditions = systems_in_sets_with_conditions;
     }
 
-    run() {
-
-    }
-
     static default() {
         return new SystemSchedule(
             [],
@@ -72,10 +68,8 @@ export class SystemSchedule {
     }
 }
 
-export function apply_deferred(_world: World) { }
 
-// module
-export function is_apply_deferred(system: System): boolean {
+export function is_apply_deferred(system: System<any, any>): boolean {
     TODO('Executor::is_apply_deferred()')
     // @ts-expect-error
     return system.type_id === apply_deferred.system_type_id

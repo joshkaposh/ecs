@@ -7,6 +7,7 @@ import { SystemParam, SystemParamItem } from "./system-param";
 import { Option } from "joshkaposh-option";
 import { SystemInput } from "./input";
 import { System } from "./system";
+import { SystemTypeSet } from "../schedule/set";
 
 export class SystemMeta {
     __component_access_set: FilteredAccessSet<ComponentId>;
@@ -202,7 +203,7 @@ export class SystemState<Param extends SystemParam<any, any>> {
     }
 
     get_mut(world: World) {
-        this.validate_world(world);
+        this.validate_world(world.id());
         this.update_archetypes(world);
 
         return this.get_unchecked_manual(world)
@@ -267,7 +268,7 @@ export class SystemState<Param extends SystemParam<any, any>> {
     }
 }
 
-export class FunctionSystem<Marker, F extends SystemParamFunction> {
+export class FunctionSystem<Marker, F extends SystemParamFunction<any>> {
     #func: F;
     #state: Option<FunctionSystemState<F['Param']>>;
     #system_meta: SystemMeta;
@@ -275,17 +276,22 @@ export class FunctionSystem<Marker, F extends SystemParamFunction> {
     #marker: Marker;
 
     constructor(
+        marker: Marker,
         func: F,
         state: Option<FunctionSystemState<F['Param']>>,
         system_meta: SystemMeta,
         archetype_generation: ArchetypeGeneration,
-        marker: Marker
     ) {
         this.#func = func;
         this.#state = state;
         this.#system_meta = system_meta;
         this.#archetype_generation = archetype_generation;
         this.#marker = marker
+
+    }
+
+    static new<Marker, F extends SystemParamFunction<any>>(marker: Marker, f: F) {
+        return new FunctionSystem(marker, f, undefined, SystemMeta.new(f), ArchetypeGeneration.initial())
     }
 
     with_name(new_name: string) {
@@ -295,11 +301,11 @@ export class FunctionSystem<Marker, F extends SystemParamFunction> {
 
     clone() {
         return new FunctionSystem(
-            this.#func.clone(),
+            this.#marker,
+            this.#func,
             undefined,
             SystemMeta.new(this.#func),
             ArchetypeGeneration.initial(),
-            this.#marker
         )
     }
 
@@ -426,28 +432,38 @@ export class FunctionSystem<Marker, F extends SystemParamFunction> {
     }
 }
 
-export abstract class SystemParamFunction {
+export abstract class SystemParamFunction<Marker> {
     In!: SystemInput;
     Out!: any;
     Param!: SystemParam<any, any>;
+    marker: Marker;
 
-    constructor(input: SystemInput, out: any, param: SystemParam<any, any>) {
+    constructor(marker: Marker, input: SystemInput, out: any, param: SystemParam<any, any>) {
         this.In = input;
         this.Out = out;
         this.Param = param;
+        this.marker = marker;
     }
 
-    abstract run(input: SystemParamFunction['In']['Inner'], param_value: SystemParamItem<SystemParamFunction['Param']>): SystemParamFunction['Out'];
+    abstract run(input: SystemParamFunction<any>['In']['Inner'], param_value: SystemParamItem<SystemParamFunction<Marker>['Param']>): SystemParamFunction<Marker>['Out'];
 
-    into_system(func: SystemParamFunction) {
+    into_system(func: SystemParamFunction<any>) {
         return new FunctionSystem(
+            func.marker,
             func,
             undefined,
             SystemMeta.new(func),
             ArchetypeGeneration.initial(),
-            {}
         )
     }
+
+    into_system_set() {
+        type Set = SystemTypeSet<FunctionSystem<any, SystemParamFunction<any>>>
+
+        return new SystemTypeSet(FunctionSystem.new(this.marker, this)) as Set
+
+    }
+
 }
 
 export class FunctionSystemState<P extends SystemParam<any, any>> {

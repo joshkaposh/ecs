@@ -6,8 +6,6 @@ export * from './system';
 export * from './schedule';
 export * from './event';
 export * from './query';
-// export * from './commands';
 export * from './archetype';
-// export * from './plugin';
 export * from './bundle';
 export * from './storage';

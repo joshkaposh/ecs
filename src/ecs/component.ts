@@ -204,7 +204,7 @@ export class Components {
         if (this.#indices.has(type_id)) {
             return this.#indices.get(type_id)!
         } else {
-            const id = Components.#init_component_inner(this.#components, storages, {
+            const id = this.#init_component_inner(this.#components, storages, {
                 type: type,
                 storage_type: type.storage_type
             })
@@ -231,14 +231,14 @@ export class Components {
         return component_id
     }
 
-    static #init_component_inner(components: ComponentInfo[], storages: Storages, descriptor: ComponentDescriptor) {
+    #init_component_inner(components: ComponentInfo[], storages: Storages, descriptor: ComponentDescriptor) {
         const component_id = components.length;
         const info = new ComponentInfo(component_id, descriptor);
         if (info.descriptor.storage_type === StorageType.SparseSet) {
             storages.sparse_sets.__get_or_insert(info);
         }
 
-        components.push(info);
+        components[component_id] = info;
         return component_id;
     }
 
