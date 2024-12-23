@@ -81,7 +81,7 @@ export function define_params<P extends readonly any[]>(...params: P) {
     return new ParamImpl(params);
 }
 
-export function define_system<F extends (...args: any[]) => void, P extends Parameters<F>>(fn: F, ...params: P): System<any, any> {
+export function define_system<F extends (...args: any[]) => void, P extends Parameters<F>>(fn: F, fallible: boolean, ...params: P): System<any, any> {
     class SystemImpl extends System<any, any> {
         #fn: F;
         #name: string;
@@ -89,6 +89,8 @@ export function define_system<F extends (...args: any[]) => void, P extends Para
         #params: SystemParam<any, any>;
         #state: Option<SystemState<any>>;
         #system_meta: SystemMeta;
+
+        readonly fallible = fallible;
 
         constructor(fn: F, ...params: P) {
             super()
@@ -163,35 +165,26 @@ export function define_system<F extends (...args: any[]) => void, P extends Para
 
         }
 
+        // @ts-expect-error
         run(input: SystemIn<System<any, any>>, world: World) {
             return this.run_unsafe(input, world);
         }
 
+        // @ts-expect-error
         run_unsafe(input: SystemIn<System<any, any>>, world: World) {
             const change_tick = world.increment_change_tick();
             if (!this.#state) {
                 throw new Error(`System's state was not found. Did you forget to initialize this system before running it?`)
             }
-
-
-            // const param_state = this.#state.get(world);
-            // console.log('run_unsafe param_state', param_state);
-            const params = this.#state.get(world);
-            const out = this.#fn(...params);
-            // const params = this.#func.Param.get_param(param_state, this.#system_meta, world, change_tick);
-            // const out = this.#func.run(input, params);
-            // this.#system_meta.last_run = change_tick;
-            // return out;
-
-
-
-            return this.#fn(input)
+            const param_state = this.#state.get(world);
+            return this.#fn(param_state)
         }
 
         validate_param(world: World): boolean {
             return this.validate_param_unsafe(world)
         }
 
+        // @ts-expect-error
         validate_param_unsafe(world: World): boolean {
             return true;
         }

@@ -386,8 +386,6 @@ export class FunctionSystem<Marker, F extends SystemParamFunction<any>> {
         if (this.#state) {
             assert(this.#state.world_id === world.id(), 'System build with a different world than the one it was added to');
         } else {
-            console.log('accessing Func.Param', this.#func, this.#func.Param);
-
             this.#state = new FunctionSystemState(
                 this.#func.Param.init_state(world, this.#system_meta),
                 world.id()
@@ -461,7 +459,6 @@ export abstract class SystemParamFunction<Marker> {
         type Set = SystemTypeSet<FunctionSystem<any, SystemParamFunction<any>>>
 
         return new SystemTypeSet(FunctionSystem.new(this.marker, this)) as Set
-
     }
 
 }

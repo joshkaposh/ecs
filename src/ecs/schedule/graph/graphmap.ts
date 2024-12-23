@@ -39,9 +39,8 @@ export class Graph<const DIRECTED extends boolean, S extends { hash(value: any):
     }
 
     add_node(n: NodeId) {
-        if (this.#nodes.contains_key(n.to_primitive())) {
-            this.#nodes.get(n.to_primitive())!
-        } else {
+        // console.log('graph adding node', n);
+        if (!this.#nodes.contains_key(n.to_primitive())) {
             this.#nodes.insert(n.to_primitive(), []);
         }
     }
@@ -72,6 +71,7 @@ export class Graph<const DIRECTED extends boolean, S extends { hash(value: any):
         const key = this.edge_key(a, b)
         const is_new_edge = !this.#edges.has(key)
         this.#edges.add(key);
+
         if (is_new_edge) {
             // insert into adjacency list if new edge
             let list = this.#nodes.get(a.to_primitive());
@@ -81,15 +81,21 @@ export class Graph<const DIRECTED extends boolean, S extends { hash(value: any):
             }
             list.push(CompactNodeIdAndDirection.store(b, Outgoing))
 
-            if (a.index !== b.index) {
+            if (!a.eq(b)) {
                 let list = this.#nodes.get(b.to_primitive());
+
                 if (!list) {
                     list = []
+                    console.log(`inserting into nodes: `, b);
+
                     this.#nodes.insert(b.to_primitive(), list)
                 }
                 list.push(CompactNodeIdAndDirection.store(a, Incoming))
+
             }
+
         }
+
     }
 
     remove_single_edge(a: NodeId, b: NodeId, dir: Direction): boolean {
@@ -128,6 +134,7 @@ export class Graph<const DIRECTED extends boolean, S extends { hash(value: any):
 
     nodes() {
         return this.#nodes.keys().map(k => NodeId.to_node_id(k))
+
     }
 
     neighbors(a: NodeId) {

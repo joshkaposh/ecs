@@ -1,5 +1,6 @@
 import { test, expect } from 'vitest';
-// import { World, Schedule, define_component, define_system } from '../src/ecs'
+import { World, Schedule, define_component, define_system } from '../../src/ecs'
+
 
 // function a() {
 //     console.log('first!');
@@ -9,19 +10,15 @@ import { test, expect } from 'vitest';
 //     console.log('second!');
 // }
 
-// const sA = define_system(a, () => [] as [])
+const sA = define_system(function a() { console.log('first!') }, false)
 
 
 // const sB = define_system(b, () => [] as [])
 
 test('schedule', () => {
-    //     const w = new World();
-    //     const s = new Schedule('Update');
+    const w = World.default();
+    const s = new Schedule('Update');
 
-    //     s.add_system(sB.after(sA));
-    //     s.add_system(sA);
-
-    //     s.run(w)
-
-
+    s.add_systems(sA)
+    s.run(w)
 })

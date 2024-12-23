@@ -1,3 +1,11 @@
+import { Option } from "joshkaposh-option";
+
+export interface SystemSet {
+    system_type(): Option<UUID>
+
+    is_anonymous(): boolean
+};
+
 
 /// A [`SystemSet`] grouping instances of the same function.
 ///
@@ -5,10 +13,9 @@
 /// - You cannot manually add members.
 /// - You cannot configure them.
 
-import { SystemSet } from "./config";
 
 /// - You cannot order something relative to one if it has more than one member.
-export class SystemTypeSet<T> {
+export class SystemTypeSet<T> implements SystemSet {
     #phantom_data: any;
     constructor(phantom_data: any) {
         this.#phantom_data = phantom_data;
@@ -17,15 +24,23 @@ export class SystemTypeSet<T> {
         return this;
     }
 
-    system_type() {
+    is_anonymous(): boolean {
+        return false;
+    }
+
+    system_type(): Option<UUID> {
         return
     }
 }
 
 export class AnonymousSet implements SystemSet {
-    #id: number;
-    constructor(id: number) {
-        this.#id = id;
+    // #id: number;
+    constructor(id?: number) {
+        // this.#id = id;
+    }
+
+    system_type(): Option<UUID> {
+        return
     }
 
     is_anonymous() {
@@ -34,7 +49,7 @@ export class AnonymousSet implements SystemSet {
 
 }
 
-interface IntoSystemSet {
-    into_system_set(): SystemSet;
+export interface IntoSystemSet<M extends SystemSet> {
+    into_system_set(): M;
 }
 

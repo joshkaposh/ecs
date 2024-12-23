@@ -1,5 +1,6 @@
 import { assert, expect, test } from 'vitest'
-import { define_component, define_marker, With, Without, World, TypeId, StorageType, Maybe, Added, Write, Read, ReadRef, EntityRef, Changed } from '../../src/ecs'
+import { define_component, define_marker, With, Without, World, TypeId, StorageType, Maybe, Added, Write, Read, ReadRef, EntityRef, Changed, Events, Query, Schedule, define_system } from '../../src/ecs'
+import { Option, is_some } from 'joshkaposh-option';
 
 class A {
     static type_id: TypeId['type_id'];
@@ -40,7 +41,119 @@ function assert_throws(fn) {
 
 }
 
-const Blue = define_marker();
+const Team = {
+    Blue: define_marker(),
+    Red: define_marker(),
+} as const;
+
+class TestEvent { constructor(public value = 'TestEvent!') { } }
+
+function is_key_pressed(events: Events<typeof TestEvent>) {
+    const is_pressed = events.get_cursor().read(events).find((ev) => ev.value.includes('key'))
+    return is_pressed
+}
+
+test('events', () => {
+    const w = World.default();
+    const events = Events.default(TestEvent);
+
+    w.register_resource(events as any);
+    w.insert_resource(events as any);
+
+
+    const reader = events.get_cursor();
+    events.send(new TestEvent('key A'))
+    events.send(new TestEvent('key V'))
+    events.send(new TestEvent('key W'));
+
+
+
+    for (const ev of reader.read(events)) {
+        console.log(ev);
+    }
+
+    events.update();
+    events.send(new TestEvent('himom'));
+
+    assert(is_key_pressed(events));
+    events.clear();
+    assert(!is_key_pressed(events));
+
+
+})
+
+function params<const Params extends readonly any[]>(...p: Params) {
+    return p
+}
+
+const [a, b, c] = params('a', 'b', 'c')
+
+test('query_with_marker', () => {
+
+    const w = World.default();
+
+    const s = new Schedule('First');
+    // s.add_systems()
+
+    w.register_component(A)
+    w.register_component(B)
+    w.register_component(C)
+    w.register_component(D)
+    w.register_component(Team.Red);
+    w.register_component(Team.Blue)
+
+    w.spawn([new A('red'), new B('red'), new Team.Red()])
+    w.spawn([new A('red'), new B('red'), new Team.Red()])
+    w.spawn([new A('blue'), new B('blue'), new Team.Blue()])
+    w.spawn([new A('blue'), new B('blue'), new Team.Blue()])
+
+    const q_red = w.query_filtered([A, B], [With(Team.Red)]);
+    const q_blue = w.query_filtered([A, B], [With(Team.Blue)]);
+
+    const q_ab = w.query([A, B]);
+
+    const q_a = w.query([A]);
+    const q_a_mut = w.query([Write(A)]);
+
+    const query_a_added = w.query_filtered([A], [Added(A)]);
+    w.clear_trackers();
+
+    assert(query_a_added.iter().count() === 0);
+    w.spawn([new A()])
+    w.spawn([new A()])
+    w.spawn([new A()])
+    assert(query_a_added.iter().count() === 3);
+    w.clear_trackers();
+    assert(query_a_added.iter().count() === 0);
+
+    assert(q_a.iter().count() === 7);
+
+    assert(q_red.iter().count() === 2);
+    assert(q_blue.iter().count() === 2);
+    assert(q_ab.iter().count() === 4)
+
+
+    for (const [a] of q_a.iter()) {
+        assert_throws(() => {
+            a.value = 'not allowed'
+        })
+
+    }
+
+    for (const [a] of q_a_mut.iter()) {
+        a.value = 'allowed!'
+    }
+
+
+
+    for (const [a, b] of q_red.iter()) {
+    }
+
+    for (const [a, b] of q_blue.iter()) {
+    }
+
+
+})
 
 test('query_mut', () => {
     const w = World.new();

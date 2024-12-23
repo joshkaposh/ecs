@@ -138,8 +138,7 @@ export class World {
     }
 
     register_component(type: Component): number {
-        this.#components.register_component(type)
-        return this.init_component(type);
+        return this.#components.register_component(type, this.#storages)
     }
 
     register_resource(type: Resource): number {
@@ -185,6 +184,7 @@ export class World {
         }
 
         return ref;
+
     }
 
     /**
@@ -239,6 +239,7 @@ export class World {
         // ! Safety: if the Entity is invalid, the function returns early.
         // ! Additionally, Entities.get() returns the correct EntityLocation if the Entity exists.
         return new EntityRef(new UnsafeEntityCell(this, entity, location))
+
     }
 
     get_entity_mut(entity: Entity): Option<EntityWorldMut> {
@@ -458,7 +459,7 @@ export class World {
         const last_change_tick = this.last_change_tick();
 
         const component_id = this.register_resource(resource);
-        if (this.#storages.resources.get(component_id)) {
+        if (!this.#storages.resources.get(component_id)) {
             const ptr = resource.from_world(this);
             this.insert_resource_by_id(component_id, ptr)
         }

@@ -520,6 +520,7 @@ export function All(...filter: QueryFilter<any, any, any>[]) {
     return _All.from_filter(filter);
 }
 
+export type With<T extends Component> = InstanceType<typeof _With>
 export function With<T extends Component[]>(...types: T) {
     if (types.length === 1) {
         return new _With(types[0])
@@ -527,6 +528,7 @@ export function With<T extends Component[]>(...types: T) {
     return _All.from_filter(types.map(c => new _With(c)));
 }
 
+export type Without<T extends Component> = InstanceType<typeof _Without>
 export function Without<T extends Component[]>(...types: T) {
     if (types.length === 1) {
         return new _Without(types[0])

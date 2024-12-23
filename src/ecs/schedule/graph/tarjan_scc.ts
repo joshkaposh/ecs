@@ -67,7 +67,6 @@ class TarjanScc<AllNodes extends Iterator<NodeId>, Neighbors extends Iterator<No
         this.#visitation_stack = visitation_stack;
         this.#start = start;
         this.#index_adjustment = index_adjustment;
-
     }
 
     next_scc(): Option<NodeId[]> {
@@ -104,7 +103,6 @@ class TarjanScc<AllNodes extends Iterator<NodeId>, Neighbors extends Iterator<No
             const visited = is_some(this.#nodes[this.#graph.to_index(node.value)].root_index);
             if (!visited) {
                 this.#visitation_stack.push([node.value, true]);
-
             }
 
         }

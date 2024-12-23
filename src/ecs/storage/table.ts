@@ -73,6 +73,7 @@ export class Column {
     get_data(row: TableRow): Option<{}> {
         if (row < this.data.length) {
             return this.data[row]
+
         } else {
             return null;
         }

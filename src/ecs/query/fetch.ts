@@ -375,6 +375,7 @@ class WriteComponent<T extends Component> extends WorldQuery<InstanceType<T>, Wr
                     fetch.this_run
                 )
             }
+
         }) as InstanceType<T>;
     }
 

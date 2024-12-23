@@ -6,7 +6,7 @@ import { EventCursor, EventId, Events } from "./event";
 import { SystemMeta, SystemParam } from "./system";
 import { unit } from "../util";
 import { World } from "./world";
-import { iter } from "joshkaposh-iterator";
+import { iter, Iterator } from "joshkaposh-iterator";
 
 
 class RemovedComponentEntity {

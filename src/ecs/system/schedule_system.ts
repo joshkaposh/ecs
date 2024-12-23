@@ -1,14 +1,15 @@
-import { ArchetypeComponentId, Tick, World } from "..";
+import { ArchetypeComponentId, ScheduleGraph, Tick, World } from "..";
 import { unit } from "../../util";
 import { Access } from "../query";
+import { NodeConfig } from "../schedule/config";
 import { System } from "./system";
 
 export class ScheduleSystem extends System<any, any> {
     #system: System<any, any>
-    #fallible: boolean; // true if system returns value
+    readonly fallible: boolean; // true if system returns value
     constructor(system: System<any, any>, fallible: boolean) {
         super()
-        this.#fallible = fallible
+        this.fallible = fallible
         this.#system = system;
     }
 
@@ -19,6 +20,10 @@ export class ScheduleSystem extends System<any, any> {
     }
     static Fallible(system: System<any, any>) {
         return new ScheduleSystem(system, true);
+    }
+
+    is_system_type(): boolean {
+        return !this.fallible
     }
 
     name() {
@@ -47,9 +52,11 @@ export class ScheduleSystem extends System<any, any> {
 
     // @ts-expect-error
     run_unsafe(input: SystemIn<System<any, any>>, world: World) {
-        if (this.#fallible) {
+        if (this.fallible) {
+            console.log('SCHEDULESYSTEM RUN_UNSAFE FALLIBLE', this.#system);
             return this.#system.run_unsafe(input, world);
         } else {
+            console.log('SCHEDULESYSTEM RUN_UNSAFE INFALLIBLE');
             this.#system.run_unsafe(input, world);
             return unit
         }
@@ -57,9 +64,11 @@ export class ScheduleSystem extends System<any, any> {
 
     // @ts-expect-error
     run(input: SystemIn<System<any, any>>, world: World) {
-        if (this.#fallible) {
+        if (this.fallible) {
+            console.log('SCHEDULESYSTEM RUN FALLIBLE');
             return this.#system.run(input, world);
         } else {
+            console.log('SCHEDULESYSTEM RUN INFALLIBLE');
             this.#system.run(input, world);
             return unit;
         }
@@ -103,5 +112,10 @@ export class ScheduleSystem extends System<any, any> {
 
     set_last_run(last_run: Tick): void {
         return this.#system.set_last_run(last_run);
+    }
+
+    // * ProcessNodeConfig impl
+    process_config(schedule_graph: ScheduleGraph, config: NodeConfig<this>) {
+        schedule_graph.add_system_inner(config);
     }
 }

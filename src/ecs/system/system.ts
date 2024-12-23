@@ -1,34 +1,34 @@
-import { DoubleEndedIterator } from "joshkaposh-iterator";
 import { NodeId } from "../schedule/graph";
 import { World } from "../world";
 import { Access } from "../query";
-import { ArchetypeComponentId, ComponentId, define_type, IntoSystemTrait, SystemInput, Tick } from "..";
+import { ArchetypeComponentId, ComponentId, IntoSystemTrait, ScheduleSystem, SystemInput, Tick } from "..";
 import { unit } from "../../util";
 import { ErrorExt } from "joshkaposh-option";
 import { SystemTypeSet } from "../schedule/set";
 import { v4 } from "uuid";
+import { IntoSystemConfigs, NodeConfigs, SystemConfigs } from "../schedule/config";
 
 export type SystemFn<In extends any[] = any[], Out extends boolean | void = boolean | void> = (...args: In) => Out;
 export type ConditionFn<In extends any[] = any[]> = (...args: In) => boolean;
 export type Condition<In extends any[] = any[], Out extends boolean = boolean> = System<In, Out>;
 export type BoxedCondition<In extends any[] = any[]> = Condition<In>;
 
-export interface IntoConfig {
-    before(config: IntoConfig): IntoConfig;
-    after(config: IntoConfig): IntoConfig;
+export abstract class System<In, Out> extends IntoSystemConfigs<unit> {
 
-    run_if(condition: Condition): IntoConfig
 
-    dependencies(): DoubleEndedIterator<readonly [System, System]>;
-    conditions(): DoubleEndedIterator<readonly [System, System]>
-}
-export abstract class System<In, Out> {
     static readonly type_id: UUID;
+
+    /**
+     * A system is fallible if it returns a value
+     */
+    abstract readonly fallible: boolean;
+
 
     abstract is_send(): boolean;
     abstract is_exclusive(): boolean;
     abstract has_deferred(): boolean;
 
+    abstract type_id(): UUID;
     abstract name(): string;
     abstract initialize(world: World): void;
 
@@ -49,6 +49,7 @@ export abstract class System<In, Out> {
     abstract set_last_run(last_run: Tick): void;
 
     run(input: SystemIn<System<In, Out>>, world: World) {
+        console.log('RUNNING SYSTEM');
         this.update_archetype_component_access(world);
         const ret = this.run_unsafe(input, world);
         this.apply_deferred(world);
@@ -62,15 +63,9 @@ export abstract class System<In, Out> {
 
     default_system_sets(): any[] {
         return [
-            // schedule
+            new ScheduleSystem(this, this.fallible)
         ];
-    }
 
-    abstract type_id(): UUID;
-
-    //* IntoSystem impl
-    into_system() {
-        return this;
     }
 
     pipe<Bin extends SystemInput, Bout, Bmarker, B extends IntoSystemTrait<Bin, Bout, Bmarker>>(system: B) {
@@ -84,6 +79,22 @@ export abstract class System<In, Out> {
     system_type_id() {
         return this.type_id();
     }
+
+
+    //* IntoSystem impl
+
+    into_system() {
+        return this;
+    }
+
+    //* IntoSystemConfigs impl
+
+    into_configs(): SystemConfigs {
+        return this.fallible ?
+            NodeConfigs.new_system(ScheduleSystem.Infallible(this as System<In, void>)) :
+            NodeConfigs.new_system(ScheduleSystem.Fallible(this))
+    }
+
 };
 export type RunSystemOnce = {
     run_system_once<Out, Marker, T extends IntoSystem<unit, Out, Marker>>(system: T): void;
@@ -115,6 +126,7 @@ export function assert_is_system(system: System<any, any>) {
 const acc = new Access();
 export class ApplyDeferred extends System<unit, unit> {
     static readonly type_id: UUID = v4() as UUID;
+    readonly fallible = false;
 
     type_id(): UUID {
         return ApplyDeferred.type_id;
@@ -181,4 +193,5 @@ export class ApplyDeferred extends System<unit, unit> {
     into_system_set() {
         return new SystemTypeSet(this);
     }
+
 }

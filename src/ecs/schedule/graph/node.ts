@@ -8,6 +8,9 @@ export const NodeId = {
         to_primitive() {
             return `${this.index} ${Number(this.is_system())}`
         }
+        eq(other: NodeId) {
+            return this.index === other.index && this.is_system() === other.is_system()
+        }
         [Symbol.toPrimitive]() {
             return this.to_primitive()
         }
@@ -19,6 +22,10 @@ export const NodeId = {
         to_primitive() {
             return `${this.index} ${Number(this.is_system())}`
         }
+        eq(other: NodeId) {
+            return this.index === other.index && this.is_system() === other.is_system()
+
+        }
         [Symbol.toPrimitive]() {
             return this.to_primitive()
         }
@@ -26,6 +33,6 @@ export const NodeId = {
     to_node_id(key: string) {
         const [id_, is_system] = key.split(' ');
         const id = Number(id_)
-        return Boolean(is_system) ? new this.System(id) : new this.Set(id)
+        return Boolean(Number(is_system)) ? new this.System(id) : new this.Set(id)
     }
 };
