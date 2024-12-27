@@ -9,6 +9,8 @@ import { entry } from "../util";
 import { ArchetypeAfterBundleInsert, ON_ADD, ON_INSERT, ON_REMOVE, ON_REPLACE, TypeId, World } from '.';
 import { iter, Iterator } from 'joshkaposh-iterator';
 import { TODO } from 'joshkaposh-iterator/src/util';
+import { retain } from '../array-helpers';
+import { Ord } from 'joshkaposh-index-map/src/util';
 
 export type BundleId = number;
 
@@ -357,11 +359,7 @@ export class BundleInfo {
             next_table_components = current_archetype.table_components().collect();
             next_sparse_set_components = current_archetype.sparse_set_components().collect();
 
-
-            TODO('BundleInfo remove_bundle_from_archetype() forgot to implement sorted_remove()')
-            // @ts-expect-error
             sorted_remove(next_table_components, removed_table_components);
-            // @ts-expect-error
             sorted_remove(next_sparse_set_components, removed_sparse_set_components);
 
             next_table_id = removed_table_components.length === 0 ?
@@ -469,10 +467,12 @@ export class BundleInserter {
                 change_tick
             )
         } else {
+
             const [archetype, new_archetype] = world.archetypes().__get_2_mut(archetype_id, new_archetype_id);
             const archetype_after_insert = archetype
                 .edges()
                 .get_archetype_after_bundle_insert_internal(bundle_id)!;
+
 
             const table_id = archetype.table_id();
             const new_table_id = new_archetype.table_id();
@@ -489,7 +489,8 @@ export class BundleInserter {
                     change_tick
                 )
             } else {
-                const [table, new_table] = world.storages().tables.__get_2(table_id, new_table_id);
+                const [table, new_table] = world.storages().tables.get_2(table_id, new_table_id);
+
                 return new BundleInserter(
                     world,
                     bundle_info,
@@ -949,4 +950,21 @@ function initialize_dynamic_bundle(bundle_infos: BundleInfo[], components: Compo
     const bundle_info = new BundleInfo('<dynamic bundle>', components, component_ids, id);
     bundle_infos.push(bundle_info);
     return [id, storages_types];
+}
+
+
+
+function sorted_remove<T extends Ord>(source: T[], remove: T[]) {
+    let remove_index = 0;
+    retain(source, (value) => {
+        while (remove_index < remove.length && value > remove[remove_index]) {
+            remove_index += 1;
+        }
+
+        if (remove_index < remove.length) {
+            return value !== remove[remove_index];
+        } else {
+            return true;
+        }
+    })
 }

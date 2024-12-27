@@ -5,7 +5,7 @@ import { StorageType, Storages } from "../storage";
 import { type Component } from "../component";
 import { ON_REMOVE, ON_REPLACE, World } from ".";
 import { Entities, Entity, EntityLocation } from "../entity";
-import { BundleFromComponent, BundleId, BundleInfo, BundleInserter, Bundles, InsertMode, type Bundle, type DynamicBundle } from "../bundle";
+import { BundleId, BundleInfo, BundleInserter, Bundles, InsertMode, type Bundle, type DynamicBundle } from "../bundle";
 import { Access, Archetype, ArchetypeId, Archetypes, ComponentId, Components, ComponentTicks } from "..";
 import { UnsafeEntityCell } from "./unsafe-world-cell";
 import { RemovedComponentEvents } from "../removal-detection";
@@ -228,7 +228,7 @@ export class EntityWorldMut {
         if (old_table_id === new_archetype.table_id()) {
             new_location = new_archetype.__allocate(entity, old_table_row);
         } else {
-            const [old_table, new_table] = storages.tables.__get_2(old_table_id, new_archetype.table_id())
+            const [old_table, new_table] = storages.tables.get_2(old_table_id, new_archetype.table_id())
             const move_result = DROP ?
                 old_table.__move_to_and_drop_missing_unchecked(old_table_row, new_table) :
                 old_table.__move_to_and_forget_missing_unchecked(old_table_row, new_table);
@@ -246,7 +246,7 @@ export class EntityWorldMut {
                     table_row: old_location.table_row
                 })
 
-                archetypes.get(swapped_location.archetype_id)!.__set_entity_table_row(swapped_location.archetype_row, old_table_row);
+                archetypes.get(swapped_location.archetype_id)!.set_entity_table_row(swapped_location.archetype_row, old_table_row);
             }
             new_location = new_loc;
         }
@@ -416,13 +416,11 @@ export class EntityWorldMut {
     insert_with_caller(bundle: InstanceType<Component>[] | (Bundle & DynamicBundle), mode: InsertMode) {
         this.#assert_not_despawned();
         if (Array.isArray(bundle)) {
-            bundle = Bundles.dynamic_bundle(bundle);
+            bundle = Bundles.dynamic_bundle(bundle, this.#world);
         }
         const change_tick = this.#world.change_tick();
-        console.log('EntityWorldMut', bundle, this.#world, this.#location.archetype_id, change_tick);
-
         const bundle_inserter = BundleInserter.new(bundle, this.#world, this.#location.archetype_id, change_tick)
-        this.#location = bundle_inserter.__insert(this.#entity, this.#location, bundle, mode)
+        this.#location = bundle_inserter.insert(this.#entity, this.#location, bundle, mode)
         this.#world.flush();
         this.update_location();
         return this;
@@ -621,11 +619,11 @@ export class EntityWorldMut {
         return new_location
     }
 
-    remove(bundle: Bundle): this {
+    remove(bundle: InstanceType<Component>[]): this {
         this.#assert_not_despawned()
         const storages = this.#world.storages();
         const components = this.#world.components();
-        const bundle_info = this.#world.bundles().register_info(bundle, components, storages);
+        const bundle_info = this.#world.bundles().register_info(Bundles.dynamic_bundle(bundle, this.#world), components, storages);
         this.#location = this.__remove_bundle(bundle_info);
         this.#world.flush();
         this.update_location();

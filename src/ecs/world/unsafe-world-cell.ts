@@ -82,6 +82,7 @@ export class UnsafeEntityCell {
             this.#entity,
             this.#location
         )
+
         if (!component) {
             return
         }
@@ -134,9 +135,7 @@ function get_component(
     if (storage_type === StorageType.Table) {
         return world.storages()
             .tables
-            .get(location.table_id)
-            ?.get_column(component_id)
-            ?.get_data_unchecked(location.table_row)
+            .get(location.table_id)?.get_component(component_id, location.table_row);
     } else if (storage_type === StorageType.SparseSet) {
         return world
             .storages()

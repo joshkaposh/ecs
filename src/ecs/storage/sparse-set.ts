@@ -61,7 +61,7 @@ export class ComponentSparseSet {
     }
 
     check_change_ticks(change_tick: Tick) {
-        this.#dense.check_change_ticks(change_tick)
+        this.#dense.check_change_ticks(this.#entities.length, change_tick)
     }
 
     len(): number {
@@ -198,8 +198,9 @@ export class SparseSet<I extends number, V> {
     }
 
     static with_capacity(capacity: number) {
-        return new SparseSet(new Array(capacity), new Array(capacity), new SparseArray())
-        // return new SparseSet(new Array(capacity), new Array(capacity), SparseArray.default())
+        // TODO: create with capacity to increase performance (reduce array resizes)
+        return new SparseSet([], [], new SparseArray())
+        // return new SparseSet(new Array(capacity), new Array(capacity), new SparseArray())
     }
 
     into_immutable() {

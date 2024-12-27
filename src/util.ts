@@ -30,17 +30,10 @@ export function is_class<T extends Class>(value: unknown): value is T {
     return is_class_ctor(value) || is_class_instance(value);
 }
 
-// function swap_elements_container<T extends PropertyKey>(get_a: () => T, get_b: () => T, a: Record<PropertyKey, any>) {
-//     let temp = a[get_b()];
-//     a[get_a()] = a[get_b()];
-//     a[get_b()] = temp;
-// }
 
-// export function memswap<T extends PropertyKey>(get_a: () => T, get_b: () => T, containers: [Record<PropertyKey, any>, Record<PropertyKey, any>]) {
-//     const [a, b] = containers
-//     swap_elements_container(get_a, get_b, a);
-//     swap_elements_container(get_a, get_b, b);
-// }
+export function debug_assert(is_true: boolean, msg?: string) {
+    console.assert(is_true, msg)
+}
 
 export type DeepReadonly<T> = Readonly<{
     [K in keyof T]:

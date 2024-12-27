@@ -1,11 +1,12 @@
 import { iter } from "joshkaposh-iterator";
 import { Option, is_some } from 'joshkaposh-option'
-import { capacity, replace, reserve, swap_remove, swap_remove_unchecked } from "../../array-helpers";
-import { ComponentId, ComponentInfo, Components, ComponentTicks, Tick } from "../component";
-import { SparseSet } from "./sparse-set";
-import { Entity } from "../entity";
-import { split_at } from "joshkaposh-iterator/src/util";
-import { u32 } from "../../Intrinsics";
+import { capacity, replace, reserve, swap, swap_remove, split_at } from "../../../array-helpers";
+import { ComponentId, ComponentInfo, Components, ComponentTicks, Tick } from "../../component";
+import { SparseSet } from "../sparse-set";
+import { Entity } from "../../entity";
+import { u32 } from "../../../Intrinsics";
+import { debug_assert, entry } from "../../../util";
+import { Column } from "./column";
 
 export type TableId = number;
 export const TableId = {
@@ -18,138 +19,12 @@ export const TableRow = {
     INVALID: u32.MAX
 } as const;
 
-export class Column {
-
-    constructor(public data: {}[], public added_ticks: Tick[], public changed_ticks: Tick[]) { }
-
-    static default() {
-        return new Column([], [], []);
-    }
-
-    is_empty() {
-        return this.data.length === 0;
-    }
-
-    len() {
-        return this.data.length;
-    }
-
-    __swap_remove_unchecked(row: TableRow) {
-        swap_remove_unchecked(this.data, row)
-        swap_remove_unchecked(this.added_ticks, row)
-        swap_remove_unchecked(this.changed_ticks, row)
-    }
-
-    __push(ptr: {}, ticks: ComponentTicks) {
-        this.data.push(ptr);
-        this.added_ticks.push(ticks.added);
-        this.changed_ticks.push(ticks.changed);
-    }
-
-    get_data_slice() {
-        return this.data.slice();
-    }
-
-    get_added_ticks_slice() {
-        return this.added_ticks;
-    }
-
-    get_changed_ticks_slice() {
-        return this.changed_ticks;
-    }
-
-    get(row: TableRow): Option<[{}, ComponentTicks]> {
-        if (row < this.data.length) {
-            return [this.data[row], new ComponentTicks(this.added_ticks[row], this.changed_ticks[row])]
-        } else {
-            return null;
-        }
-    }
-
-    get_data_unchecked(row: TableRow) {
-        return this.data[row]
-    }
-
-    get_data(row: TableRow): Option<{}> {
-        if (row < this.data.length) {
-            return this.data[row]
-
-        } else {
-            return null;
-        }
-    }
-
-    get_added_tick(row: number): Option<Tick> {
-        return this.added_ticks[row];
-    }
-
-    get_changed_tick(row: number): Option<Tick> {
-        return this.changed_ticks[row]
-    }
-
-    get_with_ticks(row: number): Option<[{}, ComponentTicks]> {
-        const d = this.get_data(row);
-        const t = this.get_ticks(row);
-
-        return d && t ? [d, t] : undefined;
-    }
-
-    get_ticks(row: number): Option<ComponentTicks> {
-        if (row < this.data.length) {
-            return this.get_ticks_unchecked(row)
-        } else {
-            return
-        }
-    }
-
-    get_ticks_unchecked(row: number) {
-        return new ComponentTicks(this.added_ticks[row], this.changed_ticks[row]);
-    }
-
-    clear() {
-        this.data.length = 0;
-        this.added_ticks.length = 0;
-        this.changed_ticks.length = 0;
-    }
-
-    check_change_ticks(change_tick: Tick) {
-        for (let i = 0; i < this.added_ticks.length; i++) {
-            const component_ticks = this.added_ticks[i];
-            component_ticks.check_tick(change_tick);
-        }
-
-        for (let i = 0; i < this.changed_ticks.length; i++) {
-            const component_ticks = this.changed_ticks[i];
-            component_ticks.check_tick(change_tick);
-        }
-    }
-
-    __replace(row: TableRow, data: {}, change_tick: Tick) {
-        replace(this.data, row, data);
-        this.changed_ticks[row].set(change_tick.get());
-    }
-
-    __initialize_from_unchecked(other: Column, src_row: TableRow, _dst_row: TableRow) {
-        // const ptr = this.data[dst_row];
-
-        swap_remove(other.data, src_row)
-    }
-
-    __initialize(row: TableRow, data: {}, change_tick: Tick) {
-        this.data[row] = data;
-        this.added_ticks[row] = change_tick;
-        this.changed_ticks[row] = change_tick;
-    }
-
-    __reserve_exact(additional: number) {
-        reserve(this.data, additional);
-    }
-}
-
 type TableMoveResult = {
     swapped_entity: Option<Entity>;
     new_row: TableRow;
 }
+
+export { Column } from './column';
 
 export class Table {
     #columns: SparseSet<ComponentId, Column>;
@@ -160,7 +35,10 @@ export class Table {
     }
 
     check_change_ticks(change_tick: Tick) {
-        this.#columns.iter().for_each(([_, c]) => c.check_change_ticks(change_tick))
+        const len = this.entity_count();
+        for (const col of this.#columns.values()) {
+            col.check_change_ticks(len, change_tick)
+        }
     }
 
     entities() {
@@ -173,6 +51,10 @@ export class Table {
 
     get_column(component_id: ComponentId): Option<Column> {
         return this.#columns.get(component_id);
+    }
+
+    get_component(component_id: ComponentId, row: TableRow): Option<{}> {
+        return this.get_column(component_id)?.data[row];
     }
 
     get_data_slice_for(component_id: ComponentId) {
@@ -213,8 +95,13 @@ export class Table {
     }
 
     iter() {
+        return this.#columns.iter();
+    }
+
+    iter_columns() {
         return this.#columns.values();
     }
+
 
     clear() {
         this.#entities.length = 0;
@@ -248,8 +135,6 @@ export class Table {
         this.#entities.push(entity);
 
         for (const column of this.#columns.values()) {
-            console.log('TABLE ALLOCATE', column);
-
             column.data.length = this.#entities.length;
         }
 
@@ -262,12 +147,22 @@ export class Table {
     /// # Safety
     /// `row` must be in-bounds
     __swap_remove_unchecked(row: TableRow) {
-        for (const column of this.#columns.values()) {
-            column.__swap_remove_unchecked(row)
-        }
-        const is_last = row === this.#entities.length - 1;
+        debug_assert(row < this.entity_count());
+        const last_element_index = this.entity_count() - 1;
 
-        swap_remove_unchecked(this.#entities, row)
+        if (row !== last_element_index) {
+            for (const column of this.#columns.values()) {
+                column.__swap_remove_and_drop_unchecked_nonoverlapping(last_element_index, row)
+            }
+        } else {
+            for (const col of this.#columns.values()) {
+                col.__drop_last_component(last_element_index);
+            }
+        }
+
+
+        const is_last = row === last_element_index;
+        swap_remove(this.#entities, row);
 
         return is_last ? null : this.#entities[row]
     }
@@ -281,12 +176,13 @@ export class Table {
     /// # Safety
     /// Row must be in-bounds
     __move_to_and_forget_missing_unchecked(row: TableRow, new_table: Table): TableMoveResult {
-        const is_last = row === this.#entities.length - 1;
+        const last_element_index = this.#entities.length - 1
+        const is_last = row === last_element_index;
         const new_row = new_table.__allocate(swap_remove(this.#entities, row)!)
         for (const [component_id, column] of this.#columns.iter()) {
             let new_column = new_table.get_column(component_id);
             if (is_some(new_column)) {
-                new_column.__initialize_from_unchecked(column, row, new_row)
+                new_column.__initialize_from_unchecked(column, last_element_index, row, new_row)
             } else {
                 column.__swap_remove_unchecked(row)
             }
@@ -304,12 +200,13 @@ export class Table {
     /// # Safety
     /// row must be in-bounds
     __move_to_and_drop_missing_unchecked(row: TableRow, new_table: Table): TableMoveResult {
-        const is_last = row < this.#entities.length - 1;
+        const last_element_index = this.#entities.length - 1
+        const is_last = row === last_element_index;
         const new_row = new_table.__allocate(swap_remove(this.#entities, row as number)!)
         for (const [component_id, column] of this.#columns.iter()) {
             const new_column = new_table.get_column(component_id)
             if (new_column) {
-                new_column.__initialize_from_unchecked(column, row, new_row)
+                new_column.__initialize_from_unchecked(column, last_element_index, row, new_row)
             } else {
                 column.__swap_remove_unchecked(row)
             }
@@ -327,11 +224,16 @@ export class Table {
     /// # Safety
     /// `row` must be in-bounds. `new_table` must contain every component this table has
     __move_to_superset_unchecked(row: TableRow, new_table: Table): TableMoveResult {
-        const is_last = row === this.#entities.length - 1;
+        debug_assert(row < this.entity_count());
+        const last_element_index = this.entity_count() - 1;
+        const is_last = row === last_element_index;
         const new_row = new_table.__allocate(swap_remove(this.#entities, row)!)
 
+
         for (const [component_id, column] of this.#columns.iter()) {
-            new_table.get_column(component_id)?.__initialize_from_unchecked(column, row, new_row)
+
+            new_table
+                .get_column(component_id)!.__initialize_from_unchecked(column, last_element_index, row, new_row)
         }
 
         return {
@@ -400,14 +302,12 @@ export class Tables {
         return this.#tables[id];
     }
 
-    __get_2(a: TableId, b: TableId) {
-        if (a < b) {
-            // let (b_slice, a_slice) = self.tables.split_at_mut(a);
-            const [b_slice, a_slice] = split_at(this.#tables, a) ?? [[], []];
+    get_2(a: TableId, b: TableId) {
+        if (a > b) {
+            const [b_slice, a_slice] = split_at(this.#tables, a)!;
             return [a_slice[0], b_slice[b]] as const;
         } else {
-            // let (b_slice, a_slice) = self.tables.split_at_mut(b);
-            const [a_slice, b_slice] = split_at(this.#tables, b) ?? [[], []];
+            const [a_slice, b_slice] = split_at(this.#tables, b)!;
             return [a_slice[a], b_slice[0]] as const
         }
     }
@@ -424,22 +324,18 @@ export class Tables {
 
         const tables = this.#tables;
 
-
         let value!: TableId;
-        const hash = hash_component_ids(component_ids)
-        if (!this.#table_ids.has(hash)) {
+        const hash = hash_component_ids(component_ids);
+
+        return entry(this.#table_ids, hash, () => {
             const table = TableBuilder.with_capacity(0, component_ids.length)
             for (let i = 0; i < component_ids.length; i++) {
                 table.add_column(components.get_info(component_ids[i])!)
             }
             tables.push(table.build());
             value = tables.length - 1;
-            this.#table_ids.set(hash, value);
-        } else {
-            value = this.#table_ids.get(hash)!
-        }
-        return value;
-
+            return value;
+        })
     }
 
     iter() {

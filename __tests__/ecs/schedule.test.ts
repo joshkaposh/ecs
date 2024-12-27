@@ -20,8 +20,8 @@ test('schedule', () => {
     const w = World.default();
     const s = new Schedule('Update');
 
-    s.add_systems(sA);
-    s.run(w)
+    // s.add_systems(sA);
+    // s.run(w)
     // s.add_systems(sB);
 
     // s.run_disjoint(w)

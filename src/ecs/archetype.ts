@@ -7,9 +7,9 @@ import { StorageType } from "./storage";
 import { SparseArray, SparseSet } from "./storage/sparse-set";
 import { reserve, swap_remove } from "../array-helpers";
 import { type BundleId } from './bundle';
-import { split_at } from "joshkaposh-iterator/src/util";
 import { u32 } from "../Intrinsics";
 import { entry, Enum } from "../util";
+import { split_at } from "../array-helpers";
 
 export type ArchetypeGeneration = number;
 export const ArchetypeGeneration = {
@@ -167,6 +167,7 @@ export class Archetype {
             // const info = components.get_info(component_id)!;
             // info.update_archetype_flags()
 
+            // @ts-expect-error
             archetype_components.insert(component_id, {
                 storage_type: StorageType.Table,
                 archetype_component_id
@@ -178,6 +179,7 @@ export class Archetype {
         }
 
         for (const [component_id, archetype_component_id] of sparse_set_components.into_iter()) {
+            // @ts-expect-error
             archetype_components.insert(component_id, {
                 storage_type: StorageType.SparseSet,
                 archetype_component_id
