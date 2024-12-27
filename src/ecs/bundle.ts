@@ -55,11 +55,11 @@ export function define_bundle(bundle: any[], world: World): Bundle & DynamicBund
         })
     }
     rec(bundle);
-    const type_id = bundle_hash(ids);
-    const name = type_id;
+    const hash = bundle_hash(ids);
+    const name = hash;
 
     const bun: Bundle & DynamicBundle = {
-        type_id: type_id,
+        hash: hash,
         name: name,
         component_ids(components, storages, ids) {
             for (const b of bundles) {
@@ -856,15 +856,15 @@ export class Bundles {
         let id: number;
 
 
-        if (this.#bundle_ids.has(bundle.type_id)) {
-            id = this.#bundle_ids.get(bundle.type_id)!
+        if (this.#bundle_ids.has(bundle.hash)) {
+            id = this.#bundle_ids.get(bundle.hash)!
         } else {
             const component_ids: number[] = [];
             bundle.component_ids(components, storages, id => component_ids.push(id))
             let _id = bundle_infos.length;
             const bundle_info = new BundleInfo(bundle.name, components, component_ids, _id)
             bundle_infos.push(bundle_info)
-            this.#bundle_ids.set(bundle.type_id, _id);
+            this.#bundle_ids.set(bundle.hash, _id);
             id = _id;
         }
         return id;
