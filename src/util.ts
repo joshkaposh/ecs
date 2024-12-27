@@ -1,15 +1,14 @@
 import { Primitive } from "joshkaposh-iterator";
-import { is_none, is_some, None, Option } from "joshkaposh-option";
+import { is_none, None, Option } from "joshkaposh-option";
 
 export type Some<T> = T extends None ? never : T;
 
 export type unit = typeof unit;
-export const unit = Symbol('Unit');
+export const unit = Symbol('UNIT');
 
 type Hint = 'string' | 'number' | 'default';
 
 export type Class<Static extends {} = {}, Inst extends {} = {}> = (new (...args: any[]) => Inst) & Static
-
 
 export function is_primitive(value: unknown): value is Primitive {
     const ty = typeof value;

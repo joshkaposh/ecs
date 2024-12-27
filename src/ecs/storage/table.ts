@@ -4,7 +4,7 @@ import { capacity, replace, reserve, swap_remove, swap_remove_unchecked } from "
 import { ComponentId, ComponentInfo, Components, ComponentTicks, Tick } from "../component";
 import { SparseSet } from "./sparse-set";
 import { Entity } from "../entity";
-import { assert, split_at } from "joshkaposh-iterator/src/util";
+import { split_at } from "joshkaposh-iterator/src/util";
 import { u32 } from "../../Intrinsics";
 
 export type TableId = number;
@@ -248,10 +248,11 @@ export class Table {
         this.#entities.push(entity);
 
         for (const column of this.#columns.values()) {
+            console.log('TABLE ALLOCATE', column);
+
             column.data.length = this.#entities.length;
         }
 
-        // return new TableRow(index);
         return index;
     }
 
@@ -363,11 +364,15 @@ export class TableBuilder {
     }
 }
 
+function hash_component_ids(component_ids: ComponentId[]): string {
+    return component_ids.join(' ');
+}
+
 export class Tables {
     #tables: Table[];
-    #table_ids: Map<ComponentId[], TableId>;
+    #table_ids: Map<string, TableId>;
 
-    constructor(tables: Table[] = [], table_ids: Map<ComponentId[], TableId> = new Map()) {
+    constructor(tables: Table[] = [], table_ids: Map<string, TableId> = new Map()) {
         this.#tables = tables;
         this.#table_ids = table_ids;
     }
@@ -413,19 +418,25 @@ export class Tables {
     /// # Safety
     /// `component_ids` must contain components that exist in `components`
     __get_id_or_insert(component_ids: ComponentId[], components: Components): TableId {
+        if (component_ids.length === 0) {
+            return TableId.empty
+        }
+
         const tables = this.#tables;
-        // compute from component_ids;
-        // const hash = TODO<any>();
+
+
         let value!: TableId;
-        if (!this.#table_ids.has(component_ids)) {
-            let table = TableBuilder.with_capacity(0, component_ids.length)
-            for (const component_id of component_ids) {
-                table.add_column(components.get_info(component_id)!)
+        const hash = hash_component_ids(component_ids)
+        if (!this.#table_ids.has(hash)) {
+            const table = TableBuilder.with_capacity(0, component_ids.length)
+            for (let i = 0; i < component_ids.length; i++) {
+                table.add_column(components.get_info(component_ids[i])!)
             }
             tables.push(table.build());
             value = tables.length - 1;
+            this.#table_ids.set(hash, value);
         } else {
-            value = this.#table_ids.get(component_ids)!
+            value = this.#table_ids.get(hash)!
         }
         return value;
 

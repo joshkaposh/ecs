@@ -202,9 +202,7 @@ class _With extends QueryFilter<unit, unit, ComponentId> {
 
     set_table(_fetch: unit, _state: number, _table: Table): void { }
 
-    set_archetype(_fetch: unit, _state: number, _archetype: Archetype, _table: Table): void {
-
-    }
+    set_archetype(_fetch: unit, _state: number, _archetype: Archetype, _table: Table): void { }
 
     fetch(_fetch: unit, _entity: Entity, _table_row: TableRow): unit {
         return _fetch
@@ -215,7 +213,7 @@ class _With extends QueryFilter<unit, unit, ComponentId> {
     }
 
     init_state(world: World) {
-        const id = world.init_component(this.#ty);
+        const id = world.register_component(this.#ty);
         this.__state = id
         return id
     }
@@ -263,7 +261,7 @@ class _Without extends QueryFilter<unit, unit, ComponentId> {
     }
 
     init_state(world: World) {
-        const id = world.init_component(this.#ty);
+        const id = world.register_component(this.#ty);
         this.__state = id
         return id;
     }
@@ -521,132 +519,15 @@ export function All(...filter: QueryFilter<any, any, any>[]) {
 }
 
 export type With<T extends Component> = InstanceType<typeof _With>
-export function With<T extends Component[]>(...types: T) {
-    if (types.length === 1) {
-        return new _With(types[0])
-    }
-    return _All.from_filter(types.map(c => new _With(c)));
+export function With<T extends Component>(type: T) {
+    return new _With(type)
 }
 
 export type Without<T extends Component> = InstanceType<typeof _Without>
-export function Without<T extends Component[]>(...types: T) {
-    if (types.length === 1) {
-        return new _Without(types[0])
-    }
-    return _All.from_filter(types.map(c => new _Without(c)))
+export function Without<T extends Component>(type: T) {
+    return new _Without(type)
 }
 
 export function Or(...filters: QueryFilter<any, any, any>[]) {
     return _Or.from_filter(filters);
 }
-
-// export class QueryFilterTuple<F extends QueryFilter<any, any, any>[]> extends QueryFilter<any, FilterFetch<any>[], any[]> {
-//     #data: F
-//     private constructor(filters: F, is_dense: boolean, is_archetypal: boolean) {
-//         super()
-//         this.#data = filters as F;
-//         this.IS_ARCHETYPAL = is_archetypal;
-//         this.IS_DENSE = is_dense;
-//     }
-
-//     static from_filter<F extends QueryFilter<any, any, any>[]>(filters: F) {
-//         let is_archetypal = 1;
-//         let is_dense = 1;
-//         filters.forEach(f => {
-//             // @ts-expect-error
-//             is_archetypal &= f.IS_ARCHETYPAL
-//             // @ts-expect-error
-//             is_dense &= f.IS_DENSE;
-//         })
-//         return new QueryFilterTuple(filters, Boolean(is_dense), Boolean(is_archetypal))
-//     }
-
-//     IS_ARCHETYPAL: boolean;
-//     IS_DENSE: boolean;
-
-//     init_fetch(world: World, state: any, last_run: Tick, this_run: Tick): FilterFetch<any>[] {
-//         const filters = Array.from({ length: state.length }, (_, i) => ({
-//             fetch: this.#data[i].init_fetch(world, state, last_run, this_run),
-//             matches: false
-//         }))
-//         this.__fetch = filters;
-//         return filters;
-
-
-//     }
-
-//     set_table(fetch: FilterFetch<any>[], state: any[], table: Table): void {
-//         for (let i = 0; i < this.#data.length; i++) {
-//             const filter = this.#data[i];
-//             fetch[i].matches = filter.matches_component_set(state[i], id => table.has_column(id))
-//             if (fetch[i].matches) {
-
-//                 filter.set_table(filter.__fetch, state[i], table)
-//             }
-
-//         }
-//     }
-
-//     set_archetype(fetch: FilterFetch<any>[], state: any[], archetype: Archetype, table: Table): void {
-//         for (let i = 0; i < fetch.length; i++) {
-//             const filter = this.#data[i];
-//             fetch[i].matches = filter.matches_component_set(state, id => archetype.contains(id))
-
-//             if (fetch[i].matches) {
-//                 filter.set_archetype(filter.__fetch, state[i], archetype, table)
-//             }
-//         }
-//     }
-
-//     fetch(fetch: FilterFetch<any>[], entity: Entity, table_row: number): boolean {
-//         for (let i = 0; i < fetch.length; i++) {
-//             if (!this.#data[i].filter_fetch(fetch[i].fetch, entity, table_row)) {
-//                 return false
-//             }
-//         }
-//         return true
-//     }
-
-//     update_component_access(state: any[], access: FilteredAccess<ComponentId>): void {
-//         const _new_access = FilteredAccess.matches_nothing();
-
-//         for (let i = 0; i < this.#data.length; i++) {
-//             const filter = this.#data[i];
-//             const intermediate = access.clone();
-//             filter.update_component_access(state[i], intermediate);
-//             _new_access.append_or(intermediate);
-//             _new_access.extend_access(intermediate);
-//         }
-
-//         _new_access.__required = access.__required;
-//         access.set_to_access(_new_access)
-//     }
-
-//     init_state(world: World): any[] {
-//         const state = Array.from({ length: this.#data.length }, (_, i) => this.#data[i].init_state(world))
-//         this.__state = state as any;
-//         return state;
-//     }
-
-//     get_state(components: Components): Option<any[]> {
-//         return Array.from({ length: this.#data.length }, (_, i) => this.#data[i].get_state(components))
-//     }
-
-//     matches_component_set(state: any[], set_contains_id: (component_id: ComponentId) => boolean): boolean {
-//         // filter is a no op, so it matches everything
-//         if (this.#data.length === 0) {
-//             return true;
-//         }
-
-//         for (let i = 0; i < state.length; i++) {
-//             if (!this.#data[i].matches_component_set(state[i], set_contains_id)) {
-//                 return false;
-//             }
-//         }
-//         return true
-//     }
-
-//     filter_fetch(fetch: any, entity: Entity, table_row: number): boolean {
-//         return this.fetch(fetch, entity, table_row);
-//     }
-// }

@@ -1,7 +1,7 @@
 import { Iterator, done, from_fn, iter, once } from "joshkaposh-iterator";
 import { assert, TODO } from "joshkaposh-iterator/src/util";
 import { Err, Option, Result, is_error, is_none, is_some, ErrorExt } from 'joshkaposh-option';
-import { ArchetypeComponentId, ArchetypeGeneration, Archetypes } from "../archetype";
+import { Archetype, ArchetypeComponentId, ArchetypeGeneration, Archetypes } from "../archetype";
 import { Component, ComponentId, ComponentInfo, Components, ComponentTicks, Resource, ResourceId, Tick, TypeId } from "../component";
 import { Storages } from "../storage";
 import { AllocAtWithoutReplacement, Entities, Entity, EntityLocation } from "../entity";
@@ -24,10 +24,16 @@ export type WorldId = number;
 
 type AllTuples<T> = T | T[] | T[][]
 
+export type ON_ADD = typeof ON_ADD;
 export const ON_ADD = 0;
+export type ON_INSERT = typeof ON_INSERT;
 export const ON_INSERT = 1;
+export type ON_REPLACE = typeof ON_REPLACE;
 export const ON_REPLACE = 2;
+export type ON_REMOVE = typeof ON_REMOVE;
 export const ON_REMOVE = 3;
+
+type ObserverId = ON_ADD | ON_INSERT | ON_REPLACE | ON_REMOVE;
 
 export class OnAdd { }
 export class OnInsert { }
@@ -259,9 +265,18 @@ export class World {
         return this.#spawn_at_empty_internal(entity);
     }
 
-    spawn(bundle: any[] | (Bundle & DynamicBundle)): EntityWorldMut {
+    spawn(bundle: InstanceType<Component>[] | (Bundle & DynamicBundle)): EntityWorldMut {
+        if (Array.isArray(bundle)) {
+            bundle = Bundles.dynamic_bundle(bundle, this);
+        }
+
         this.flush();
-        return this.#spawn_post_flush(bundle);
+        const change_tick = this.change_tick();
+        const entity = this.#entities.alloc();
+        const bundle_spawner = BundleSpawner.new(bundle, this, change_tick)
+        const entity_location = bundle_spawner.spawn_non_existent(entity, bundle);
+
+        return new EntityWorldMut(this, entity, entity_location);
     }
 
     spawn_batch(...bundle: (any[] | (Bundle & DynamicBundle))[]): SpawnBatchIter {
@@ -270,9 +285,9 @@ export class World {
         this.#entities.reserve(len);
         if (Array.isArray(bundle)) {
             // @ts-expect-error
-            bundle[0] = Bundles.dynamic_bundle(bundle[0]);
+            bundle = Bundles.dynamic_bundle(bundle[0], this);
         }
-        const bundle_info = this.#bundles.__init_info(bundle[0] as any, this.#components, this.#storages);
+        const bundle_info = this.#bundles.__init_info(bundle as any, this.#components, this.#storages);
         // const spawner = new BundleSpawner(this)
         // spawner.reserve_storage(len)
         // for (let i = 0; i < len; i++) {
@@ -316,11 +331,11 @@ export class World {
         return this.get_entity(entity)?.get_mut(component)
     }
 
-    query<const D extends AllTuples<any>>(data: D): Query<QueryData, QueryFilter> {
-        return this.query_filtered(data, []) as Query<QueryData, QueryFilter>
+    query<const D extends readonly any[]>(data: D): Query<D, []> {
+        return this.query_filtered(data, []) as Query<D, []>
     }
 
-    query_filtered<const D extends AllTuples<any>, const F extends AllTuples<QueryFilter<any, any, any>>>(data: D, filter: F): Query<QueryData, QueryFilter> {
+    query_filtered<const D extends readonly any[], const F extends readonly any[]>(data: D, filter: F): Query<D, F> {
         return new Query(this, QueryState.new(data as any, filter as any, this) as QueryState<QueryData, QueryFilter>, false);
     }
 
@@ -347,6 +362,16 @@ export class World {
         }
 
         return from_fn(() => { return done() })
+    }
+
+
+    trigger_on_add(archetype: Archetype, entity: Entity, archetype_after_insert: any) { }
+    trigger_on_insert(archetype: Archetype, entity: Entity, archetype_after_insert: any) { }
+    trigger_on_replace(archetype: Archetype, entity: Entity, archetype_after_insert: any) { }
+    trigger_on_remove(archetype: Archetype, entity: Entity, archetype_after_insert: any) { }
+
+    trigger_observers(type: ObserverId, entity: Entity, archetype_after_insert: any) {
+
     }
 
     insert_resource(resource: Resource): void {
@@ -653,7 +678,7 @@ export class World {
     }
 
     __flush_entities() {
-        const empty_archetype = this.#archetypes.empty_mut();
+        const empty_archetype = this.#archetypes.empty();
         const table = this.#storages.tables.get(empty_archetype.table_id())!;
         this.#entities.flush((entity, location) => {
             const new_loc = empty_archetype.__allocate(entity, table.__allocate(entity));
@@ -676,7 +701,7 @@ export class World {
 
     __initialize_resource_internal(component_id: ComponentId) {
         const archetypes = this.#archetypes;
-        return this.#storages.resources.__initialize_with(component_id, this.#components, () => archetypes.__new_archetype_component_id())
+        return this.#storages.resources.__initialize_with(component_id, this.#components, () => archetypes.new_archetype_component_id())
     }
 
     #bootstrap() {
@@ -704,7 +729,7 @@ export class World {
     #spawn_post_flush(bundle: any) {
         const entity = this.#entities.alloc();
         if (Array.isArray(bundle)) {
-            bundle = Bundles.dynamic_bundle(bundle);
+            bundle = Bundles.dynamic_bundle(bundle, this);
         }
         const bundle_info = this.#bundles.__init_info(bundle, this.#components, this.#storages);
         const spawner = bundle_info.__get_bundle_spawner(this.#entities, this.#archetypes, this.#components, this.#storages, this.change_tick());
@@ -713,7 +738,7 @@ export class World {
     }
 
     #spawn_at_empty_internal(entity: Entity): EntityWorldMut {
-        const archetype = this.#archetypes.empty_mut();
+        const archetype = this.#archetypes.empty();
         const table_row = this.#storages.tables.get(archetype.table_id())!.__allocate(entity);
         const location = archetype.__allocate(entity, table_row);
         this.#entities.__set(entity.index(), location);

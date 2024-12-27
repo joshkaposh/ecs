@@ -47,10 +47,9 @@ export class SingleThreadedExecutor implements SystemExecutor {
         const set_count = schedule.__set_ids.length;
         console.log('Executable init', sys_count, set_count);
 
-        this.#evaluated_sets = FixedBitSet.with_capacity(set_count + 1);
-        this.#completed_systems = FixedBitSet.with_capacity(sys_count + 1);
-        this.#unapplied_systems = FixedBitSet.with_capacity(sys_count + 1);
-
+        this.#evaluated_sets = FixedBitSet.with_capacity(set_count);
+        this.#completed_systems = FixedBitSet.with_capacity(sys_count);
+        this.#unapplied_systems = FixedBitSet.with_capacity(sys_count);
     }
 
     run(schedule: SystemSchedule, world: World, _skip_systems: Option<FixedBitSet>): void {
@@ -79,14 +78,14 @@ export class SingleThreadedExecutor implements SystemExecutor {
 
             const res = result(() => {
                 if (system.is_exclusive()) {
-                    console.log('RUNNING SYSTEM EXCLUSIVE');
+                    console.log('RUNNING SYSTEM EXCLUSIVE', system);
                     return system.run(undefined, world)
                 } else {
-                    console.log('RUNNING SYSTEM NON-EXCLUSIVE');
+                    console.log('RUNNING SYSTEM NON-EXCLUSIVE', system);
                     return system.run_unsafe(undefined, world);
                 }
             })
-            if (res) {
+            if (res instanceof Error) {
                 throw new Error(`Encontered an error in system ${system.name()}`)
             }
 

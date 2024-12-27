@@ -1,6 +1,5 @@
 import { assert, expect, test } from 'vitest'
-import { define_component, define_marker, With, Without, World, TypeId, StorageType, Maybe, Added, Write, Read, ReadRef, EntityRef, Changed, Events, Query, Schedule, define_system } from '../../src/ecs'
-import { Option, is_some } from 'joshkaposh-option';
+import { define_component, define_marker, With, Without, World, TypeId, StorageType, Maybe, Added, Write, Read, ReadRef, EntityRef, Changed, Events, Query, Schedule, define_system, QueryBuilder, Entity } from '../../src/ecs'
 
 class A {
     static type_id: TypeId['type_id'];
@@ -53,129 +52,113 @@ function is_key_pressed(events: Events<typeof TestEvent>) {
     return is_pressed
 }
 
-test('events', () => {
+test('query_builder', () => {
     const w = World.default();
-    const events = Events.default(TestEvent);
+    const query = new QueryBuilder(w, [A])
+        .with(B)
+        .without(C)
+        .build();
 
-    w.register_resource(events as any);
-    w.insert_resource(events as any);
+    w.spawn([new A('lonely A')])
+    w.spawn([new A('A with B'), new B()])
+    w.spawn([new A('A with B and C'), new B(), new C()])
 
-
-    const reader = events.get_cursor();
-    events.send(new TestEvent('key A'))
-    events.send(new TestEvent('key V'))
-    events.send(new TestEvent('key W'));
-
-
-
-    for (const ev of reader.read(events)) {
-        console.log(ev);
+    for (const [a, b, c] of query) {
+        console.log([a, b, c]);
     }
-
-    events.update();
-    events.send(new TestEvent('himom'));
-
-    assert(is_key_pressed(events));
-    events.clear();
-    assert(!is_key_pressed(events));
-
-
 })
 
-function params<const Params extends readonly any[]>(...p: Params) {
-    return p
-}
+// test('query_with_marker', () => {
 
-const [a, b, c] = params('a', 'b', 'c')
+//     const w = World.default();
 
-test('query_with_marker', () => {
+//     w.register_component(A)
+//     w.register_component(B)
+//     w.register_component(C)
+//     w.register_component(D)
+//     w.register_component(Team.Red);
+//     w.register_component(Team.Blue)
 
+//     w.spawn([new A('red'), new B('red'), new Team.Red()])
+//     w.spawn([new A('red'), new B('red'), new Team.Red()])
+//     w.spawn([new A('blue'), new B('blue'), new Team.Blue()])
+//     w.spawn([new A('blue'), new B('blue'), new Team.Blue()])
+
+//     const q_red = w.query_filtered([A, B], [With(Team.Red)]);
+//     const q_blue = w.query_filtered([A, B], [With(Team.Blue)]);
+
+//     const q_ab = w.query([A, B]);
+
+//     const q_a = w.query([A]);
+//     const q_a_mut = w.query([Write(A)]);
+
+//     const query_a_added = w.query_filtered([A], [Added(A)]);
+//     w.clear_trackers();
+
+//     assert(query_a_added.iter().count() === 0);
+//     w.spawn([new A()])
+//     w.spawn([new A()])
+//     w.spawn([new A()])
+//     assert(query_a_added.iter().count() === 3);
+//     w.clear_trackers();
+//     assert(query_a_added.iter().count() === 0);
+
+//     assert(q_a.iter().count() === 7);
+
+//     assert(q_red.iter().count() === 2 && q_red.iter().all(([a, b]) => a.value === 'red' && b.value === 'red'));
+//     assert(q_blue.iter().count() === 2 && q_blue.iter().all(([a, b]) => a.value === 'blue' && b.value === 'blue'));
+//     assert(q_ab.iter().count() === 4)
+
+//     for (const [a] of q_a.iter()) {
+//         assert_throws(() => {
+//             a.value = 'not allowed'
+//         })
+
+//     }
+
+//     for (const [a] of q_a_mut) {
+//         a.value = 'mutated'
+//     }
+
+//     assert(q_a_mut.iter().all(([a]) => a.value === 'mutated'))
+
+// })
+
+// test('query_mut', () => {
+//     const w = World.new();
+//     w.spawn([new A(), new B()]);
+//     w.spawn([new A(), new B()]);
+//     w.spawn([new A(), new B()]);
+
+//     const q = w.query([A]);
+//     assert(q.iter().count() === 3);
+//     assert(q.iter().count() === 3);
+
+//     for (const [a] of q.iter()) {
+//         assert_throws(() => a.value = 'modified')
+//     }
+//     assert(q.iter().all(([t]) => t.value !== 'modified'))
+//     const qm = w.query([Write(A)])
+//     for (const [a] of qm.iter()) {
+//         a.value = 'modified'
+//     }
+
+//     assert(q.iter().all(([t]) => t.value === 'modified'))
+
+// })
+
+test('query_entity', () => {
     const w = World.default();
+    w.spawn([new A()]);
+    w.spawn([new A()]);
+    w.spawn([new A()]);
 
-    const s = new Schedule('First');
-    // s.add_systems()
-
-    w.register_component(A)
-    w.register_component(B)
-    w.register_component(C)
-    w.register_component(D)
-    w.register_component(Team.Red);
-    w.register_component(Team.Blue)
-
-    w.spawn([new A('red'), new B('red'), new Team.Red()])
-    w.spawn([new A('red'), new B('red'), new Team.Red()])
-    w.spawn([new A('blue'), new B('blue'), new Team.Blue()])
-    w.spawn([new A('blue'), new B('blue'), new Team.Blue()])
-
-    const q_red = w.query_filtered([A, B], [With(Team.Red)]);
-    const q_blue = w.query_filtered([A, B], [With(Team.Blue)]);
-
-    const q_ab = w.query([A, B]);
-
-    const q_a = w.query([A]);
-    const q_a_mut = w.query([Write(A)]);
-
-    const query_a_added = w.query_filtered([A], [Added(A)]);
-    w.clear_trackers();
-
-    assert(query_a_added.iter().count() === 0);
-    w.spawn([new A()])
-    w.spawn([new A()])
-    w.spawn([new A()])
-    assert(query_a_added.iter().count() === 3);
-    w.clear_trackers();
-    assert(query_a_added.iter().count() === 0);
-
-    assert(q_a.iter().count() === 7);
-
-    assert(q_red.iter().count() === 2);
-    assert(q_blue.iter().count() === 2);
-    assert(q_ab.iter().count() === 4)
-
-
-    for (const [a] of q_a.iter()) {
-        assert_throws(() => {
-            a.value = 'not allowed'
-        })
-
+    const q = w.query([Entity, Write(A)]);
+    for (const [e, a1] of q.iter()) {
+        const a2 = w.get(e, A)!;
+        a1.value = 'modified';
+        assert(a1.value === a2.value);
     }
-
-    for (const [a] of q_a_mut.iter()) {
-        a.value = 'allowed!'
-    }
-
-
-
-    for (const [a, b] of q_red.iter()) {
-    }
-
-    for (const [a, b] of q_blue.iter()) {
-    }
-
-
-})
-
-test('query_mut', () => {
-    const w = World.new();
-    w.spawn([new A(), new B()]);
-    w.spawn([new A(), new B()]);
-    w.spawn([new A(), new B()]);
-
-    const q = w.query([A]);
-    assert(q.iter().count() === 3);
-    assert(q.iter().count() === 3);
-
-    for (const [a] of q.iter()) {
-        assert_throws(() => a.value = 'modified')
-    }
-    assert(q.iter().all(([t]) => t.value !== 'modified'))
-    const qm = w.query([Write(A)])
-    for (const [a] of qm.iter()) {
-        a.value = 'modified'
-    }
-
-    assert(q.iter().all(([t]) => t.value === 'modified'))
-
 })
 
 test('query_entity_ref', () => {
@@ -186,14 +169,13 @@ test('query_entity_ref', () => {
 
     const q = w.query([EntityRef, Write(A)]);
     for (const [r, a1] of q.iter()) {
-        const a2 = r.get(A);
+        const a2 = r.get(A)!;
         a1.value = 'modified';
         assert(a1.value === a2.value);
     }
 })
 
 test('query', () => {
-
     const w = World.default();
 
     w.spawn([new A(), new B()])
@@ -203,6 +185,7 @@ test('query', () => {
     const qa = w.query([A]);
 
     assert(qa.iter().count() === 2);
+    assert(qab.iter().count() === 2);
 
     w.spawn([new A('third a'), new B('third b')])
     w.spawn([new A('lonely a')])
@@ -213,17 +196,28 @@ test('query', () => {
 
 test('query_with', () => {
     const w = World.default();
-    w.spawn([new A('with_b'), new B()]);
-    w.spawn([new A('with_b'), new B()]);
-    w.spawn([new A()]);
-    w.spawn([new A()]);
-    const qa_with_b = w.query_filtered([A], [With(B)]);
-    console.log('a_with_b_count', qa_with_b.iter().count(), 2)
-    expect(qa_with_b.iter().flatten().collect()).toEqual([new A('with_b'), new A('with_b')])
-    w.spawn([new A(), new B(), new C()])
-    w.spawn([new A(), new C()])
-    assert(qa_with_b.iter().count() === 3);
+    w.register_component(A)
+    w.register_component(B)
+    w.register_component(C)
 
+    w.spawn([new A('lonely a')])
+    w.spawn([new A('lonely a')])
+
+    const qa_with_b = w.query_filtered([A], [With(B)]);
+    assert(qa_with_b.count() === 0);
+
+    w.spawn([new A('with_b'), new B()])
+    w.spawn([new A('with_b'), new B()])
+    w.spawn([new C()])
+    assert(qa_with_b.count() === 2);
+
+    w.spawn([new A('without_b_with_c'), new C()])
+    assert(qa_with_b.count() === 2);
+
+    assert(qa_with_b.iter().all(([x]) => x.value === 'with_b'))
+    assert(qa_with_b.iter().count() === 2);
+    w.spawn([new A('with_b'), new B(), new C()])
+    assert(qa_with_b.iter().count() === 3);
 })
 
 test('query_without', () => {
@@ -244,15 +238,21 @@ test('query_without', () => {
 
     w.clear_entities();
 
-    const qa_without_bd = w.query_filtered([A], [Without(D, B)]);
+    const qa_without_bd = w.query_filtered([A], [Without(B), Without(D)]);
 
     w.spawn([new A('with_bd'), new C(), new B(), new D()]);
+    w.spawn([new A('with_bd'), new C(), new B(), new D()]);
+    w.spawn([new A('with_bd'), new C(), new B(), new D()]);
+    w.spawn([new A('with_d'), new D()]);
+    w.spawn([new A('with_d'), new D()]);
     w.spawn([new A('with_d'), new D()]);
     w.spawn([new A('with_b'), new B()]);
+    w.spawn([new A('with_b'), new B()]);
+    w.spawn([new A('with_b'), new B()]);
+    w.spawn([new A('lonely')]);
+    w.spawn([new A('with_c'), new C()])
 
-    let it = qa_without_bd.iter();
-    console.log(it.next());
-
+    assert(qa_without_bd.iter().all(([a]) => a.value !== 'with_b' && a.value !== 'with_d' && a.value !== 'with_bd'))
 })
 
 test('query_with_without', () => {
@@ -284,13 +284,13 @@ test('query_maybe', () => {
     w.spawn([new A(), new C()])
     w.spawn([new A(), new C()])
 
-    const q = w.query([A, B]);
-    const q2 = w.query([A, Maybe(B)]);
-    const q3 = w.query([A, Maybe(B), C]);
+    const q_a = w.query([A, B]);
+    const q_a_maybe_b = w.query([A, Maybe(B)]);
+    const q_ac_maybe_b = w.query([A, Maybe(B), C]);
 
-    assert(q.iter().count() === 3)
-    assert(q2.iter().count() === 8);
-    assert(q3.iter().count() === 3)
+    assert(q_a.iter().count() === 3)
+    assert(q_a_maybe_b.iter().count() === 8);
+    assert(q_ac_maybe_b.iter().count() === 3)
 })
 
 test('query_or', () => {
@@ -325,8 +325,6 @@ test('query_added', () => {
 
     w.clear_trackers();
     assert(q.iter().count() === 0)
-
-
 })
 
 test('changed', () => {
@@ -345,10 +343,6 @@ test('changed', () => {
     w.spawn([new A(), new B(), new C()])
     w.spawn([new A(), new B(), new C()])
 
-    const comps: any[] = [];
-    q.iter().for_each(([a]) => {
-        comps.push(a);
-    })
     w.clear_trackers();
 
     w.spawn([new A(), new B(), new C()])

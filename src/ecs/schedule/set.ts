@@ -1,9 +1,12 @@
 import { Option } from "joshkaposh-option";
+import { ProcessNodeConfig, ScheduleGraph } from "./schedule";
+import { NodeConfig } from "./config";
+import { NodeId } from "./graph";
 
-export interface SystemSet {
-    system_type(): Option<UUID>
+export interface SystemSet extends ProcessNodeConfig {
+    system_type(): Option<UUID>;
 
-    is_anonymous(): boolean
+    is_anonymous(): boolean;
 };
 
 

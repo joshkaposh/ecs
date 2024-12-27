@@ -10,8 +10,13 @@ type EntityIndex = EntityId;
 export class SparseArray<I extends number, V extends any> {
     #values: Option<V>[];
 
-    constructor() {
-        this.#values = [];
+    constructor(values: Option<V>[] = []) {
+        this.#values = values;
+    }
+
+    into_immutable() {
+        // @ts-expect-error
+        return new SparseArray(Object.freeze(this.#values))
     }
 
     contains(index: I): boolean {
@@ -195,6 +200,11 @@ export class SparseSet<I extends number, V> {
     static with_capacity(capacity: number) {
         return new SparseSet(new Array(capacity), new Array(capacity), new SparseArray())
         // return new SparseSet(new Array(capacity), new Array(capacity), SparseArray.default())
+    }
+
+    into_immutable() {
+        // @ts-expect-error
+        return new SparseSet(Object.freeze(this.#indices), Object.freeze(this.#dense), this.#sparse.into_immutable())
     }
 
     capacity() {

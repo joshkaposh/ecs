@@ -1,5 +1,5 @@
 import { is_some, type Option } from "joshkaposh-option";
-import { Archetype, Component, ComponentId, Components, EntityRef, FilteredAccess, is_component, StorageType, Tick, UnsafeEntityCell, World } from "..";
+import { Archetype, Component, ComponentId, Components, EntityRef, FilteredAccess, StorageType, Tick, World } from "..";
 import { DeepReadonly, unit } from "../../util";
 import { Entity } from "../entity";
 import { Table, TableRow } from "../storage/table";
@@ -198,12 +198,12 @@ type OptionFetch<T extends WorldQuery<any, any, any>> = {
     matches: boolean;
 }
 
-class OptionComponent<T extends WorldQuery<any, any, any>> extends WorldQuery<Option<T['__item']>, OptionFetch<T>, T['__state']> {
-    #T: T
+class OptionComponent<T extends Component> extends WorldQuery<Option<InstanceType<T>>, OptionFetch<WorldQuery<any, any, any>>, ComponentId> {
+    #T: WorldQuery<any, any, any>
     IS_DENSE: boolean;
     constructor(component: Component) {
         super()
-        this.#T = new ReadComponent(component) as unknown as T;
+        this.#T = new ReadComponent(component);
         this.IS_DENSE = this.#T.IS_DENSE
 
     }
@@ -212,7 +212,7 @@ class OptionComponent<T extends WorldQuery<any, any, any>> extends WorldQuery<Op
         return {
             fetch: this.#T.init_fetch(world, state, last_run, this_run),
             matches: false
-        } satisfies OptionFetch<T>;
+        };
     }
 
     set_archetype(fetch: any, state: any, archetype: Archetype, table: Table): void {
@@ -235,7 +235,7 @@ class OptionComponent<T extends WorldQuery<any, any, any>> extends WorldQuery<Op
         }
     }
 
-    update_component_access(state: unit, access: FilteredAccess<ComponentId>): void {
+    update_component_access(state: number, access: FilteredAccess<ComponentId>): void {
         const intermediate = access.clone();
         this.#T.update_component_access(state, intermediate);
         access.extend_access(intermediate);
@@ -245,7 +245,7 @@ class OptionComponent<T extends WorldQuery<any, any, any>> extends WorldQuery<Op
         return this.#T.init_state(world);
     }
 
-    get_state(components: Components): Option<unit> {
+    get_state(components: Components): Option<number> {
         return this.#T.get_state(components)
     }
 
@@ -422,7 +422,7 @@ export class QueryDataTuple extends WorldQuery<any, any, any> {
     set_archetype(fetch: any, state: any, archetype: Archetype, table: Table): void {
         for (let i = 0; i < fetch.length; i++) {
             const name = this.#queries[i];
-            const s = state[i]
+            const s = state[i];
             if (name.matches_component_set(s, (id: any) => archetype.contains(id))) {
                 name.set_archetype(fetch[i], s, archetype, table)
             }
@@ -470,6 +470,7 @@ export class QueryDataTuple extends WorldQuery<any, any, any> {
     }
 }
 
+export type Read<T extends Component> = ReadComponent<T>;
 export function Read<T extends Component>(type: T) {
     return new ReadComponent(type);
 }
@@ -478,13 +479,14 @@ export function ReadRef<T extends Component>(type: T) {
     return new RefComponent(type);
 }
 
+export type Write<T extends Component> = WriteComponent<T>;
 export function Write<T extends Component>(type: T) {
     return new WriteComponent(type);
 }
 
+export type Maybe<T extends Component> = OptionComponent<T>
 export function Maybe<T extends Component>(component: T) {
-    const qc = new OptionComponent(component);
-    return qc;
+    return new OptionComponent<T>(component);
 }
 
 function to_query_data(ty: any): QueryData<any, any, any> {

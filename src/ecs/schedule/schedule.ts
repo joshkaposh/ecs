@@ -182,7 +182,7 @@ export class Schedule {
         return this.#label
     }
 
-    add_systems<M>(systems: IntoSytemConfigs<M>) {
+    add_systems<M>(systems: IntoSystemConfigs<M>) {
         // TODO: need `M` type
         this.#graph.process_configs(systems.into_configs(), false)
         return this;
@@ -243,6 +243,38 @@ export class Schedule {
         if (err) throw new Error(`Error when initializing schedule ${this.#label}: ${err}`)
 
         this.#executor.run(this.#executable, world, undefined);
+    }
+
+    run_disjoint(world: World) {
+        world.check_change_ticks();
+        if (this.#graph.__changed) {
+            console.log('RUN DISJOINT GRAPH CHANGED');
+
+            this.#graph.initialize(world);
+            const ignored_ambiguities = world.get_resource_or_init(Schedules).ignored_scheduling_ambiguities.clone();
+            // const err = this.#graph.update_schedule(
+            //     this.#executable,
+            //     world.components(),
+            //     ignored_ambiguities,
+            //     this.#label
+            // );
+            // if (err) return err;
+            // this.#graph.__changed = false;
+            this.#executor_initialized = false;
+        }
+
+
+        if (!this.#executor_initialized) {
+            console.log('RUN DISJOINT INITIALIZING EXECUTOR');
+
+            // TODO: executor does not initialize properly
+            // this.#executor.init(this.#executable);
+            // this.#executor_initialized = true;
+        }
+
+        // this.#executor.run(this.#executable, world, undefined);
+
+        return;
 
     }
 
@@ -255,8 +287,6 @@ export class Schedule {
                 world.components(),
                 ignored_ambiguities,
                 this.#label
-
-
             );
             if (err) return err;
             this.#graph.__changed = false;
@@ -656,7 +686,7 @@ export class ScheduleGraph {
 
     configure_sets<M>(sets: IntoSytemSetConfigs<M>) {
         this.process_configs(
-            sets.into_configs,
+            sets.into_configs(),
             false
         );
     }
@@ -664,7 +694,7 @@ export class ScheduleGraph {
     add_system_inner(config: SystemConfig): Result<NodeId, ScheduleBuildError> {
         const id = new NodeId.System(this.#systems.length);
 
-        let err = this.update_graphs(id, config.graph_info);
+        const err = this.update_graphs(id, config.graph_info);
         if (err) return err;
 
         this.#uninit.push([id, 0]);
@@ -1121,17 +1151,18 @@ export class ScheduleGraph {
 
         console.log('BUILD SCHEDULE COUNT', sys_count);
         const sched = new SystemSchedule(
-            Array.from({ length: sys_count }, (_, i) => this.#systems[i].get()!.into_system()),
+            Array.from({ length: sys_count }, (_, i) => this.#systems[i].get()!),
             new Array(sys_count),
             new Array(set_with_conditions_count),
-            dg_system_ids,
+            Array.from({ length: sys_count }, (_, i) => new NodeId.System(i)),
             [],
+            // dg_system_ids,
             [],
             [],
             [],
             [],
         )
-        console.log('SCHED LEN', sched.__systems.length);
+        console.log('SCHED LEN', sched.__systems.length, sched.__system_ids.length);
         return sched
 
         // const [hg_set_with_conditions_idxs, hg_set_ids] = iter(this.#hierarchy.cached_topsort())
@@ -1226,10 +1257,14 @@ export class ScheduleGraph {
     ): Result<undefined, ScheduleBuildError> {
         if (this.#uninit.length !== 0) return ScheduleBuildError.Uninitialized()
 
+        console.log('UPDATE SCHEDULE', schedule);
+
         for (const [[id, system], conditions] of drain(schedule.__system_ids)
             .zip(drain(schedule.__systems))
             .zip(drain(schedule.__system_conditions))
         ) {
+            console.log('update_schedule', id, system, conditions);
+
             // @ts-expect-error
             this.#systems[id.index].inner = system;
             this.#system_conditions[id.index] = conditions;
@@ -1243,6 +1278,7 @@ export class ScheduleGraph {
 
         if (!(err_or_sched instanceof SystemSchedule)) return err_or_sched;
         console.log('SCHED LEN', err_or_sched.__systems.length, err_or_sched.__system_ids.length);
+        // schedule = err_or_sched;
         schedule.transfer(err_or_sched);
 
         // TODO: copy new schedule into old schedule
@@ -1530,7 +1566,7 @@ type ProcessConfigsResult = {
     densely_chained: boolean;
 }
 
-interface ProcessNodeConfig {
+export interface ProcessNodeConfig {
     process_config(schedule_graph: ScheduleGraph, config: NodeConfig<ProcessNodeConfig>): NodeId
 }
 

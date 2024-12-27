@@ -9,13 +9,14 @@ import { assert } from 'joshkaposh-iterator/src/util';
 import { SystemState } from './function-system';
 import { Option } from 'joshkaposh-option';
 import { SystemParam } from './system-param';
+import { unit } from '../../util';
 export * from './system-param';
 export * from './input';
 export * from './system';
 export * from './function-system';
 export * from './schedule_system';
 
-export abstract class IntoSystemTrait<In extends SystemInput, Out, Marker> {
+export abstract class IntoSystemTrait<In extends SystemInput | unit, Out, Marker> {
     #system: System<In, Out>
     constructor(system: System<In, Out>) {
         this.#system = system;

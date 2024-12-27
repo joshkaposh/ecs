@@ -1,7 +1,8 @@
-import { ArchetypeComponentId, ScheduleGraph, Tick, World } from "..";
+import { ArchetypeComponentId, ProcessNodeConfig, ScheduleGraph, Tick, World } from "..";
 import { unit } from "../../util";
 import { Access } from "../query";
-import { NodeConfig } from "../schedule/config";
+import { NodeConfig, SystemConfig } from "../schedule/config";
+import { NodeId } from "../schedule/graph";
 import { System } from "./system";
 
 export class ScheduleSystem extends System<any, any> {
@@ -15,6 +16,8 @@ export class ScheduleSystem extends System<any, any> {
 
 
     static Infallible(system: System<any, void>) {
+        console.log('creating Infallible ScheduleSystem', system);
+
         return new ScheduleSystem(system, false)
 
     }
@@ -53,10 +56,10 @@ export class ScheduleSystem extends System<any, any> {
     // @ts-expect-error
     run_unsafe(input: SystemIn<System<any, any>>, world: World) {
         if (this.fallible) {
-            console.log('SCHEDULESYSTEM RUN_UNSAFE FALLIBLE', this.#system);
+            console.log('SCHEDULESYSTEM RUN_UNSAFE FALLIBLE', input, this.#system);
             return this.#system.run_unsafe(input, world);
         } else {
-            console.log('SCHEDULESYSTEM RUN_UNSAFE INFALLIBLE');
+            console.log('SCHEDULESYSTEM RUN_UNSAFE INFALLIBLE', input, this.#system);
             this.#system.run_unsafe(input, world);
             return unit
         }
@@ -115,7 +118,8 @@ export class ScheduleSystem extends System<any, any> {
     }
 
     // * ProcessNodeConfig impl
-    process_config(schedule_graph: ScheduleGraph, config: NodeConfig<this>) {
-        schedule_graph.add_system_inner(config);
+
+    process_config(schedule_graph: ScheduleGraph, config: NodeConfig<ProcessNodeConfig>) {
+        return schedule_graph.add_system_inner(config as unknown as SystemConfig) as NodeId;
     }
 }

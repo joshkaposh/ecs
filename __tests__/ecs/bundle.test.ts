@@ -11,10 +11,11 @@ define_component(B)
 class C { constructor(public value = 'C') { } }
 define_component(C)
 
-const MyBundle = define_bundle([A as Component, B as Component]);
 
 test('bundle', () => {
     const w = World.default();
+    const MyBundle = define_bundle([A as Component, B as Component], w);
+
 
     const e0 = w.spawn([new A('in table A')]);
     const e1 = w.spawn([new A('2nd in table A')]);
@@ -64,9 +65,4 @@ test('bundle', () => {
     //     [new A('6th in table A')]
     // ).collect();
 
-
-    for (const archent of arch0.entities()) {
-        const ent = w.get_entity(archent.id())!;
-        const compA = ent.get(A as Component)!;
-    }
 })

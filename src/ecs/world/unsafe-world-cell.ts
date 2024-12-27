@@ -72,16 +72,21 @@ export class UnsafeEntityCell {
     get<T extends Component>(type: T): Option<InstanceType<T>> {
         const component_id = this.#world.components().get_id(type);
         if (!is_some(component_id)) {
-            return null;
+            return;
         }
 
-        return $readonly(get_component(
+        const component = get_component(
             this.#world,
             component_id,
             type.storage_type,
             this.#entity,
             this.#location
-        )) as InstanceType<T>;
+        )
+        if (!component) {
+            return
+        }
+
+        return $readonly(component) as InstanceType<T>;
     }
 
     get_mut<T extends Component>(type: T): Option<InstanceType<T>> {
@@ -166,7 +171,6 @@ function get_ticks(
         throw new Error(`Unreachable: ${storage_type} has to be either StorageType::Table - ${StorageType.Table} or StorageType::SparseSet - ${StorageType.SparseSet}`)
     }
 }
-
 
 function get_component_with_ticks(
     world: World,

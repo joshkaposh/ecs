@@ -1,8 +1,8 @@
 import { FixedBitSet } from "fixed-bit-set";
-import { Archetype, ArchetypeGeneration, ArchetypeId, ComponentId, Entity, QueryData, QueryFilter, QueryIter, World, QueryDataTuple, QueryFilterTuple, ArchetypeComponentId, QueryEntityError, All } from "..";
+import { Archetype, ArchetypeGeneration, ArchetypeId, ComponentId, QueryData, QueryFilter, QueryIter, World, QueryDataTuple, ArchetypeComponentId, All } from "..";
 import { TableId } from "../storage/table";
 import { Access, FilteredAccess } from "./access";
-import { ErrorExt, is_some } from "joshkaposh-option";
+import { is_some } from "joshkaposh-option";
 import { assert } from "joshkaposh-iterator/src/util";
 
 export type StorageIdTable = {
@@ -19,15 +19,15 @@ function from_tuples(fetch: any[], filter: any[]) {
 
 export class QueryState<D extends QueryData<any, any, any>, F extends QueryFilter<any, any, any>> {
     #world_id: number;
-    __archetype_generation: ArchetypeGeneration;
-    __matched_tables: FixedBitSet;
-    __matched_archetypes: FixedBitSet;
-    __component_access: FilteredAccess<ComponentId>;
-    __matched_storage_ids: StorageId[];
-    __fetch_state: D['__state'];
-    __filter_state: F['__state'];
+    private __archetype_generation: ArchetypeGeneration;
+    private __matched_tables: FixedBitSet;
+    private __matched_archetypes: FixedBitSet;
+    private __component_access: FilteredAccess<ComponentId>;
+    private __matched_storage_ids: StorageId[];
+    private __fetch_state: D['__state'];
+    private __filter_state: F['__state'];
 
-    is_dense: boolean;
+    readonly is_dense: boolean;
     D: D;
     F: F;
 
@@ -278,8 +278,16 @@ export class QueryState<D extends QueryData<any, any, any>, F extends QueryFilte
         ))
     }
 
-    #new_archetype_internal(archetype: Archetype) {
+    iter(world: World) {
+        this.update_archetypes(world);
+        return this.iter_unchecked_manual(world);
+    }
 
+    iter_unchecked_manual(world: World) {
+        return QueryIter.new(world, this, world.last_change_tick(), world.change_tick())
+    }
+
+    #new_archetype_internal(archetype: Archetype) {
         if (
             this.D.matches_component_set(this.__fetch_state, id => archetype.contains(id)) &&
             this.F.matches_component_set(this.__filter_state, id => archetype.contains(id)) &&
@@ -310,12 +318,4 @@ export class QueryState<D extends QueryData<any, any, any>, F extends QueryFilte
         }
     }
 
-    iter(world: World) {
-        this.update_archetypes(world);
-        return this.iter_unchecked_manual(world);
-    }
-
-    iter_unchecked_manual(world: World) {
-        return QueryIter.new(world, this, world.last_change_tick(), world.change_tick())
-    }
 }

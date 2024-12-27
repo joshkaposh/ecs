@@ -1,4 +1,4 @@
-import { Iterator, done, iter, item, range, ArrayLike, Range } from "joshkaposh-iterator";
+import { Iterator, done, iter, item, Range } from "joshkaposh-iterator";
 import { Archetype, ArchetypeEntity, Archetypes, Entity, QueryData, QueryFilter, QueryState, StorageId, StorageIdArchetype, StorageIdTable, Tick, World } from "..";
 import { Table, Tables } from "../storage/table";
 import { Option } from "joshkaposh-option";
@@ -31,7 +31,13 @@ export class QueryIter<D extends QueryData<any, any, any>, F extends QueryFilter
         last_run: Tick,
         this_run: Tick
     ): QueryIter<D, F> {
-        return new QueryIter(world, state, world.storages().tables, world.archetypes(), QueryIterationCursor.init(world, state, last_run, this_run));
+        return new QueryIter(
+            world,
+            state,
+            world.storages().tables,
+            world.archetypes(),
+            QueryIterationCursor.init(world, state, last_run, this_run)
+        );
     }
 
     next(): IteratorResult<any, any> {
@@ -91,7 +97,9 @@ export class QueryIter<D extends QueryData<any, any, any>, F extends QueryFilter
         }
 
         assert(rows.end <= u32.MAX);
+        // @ts-expect-error
         this.#D.set_table(this.#cursor.__fetch, this.#query_state.__fetch_state, table);
+        // @ts-expect-error
         this.#F.set_table(this.#cursor.__filter, this.#query_state.__filter_state, table);
         const entities = table.entities();
         for (const row of rows) {
@@ -123,6 +131,7 @@ export class QueryIter<D extends QueryData<any, any, any>, F extends QueryFilter
         const table = this.#tables.get(archetype.table_id())!;
         this.#D.set_archetype(
             this.#cursor.__fetch,
+            // @ts-expect-error
             this.#query_state.__fetch_state,
             archetype,
             table
@@ -130,6 +139,7 @@ export class QueryIter<D extends QueryData<any, any, any>, F extends QueryFilter
 
         this.#F.set_archetype(
             this.#cursor.__filter,
+            // @ts-expect-error
             this.#query_state.__filter_state,
             archetype,
             table
@@ -166,7 +176,9 @@ export class QueryIter<D extends QueryData<any, any, any>, F extends QueryFilter
         const table = this.#tables.get(archetype.table_id())!
         assert(archetype.len() === table.entity_count())
 
+        // @ts-expect-error
         this.#D.set_archetype(this.#cursor.__fetch, this.#query_state.__fetch_state, archetype, table);
+        // @ts-expect-error
         this.#F.set_archetype(this.#cursor.__filter, this.#query_state.__filter_state, archetype, table);
 
         const entities = table.entities();
@@ -190,14 +202,14 @@ export class QueryIter<D extends QueryData<any, any, any>, F extends QueryFilter
             const elt = this.next();
             if (elt.done) {
                 break
-            } else {
-                accum = fold(accum, elt.value);
             }
-
-            // for (const id of this.#cursor.__storage_id_iter.clone()) {
-
-            // }
+            accum = fold(accum, elt.value);
         }
+
+        for (const id of this.#cursor.__storage_id_iter.clone()) {
+            accum = this.__fold_over_storage_range(accum, fold, id, undefined)
+        }
+
         return accum;
     }
 
@@ -259,16 +271,20 @@ class QueryIterationCursor<D extends QueryData, F extends QueryFilter> {
         // return new QueryCursor(
 
         // )
+
     }
 
     static init<D extends QueryData, F extends QueryFilter>(world: World, query_state: QueryState<D, F>, last_run: Tick, this_run: Tick) {
+        // @ts-expect-error
         const fetch = query_state.D.init_fetch(world, query_state.__fetch_state, last_run, this_run);
+        // @ts-expect-error
         const filter = query_state.F.init_fetch(world, query_state.__filter_state, last_run, this_run);
         const cursor = new QueryIterationCursor(
             fetch as D['__fetch'],
             filter as F['__fetch'],
             [],
             [],
+            // @ts-expect-error
             iter(query_state.__matched_storage_ids),
             query_state.is_dense,
             0,
@@ -308,7 +324,11 @@ class QueryIterationCursor<D extends QueryData, F extends QueryFilter> {
                         continue
                     }
 
+                    // SAFETY: table is from the world that fetch/filter were created for.
+                    //  fetch_state / filter_state are the states that fetch/filter were initialized with
+                    // @ts-expect-error
                     D.set_table(this.__fetch, query_state.__fetch_state, table)
+                    // @ts-expect-error
                     F.set_table(this.__filter, query_state.__filter_state, table)
                     this.#table_entities = table.entities();
                     this.__current_len = table.entity_count();
@@ -317,6 +337,7 @@ class QueryIterationCursor<D extends QueryData, F extends QueryFilter> {
 
                 const entity = this.#table_entities[this.__current_row];
                 const row = this.__current_row;
+
                 if (!F.filter_fetch(this.__filter, entity, row)) {
                     this.__current_row += 1;
                     continue;
@@ -342,12 +363,14 @@ class QueryIterationCursor<D extends QueryData, F extends QueryFilter> {
 
                     D.set_archetype(
                         this.__fetch,
+                        // @ts-expect-error
                         query_state.__fetch_state,
                         archetype,
                         table
                     )
                     F.set_archetype(
                         this.__filter,
+                        // @ts-expect-error
                         query_state.__filter_state,
                         archetype,
                         table

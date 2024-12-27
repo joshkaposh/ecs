@@ -7,11 +7,14 @@ import { ErrorExt } from "joshkaposh-option";
 import { SystemTypeSet } from "../schedule/set";
 import { v4 } from "uuid";
 import { IntoSystemConfigs, NodeConfigs, SystemConfigs } from "../schedule/config";
+import { TODO } from "joshkaposh-iterator/src/util";
 
-export type SystemFn<In extends any[] = any[], Out extends boolean | void = boolean | void> = (...args: In) => Out;
-export type ConditionFn<In extends any[] = any[]> = (...args: In) => boolean;
-export type Condition<In extends any[] = any[], Out extends boolean = boolean> = System<In, Out>;
+// export type SystemFn<In extends any[] = any[], Out extends boolean | void = boolean | void> = (...args: In) => Out;
+// export type ConditionFn<In extends any[] = any[]> = (...args: In) => boolean;
+export type Condition<M> = any;
 export type BoxedCondition<In extends any[] = any[]> = Condition<In>;
+
+export type SystemIn<T> = any;
 
 export abstract class System<In, Out> extends IntoSystemConfigs<unit> {
 
@@ -69,10 +72,14 @@ export abstract class System<In, Out> extends IntoSystemConfigs<unit> {
     }
 
     pipe<Bin extends SystemInput, Bout, Bmarker, B extends IntoSystemTrait<Bin, Bout, Bmarker>>(system: B) {
+        TODO('System.pipe()')
+        // @ts-expect-error
         return IntoPipeSystem.new(this, this)
     }
 
     map<T>(fn: (output: Out) => T) {
+        TODO('System.map()')
+        // @ts-expect-error
         IntoAdaperSystem.new(fn, this)
     }
 
@@ -91,14 +98,14 @@ export abstract class System<In, Out> extends IntoSystemConfigs<unit> {
 
     into_configs(): SystemConfigs {
         return this.fallible ?
-            NodeConfigs.new_system(ScheduleSystem.Infallible(this as System<In, void>)) :
-            NodeConfigs.new_system(ScheduleSystem.Fallible(this))
+            NodeConfigs.new_system(ScheduleSystem.Fallible(this)) :
+            NodeConfigs.new_system(ScheduleSystem.Infallible(this as System<In, void>))
     }
 
 };
 export type RunSystemOnce = {
-    run_system_once<Out, Marker, T extends IntoSystem<unit, Out, Marker>>(system: T): void;
-    run_system_once_with<Out, Marker, T extends IntoSystem<In, Out, Marker>>(system: T): void;
+    run_system_once<Out, Marker, T extends IntoSystemTrait<unit, Out, Marker>>(system: T): void;
+    run_system_once_with<Out, Marker, T extends IntoSystemTrait<any, Out, Marker>>(system: T): void;
 }
 
 export type RunSystemError = ErrorExt<string>;
@@ -156,12 +163,10 @@ export class ApplyDeferred extends System<unit, unit> {
         return false
     }
 
-    // @ts-expect-error
     run_unsafe(_input: SystemIn<System<unit, unit>>, _world: World): unit {
         return unit;
     }
 
-    // @ts-expect-error
     run(_input: SystemIn<System<unit, unit>>, _world: World): unit {
         return unit
     }
