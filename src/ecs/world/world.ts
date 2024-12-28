@@ -228,6 +228,7 @@ export class World {
 
     get_or_spawn(entity: Entity): EntityWorldMut {
         this.flush();
+        // @ts-expect-error
         const m = this.#entities.__alloc_at_without_replacement(entity);
         if (m === AllocAtWithoutReplacement.DidNotExist) {
             return this.#spawn_at_empty_internal(entity);
@@ -328,7 +329,7 @@ export class World {
     }
 
     get_mut<T extends Component>(entity: Entity, component: T) {
-        return this.get_entity(entity)?.get_mut(component)
+        return this.get_entity_mut(entity)?.get_mut(component)
     }
 
     query<const D extends readonly any[]>(data: D): Query<D, []> {
@@ -494,28 +495,7 @@ export class World {
     }
 
     insert_or_spawn_batch(iterable: Iterable<[Entity, Bundle]> & ArrayLike<[Entity, Bundle]>) {
-        const bundle_info = this.#bundles.__init_info(iterable[0][1], this.#components, this.#storages);
 
-        const spawn_or_insert = bundle_info.__get_bundle_spawner(
-            this.#entities,
-            this.#archetypes,
-            this.#components,
-            this.#storages
-        )
-
-        const invalid_entities: any[] = [];
-
-        for (const [entity, bundle] of iterable) {
-            const alloc = spawn_or_insert.__entities.__alloc_at_without_replacement(entity);
-            // TODO: double check
-            if (typeof alloc === 'object') {
-                if (spawn_or_insert instanceof BundleInserter) {
-                    // if (alloc.archetype_id == ) {
-
-                    // }
-                }
-            }
-        }
     }
 
     send_event<E extends Event>(type: Events<E>, event: E): Option<EventId> {
@@ -681,6 +661,7 @@ export class World {
         const empty_archetype = this.#archetypes.empty();
         const table = this.#storages.tables.get(empty_archetype.table_id())!;
         this.#entities.flush((entity, location) => {
+            // @ts-expect-error
             const new_loc = empty_archetype.__allocate(entity, table.__allocate(entity));
             location.archetype_id = new_loc.archetype_id;
             location.archetype_row = new_loc.archetype_row;
@@ -726,21 +707,24 @@ export class World {
         return refs;
     }
 
-    #spawn_post_flush(bundle: any) {
-        const entity = this.#entities.alloc();
-        if (Array.isArray(bundle)) {
-            bundle = Bundles.dynamic_bundle(bundle, this);
-        }
-        const bundle_info = this.#bundles.__init_info(bundle, this.#components, this.#storages);
-        const spawner = bundle_info.__get_bundle_spawner(this.#entities, this.#archetypes, this.#components, this.#storages, this.change_tick());
-        const entity_location = spawner.spawn_non_existent(entity, bundle);
-        return new EntityWorldMut(this, entity, entity_location);
-    }
+    // #spawn_post_flush(bundle: any) {
+    //     const entity = this.#entities.alloc();
+    //     if (Array.isArray(bundle)) {
+    //         bundle = Bundles.dynamic_bundle(bundle, this);
+    //     }
+    //     const bundle_info = this.#bundles.__init_info(bundle, this.#components, this.#storages);
+    //     const spawner = bundle_info.__get_bundle_spawner(this.#entities, this.#archetypes, this.#components, this.#storages, this.change_tick());
+    //     const entity_location = spawner.spawn_non_existent(entity, bundle);
+    //     return new EntityWorldMut(this, entity, entity_location);
+    // }
 
     #spawn_at_empty_internal(entity: Entity): EntityWorldMut {
         const archetype = this.#archetypes.empty();
+        // @ts-expect-error
         const table_row = this.#storages.tables.get(archetype.table_id())!.__allocate(entity);
+        // @ts-expect-error
         const location = archetype.__allocate(entity, table_row);
+        // @ts-expect-error
         this.#entities.__set(entity.index(), location);
         return new EntityWorldMut(this, entity, location);
     }

@@ -407,7 +407,7 @@ export class QueryDataTuple extends WorldQuery<any, any, any> {
         this.IS_DENSE = queries.every(q => q.IS_DENSE);
     }
 
-    static from_data(data: any[]) {
+    static from_data(data: any[] | readonly any[]) {
         return new QueryDataTuple(evaluate_query_data(data))
     }
 
@@ -502,6 +502,6 @@ function to_query_data(ty: any): QueryData<any, any, any> {
 
 }
 
-function evaluate_query_data(data: any[]) {
+function evaluate_query_data(data: any[] | readonly any[]) {
     return data.map(c => to_query_data(c))
 }

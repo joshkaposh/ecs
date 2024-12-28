@@ -110,7 +110,7 @@ export class Table {
         }
     }
 
-    __reserve(additional: number) {
+    private __reserve(additional: number) {
         // this.#entities.capacity() - this.#entities.length < additional
         if (capacity(this.#entities.length) - this.#entities.length < additional) {
             // this.entities.reserve(additional);
@@ -129,7 +129,7 @@ export class Table {
     ///
     /// # Safety
     /// the allocated row must be written to immediately with valid values in each column
-    __allocate(entity: Entity): TableRow {
+    private __allocate(entity: Entity): TableRow {
         this.__reserve(1);
         const index = this.#entities.length;
         this.#entities.push(entity);
@@ -146,7 +146,7 @@ export class Table {
     ///
     /// # Safety
     /// `row` must be in-bounds
-    __swap_remove_unchecked(row: TableRow) {
+    private __swap_remove_unchecked(row: TableRow) {
         debug_assert(row < this.entity_count());
         const last_element_index = this.entity_count() - 1;
 
@@ -162,9 +162,11 @@ export class Table {
 
 
         const is_last = row === last_element_index;
-        swap_remove(this.#entities, row);
-
-        return is_last ? null : this.#entities[row]
+        // swap_remove(this.#entities, row);
+        swap(this.#entities, row, this.#entities.length - 1);
+        const ent = is_last ? null : this.#entities[row]
+        this.#entities.pop();
+        return ent;
     }
 
     /// Moves the `row` column values to `new_table`, for the columns shared between both tables.
@@ -175,7 +177,7 @@ export class Table {
     ///
     /// # Safety
     /// Row must be in-bounds
-    __move_to_and_forget_missing_unchecked(row: TableRow, new_table: Table): TableMoveResult {
+    private __move_to_and_forget_missing_unchecked(row: TableRow, new_table: Table): TableMoveResult {
         const last_element_index = this.#entities.length - 1
         const is_last = row === last_element_index;
         const new_row = new_table.__allocate(swap_remove(this.#entities, row)!)
@@ -199,7 +201,7 @@ export class Table {
     ///
     /// # Safety
     /// row must be in-bounds
-    __move_to_and_drop_missing_unchecked(row: TableRow, new_table: Table): TableMoveResult {
+    private __move_to_and_drop_missing_unchecked(row: TableRow, new_table: Table): TableMoveResult {
         const last_element_index = this.#entities.length - 1
         const is_last = row === last_element_index;
         const new_row = new_table.__allocate(swap_remove(this.#entities, row as number)!)
@@ -223,7 +225,7 @@ export class Table {
     ///
     /// # Safety
     /// `row` must be in-bounds. `new_table` must contain every component this table has
-    __move_to_superset_unchecked(row: TableRow, new_table: Table): TableMoveResult {
+    private __move_to_superset_unchecked(row: TableRow, new_table: Table): TableMoveResult {
         debug_assert(row < this.entity_count());
         const last_element_index = this.entity_count() - 1;
         const is_last = row === last_element_index;

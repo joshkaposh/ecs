@@ -42,9 +42,6 @@ test('move_to_superset', () => {
 
     alloc(table_a, Entity.from_raw(0), aid, new TestA());
 
-    console.log('exists??', table_a.get_column(aid), table_ab.get_column(aid));
-
-
     table_a.__move_to_superset_unchecked(0, table_ab);
 
     console.log(table_a.get_component(aid, 0));

@@ -78,7 +78,7 @@ export class ComponentSparseSet {
         this.#sparse.clear();
     }
 
-    __insert(entity: Entity, value: {}, change_tick: Tick) {
+    private __insert(entity: Entity, value: {}, change_tick: Tick) {
         const dense_index = this.#sparse.get(entity.index());
         if (is_some(dense_index)) {
             this.#dense.__replace(dense_index, value, change_tick);
@@ -144,7 +144,7 @@ export class ComponentSparseSet {
         return this.#dense.get_ticks_unchecked(dense_index);
     }
 
-    __remove_and_forget(entity: Entity) {
+    private __remove_and_forget(entity: Entity) {
         const dense_index = this.#sparse.remove(entity.index())
         if (is_some(dense_index)) {
             swap_remove(this.#entities, dense_index);
@@ -162,7 +162,7 @@ export class ComponentSparseSet {
         }
     }
 
-    __remove(entity: Entity) {
+    private __remove(entity: Entity) {
         const dense_index = this.#sparse.remove(entity.index());
 
         if (is_some(dense_index)) {

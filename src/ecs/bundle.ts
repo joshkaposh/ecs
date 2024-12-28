@@ -5,8 +5,8 @@ import { Entity, EntityLocation } from "./entity";
 import { StorageType, Storages } from "./storage";
 import { SparseSets } from "./storage/sparse-set";
 import { Table, TableRow } from "./storage/table";
-import { entry } from "../util";
-import { ArchetypeAfterBundleInsert, ON_ADD, ON_INSERT, ON_REMOVE, ON_REPLACE, TypeId, World } from '.';
+import { entry, is_class_ctor } from "../util";
+import { ArchetypeAfterBundleInsert, ON_ADD, TypeId, World } from '.';
 import { iter, Iterator } from 'joshkaposh-iterator';
 import { TODO } from 'joshkaposh-iterator/src/util';
 import { retain } from '../array-helpers';
@@ -39,49 +39,6 @@ export type DynamicBundle = {
     get_components(func: (storage_type: StorageType, ptr: {}) => void): void;
 };
 
-export function define_bundle(bundle: any[], world: World): Bundle & DynamicBundle {
-    const bundles: (Bundle & DynamicBundle)[] = [];
-
-    const ids: ComponentId[] = [];
-    function rec(b: any[]) {
-        b.forEach(c => {
-            if (c.type_id || c.constructor.type_id) {
-                bundles.push(BundleFromComponent(c));
-                const component_id = world.register_component(c.constructor);
-                ids.push(component_id);
-            }
-
-            if (Array.isArray(c)) {
-                rec(c)
-            }
-        })
-    }
-    rec(bundle);
-    const hash = bundle_hash(ids);
-    const name = hash;
-
-    const bun: Bundle & DynamicBundle = {
-        hash: hash,
-        name: name,
-        component_ids(components, storages, ids) {
-            for (const b of bundles) {
-                b.component_ids(components, storages, ids)
-            }
-        },
-
-        from_components(ctx, func) {
-            return bundles.map(b => b.from_components(ctx, func)) as any;
-        },
-
-        get_components(func) {
-            bundles.forEach(b => b.get_components(func))
-        },
-
-    }
-
-    return bun;
-}
-
 function ComponentBundle(type: Component | InstanceType<Component>): Bundle {
     // @ts-expect-error
     return {
@@ -112,6 +69,50 @@ export function BundleFromComponent(component: Component): Bundle & DynamicBundl
 
 function bundle_hash(ids: number[]): string {
     return ids.join(' ');
+}
+
+// TODO: compare precompute hash and get bundle if it exists, or create a new one if one does not exist.
+export function define_bundle(bundle: any[], world: World): Bundle & DynamicBundle {
+    const bundles: (Bundle & DynamicBundle)[] = [];
+
+    const ids: ComponentId[] = [];
+    function rec(b: any[]) {
+        b.forEach(c => {
+            if (Array.isArray(c)) {
+                rec(c)
+            }
+
+            bundles.push(BundleFromComponent(c));
+
+            c = is_class_ctor(c) ? c : c.constructor;
+            const component_id = world.register_component(c as any);
+            ids.push(component_id);
+        })
+    }
+    rec(bundle);
+    const hash = bundle_hash(ids);
+    const name = hash;
+
+    const bun: Bundle & DynamicBundle = {
+        hash: hash,
+        name: name,
+        component_ids(components, storages, ids) {
+            for (const b of bundles) {
+                b.component_ids(components, storages, ids)
+            }
+        },
+
+        from_components(ctx, func) {
+            return bundles.map(b => b.from_components(ctx, func)) as any;
+        },
+
+        get_components(func) {
+            bundles.forEach(b => b.get_components(func))
+        },
+
+    }
+
+    return bun;
 }
 
 export class BundleInfo {
@@ -204,6 +205,7 @@ export class BundleInfo {
                 }
             } else if (storage_type === StorageType.SparseSet) {
                 const sparse_set = sparse_sets.get(component_id)!;
+                // @ts-expect-error
                 sparse_set.__insert(
                     entity,
                     component_ptr,
@@ -331,15 +333,18 @@ export class BundleInfo {
             edges.get_archetype_after_bundle_remove(this.#id) :
             edges.get_archetype_after_bundle_take(this.#id);
 
+
         let result;
         if (is_some(archetype_after_remove_result)) {
             result = archetype_after_remove_result
         } else {
             let next_table_components, next_sparse_set_components, next_table_id;
 
-            const current_archetype = archetypes.get(archetype_id)!
+            const current_archetype = archetypes.get(archetype_id)!;
+
             const removed_table_components = []
             const removed_sparse_set_components = []
+
             for (const component_id of this.iter_explicit_components()) {
                 if (current_archetype.contains(component_id)) {
                     const component_info = components.get_info(component_id)!;
@@ -543,11 +548,13 @@ export class BundleInserter {
             const sparse_sets = this.#world.storages().sparse_sets;
             const entities = this.#world.entities();
 
+            // @ts-expect-error
             const result = archetype.__swap_remove(location.archetype_row);
             if (result.swapped_entity) {
                 const { swapped_entity } = result
                 const swapped_location = entities.get(swapped_entity)!;
 
+                // @ts-expect-error
                 entities.__set(swapped_entity.index(), {
                     archetype_id: swapped_location.archetype_id,
                     archetype_row: location.archetype_row,
@@ -555,7 +562,9 @@ export class BundleInserter {
                     table_row: swapped_location.table_row
                 })
             }
+            // @ts-expect-error
             const new_location_ = new_archetype_.__allocate(entity, result.table_row);
+            // @ts-expect-error
             entities.__set(entity.index(), new_location_);
             bundle_info.write_components(
                 table,
@@ -574,11 +583,13 @@ export class BundleInserter {
             const { new_archetype: new_archetype_, new_table } = this.#archetype_move_type
             const archetypes_ptr = this.#world.archetypes().inner;
             const entities = this.#world.entities();
-            const sparse_sets = this.#world.storages().sparse_sets
+            const sparse_sets = this.#world.storages().sparse_sets;
+            // @ts-expect-error
             const result = archetype.__swap_remove(location.archetype_row);
             if (result.swapped_entity) {
                 const { swapped_entity } = result
                 const swapped_location = entities.get(swapped_entity)!;
+                // @ts-expect-error
                 entities.__set(swapped_entity.index(), {
                     archetype_id: swapped_location.archetype_id,
                     archetype_row: location.archetype_row,
@@ -587,14 +598,18 @@ export class BundleInserter {
                 })
             }
 
+            // @ts-expect-error
             const move_result = table.__move_to_superset_unchecked(result.table_row, new_table);
+            // @ts-expect-error
             const new_location_ = new_archetype_.__allocate(entity, move_result.new_row);
+            // @ts-expect-error
             entities.__set(entity.index(), new_location_);
 
             if (move_result.swapped_entity) {
                 const { swapped_entity } = move_result
                 const swapped_location = entities.get(swapped_entity)!;
 
+                // @ts-expect-error
                 entities.__set(swapped_entity.index(), {
                     archetype_id: swapped_location.archetype_id,
                     archetype_row: swapped_location.archetype_row,
@@ -754,7 +769,9 @@ export class BundleSpawner {
         const sparse_sets = this.#world.storages().sparse_sets
         const entities = this.#world.entities();
 
+        // @ts-expect-error
         const table_row = table.__allocate(entity);
+        // @ts-expect-error
         location = archetype.__allocate(entity, table_row);
 
         bundle_info.write_components(
@@ -768,6 +785,7 @@ export class BundleSpawner {
             InsertMode.Replace
         )
 
+        // @ts-expect-error
         entities.__set(entity.index(), location);
 
         // const archetype = this.#archetype;
@@ -808,7 +826,9 @@ export class BundleSpawner {
     }
 
     reserve_storage(additional: number) {
+        // @ts-expect-error
         this.#archetype.__reserve(additional);
+        // @ts-expect-error
         this.#table.__reserve(additional);
     }
 
@@ -951,8 +971,6 @@ function initialize_dynamic_bundle(bundle_infos: BundleInfo[], components: Compo
     bundle_infos.push(bundle_info);
     return [id, storages_types];
 }
-
-
 
 function sorted_remove<T extends Ord>(source: T[], remove: T[]) {
     let remove_index = 0;

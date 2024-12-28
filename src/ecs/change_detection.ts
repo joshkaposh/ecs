@@ -9,8 +9,8 @@ export const CHECK_TICK_THRESHOLD = 518_400_000;
 export const MAX_CHANGE_AGE = u32.MAX - (2 * CHECK_TICK_THRESHOLD - 1);
 
 
-export function $readonly<T>(ty: T, ticks?: Ticks): DeepReadonly<T> {
-    return new Proxy(ty as object, {
+export function $readonly<T extends Component>(ty: T, ticks?: Ticks): DeepReadonly<InstanceType<T>> {
+    return new Proxy(ty, {
         get(target, p, receiver) {
             return Reflect.get(target, p, receiver)
         },
@@ -18,7 +18,7 @@ export function $readonly<T>(ty: T, ticks?: Ticks): DeepReadonly<T> {
             return false;
         },
 
-    }) as DeepReadonly<T>
+    }) as DeepReadonly<InstanceType<T>>
 }
 
 export function $read_and_write<T>(type: T, ticks: TicksMut) {

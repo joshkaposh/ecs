@@ -306,7 +306,7 @@ export class Entities {
         }
     }
 
-    __verify_flushed() {
+    private __verify_flushed() {
         assert(!this.needs_flush())
     }
 
@@ -361,7 +361,7 @@ export class Entities {
         return loc;
     }
 
-    __alloc_at_without_replacement(entity: Entity): AllocAtWithoutReplacement {
+    private __alloc_at_without_replacement(entity: Entity): AllocAtWithoutReplacement {
         this.__verify_flushed();
 
         let result;
@@ -474,13 +474,13 @@ export class Entities {
     ///  - `index` must be a valid entity index.
     ///  - `location` must be valid for the entity at `index` or immediately made valid afterwards
     ///    before handing control to unknown code.
-    __set(index: number, location: EntityLocation) {
+    private __set(index: number, location: EntityLocation) {
         // SAFETY: Caller guarantees that `index` a valid entity index
         // self.meta.get_unchecked_mut(index as usize).location = location;
         this.__meta[index].location = location;
     }
 
-    __reserve_generations(index: number, generations: number): boolean {
+    private __reserve_generations(index: number, generations: number): boolean {
         if (index >= this.__meta.length) {
             return false
         }

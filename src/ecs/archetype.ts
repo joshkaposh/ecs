@@ -331,7 +331,7 @@ export class Archetype {
      * @description 
      * **Safety** - valid component values must be immediately written to the relevant storages.
      */
-    __allocate(entity: Entity, table_row: TableRow): EntityLocation {
+    private __allocate(entity: Entity, table_row: TableRow): EntityLocation {
         const archetype_row = this.#entities.length;
         this.#entities.push(new ArchetypeEntity(entity, table_row));
         return {
@@ -342,7 +342,7 @@ export class Archetype {
         }
     }
 
-    __reserve(additional: number) {
+    private __reserve(additional: number) {
         reserve(this.#entities, additional)
     }
 
@@ -352,7 +352,7 @@ export class Archetype {
      * in.
      * @throws This function will **throw** if `index >= this.len()`
      */
-    __swap_remove(row: ArchetypeRow): ArchetypeSwapRemoveResult {
+    private __swap_remove(row: ArchetypeRow): ArchetypeSwapRemoveResult {
         const is_last = row == this.#entities.length - 1;
         const entity = swap_remove(this.#entities, row);
         return {
@@ -361,7 +361,7 @@ export class Archetype {
         }
     }
 
-    __clear_entities() {
+    private __clear_entities() {
         this.#entities.length = 0;
     }
 }
@@ -538,6 +538,7 @@ export class Archetypes {
     }
     __clear_entities() {
         for (const archetype of this.#archetypes) {
+            // @ts-expect-error
             archetype.__clear_entities();
         }
     }
