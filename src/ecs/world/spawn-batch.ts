@@ -1,26 +1,26 @@
 import { ExactSizeIterator, done, item } from 'joshkaposh-iterator';
-import { Bundle, BundleSpawner, DynamicBundle, Entity, World } from '../index';
+import { Bundle, Bundles, BundleSpawner, DynamicBundle, Entity, World } from '../index';
 
 export class SpawnBatchIter extends ExactSizeIterator<Entity> {
     #inner: ExactSizeIterator<Bundle & DynamicBundle>;
     #spawner: BundleSpawner
 
-    constructor(world: World, iter: ExactSizeIterator<Bundle & DynamicBundle>, item: Bundle & DynamicBundle) {
+    constructor(world: World, iter: ExactSizeIterator<Bundle & DynamicBundle>, bundle: Bundle & DynamicBundle) {
         super();
         // Ensure all entity allocations are accounted for so `self.entities` can realloc if
         // necessary
         world.flush();
 
+        const change_tick = world.change_tick();
+
         const [lower, upper] = iter.size_hint();
         const length = upper ?? lower;
-        const bundle_info = world
-            .bundles()
-            .__init_info(item, world.components(), world.storages())
         world.entities().reserve(length);
-        const spawner = bundle_info.__get_bundle_spawner(world.entities(), world.archetypes(), world.components(), world.storages());
+
+        const spawner = BundleSpawner.new(bundle, world, change_tick);
         spawner.reserve_storage(length);
 
-        this.#inner = iter;
+        this.#inner = iter.map(b => Bundles.dynamic_bundle(b as any, world)) as any;
         this.#spawner = spawner;
     }
 
@@ -37,7 +37,17 @@ export class SpawnBatchIter extends ExactSizeIterator<Entity> {
         return item(this.#spawner.spawn(bundle.value));
     }
 
+    len(): number {
+        return this.#inner.len();
+    }
+
     size_hint(): [number, number] {
         return this.#inner.size_hint();
+    }
+
+    [Symbol.dispose]() {
+        for (const _ of this) {
+        }
+        this.#spawner.flush_commands()
     }
 }

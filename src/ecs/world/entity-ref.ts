@@ -715,8 +715,6 @@ export class EntityWorldMut {
 
         world.__flush_entities();
         const location = world.entities().free(this.#entity);
-        console.log('despawn location', location);
-
         if (!location) throw new Error('Entity should exist at this point')
 
         let table_row, moved_entity;
@@ -750,9 +748,6 @@ export class EntityWorldMut {
             .get(archetype.table_id())!
             // @ts-expect-error
             .__swap_remove_unchecked(table_row);
-
-        console.log('despawn() moved_entity', moved_entity);
-
 
         if (moved_entity) {
             const moved_location = world.entities().get(moved_entity)!;

@@ -280,21 +280,9 @@ export class World {
         return new EntityWorldMut(this, entity, entity_location);
     }
 
-    spawn_batch(...bundle: (any[] | (Bundle & DynamicBundle))[]): SpawnBatchIter {
-        this.flush();
-        const len = bundle.length;
-        this.#entities.reserve(len);
-        if (Array.isArray(bundle)) {
-            // @ts-expect-error
-            bundle = Bundles.dynamic_bundle(bundle[0], this);
-        }
-        const bundle_info = this.#bundles.__init_info(bundle as any, this.#components, this.#storages);
-        // const spawner = new BundleSpawner(this)
-        // spawner.reserve_storage(len)
-        // for (let i = 0; i < len; i++) {
-        //     spawner.spawn(bundle[i] as any)
-        // }
-        return iter([]) as any;
+    spawn_batch(bundle: (any[] | (Bundle & DynamicBundle))[]): SpawnBatchIter {
+        const bundle_impl = Bundles.dynamic_bundle(bundle[0] as any, this)
+        return new SpawnBatchIter(this, iter(bundle) as any, bundle_impl)
     }
 
     despawn(entity: Entity): boolean {

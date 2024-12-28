@@ -1,7 +1,7 @@
 import { iter } from "joshkaposh-iterator";
 import { Option, is_some } from 'joshkaposh-option'
-import { capacity, replace, reserve, swap, swap_remove, split_at } from "../../../array-helpers";
-import { ComponentId, ComponentInfo, Components, ComponentTicks, Tick } from "../../component";
+import { capacity, reserve, swap, swap_remove, split_at } from "../../../array-helpers";
+import { ComponentId, ComponentInfo, Components, Tick } from "../../component";
 import { SparseSet } from "../sparse-set";
 import { Entity } from "../../entity";
 import { u32 } from "../../../Intrinsics";
@@ -146,6 +146,7 @@ export class Table {
     ///
     /// # Safety
     /// `row` must be in-bounds
+    // @ts-expect-error
     private __swap_remove_unchecked(row: TableRow) {
         debug_assert(row < this.entity_count());
         const last_element_index = this.entity_count() - 1;
@@ -177,6 +178,7 @@ export class Table {
     ///
     /// # Safety
     /// Row must be in-bounds
+    // @ts-expect-error
     private __move_to_and_forget_missing_unchecked(row: TableRow, new_table: Table): TableMoveResult {
         const last_element_index = this.#entities.length - 1
         const is_last = row === last_element_index;
@@ -201,6 +203,7 @@ export class Table {
     ///
     /// # Safety
     /// row must be in-bounds
+    // @ts-expect-error
     private __move_to_and_drop_missing_unchecked(row: TableRow, new_table: Table): TableMoveResult {
         const last_element_index = this.#entities.length - 1
         const is_last = row === last_element_index;
@@ -225,6 +228,7 @@ export class Table {
     ///
     /// # Safety
     /// `row` must be in-bounds. `new_table` must contain every component this table has
+    // @ts-expect-error
     private __move_to_superset_unchecked(row: TableRow, new_table: Table): TableMoveResult {
         debug_assert(row < this.entity_count());
         const last_element_index = this.entity_count() - 1;

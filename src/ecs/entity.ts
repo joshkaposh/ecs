@@ -361,6 +361,7 @@ export class Entities {
         return loc;
     }
 
+    // @ts-expect-error
     private __alloc_at_without_replacement(entity: Entity): AllocAtWithoutReplacement {
         this.__verify_flushed();
 
@@ -474,12 +475,14 @@ export class Entities {
     ///  - `index` must be a valid entity index.
     ///  - `location` must be valid for the entity at `index` or immediately made valid afterwards
     ///    before handing control to unknown code.
+    // @ts-expect-error
     private __set(index: number, location: EntityLocation) {
         // SAFETY: Caller guarantees that `index` a valid entity index
         // self.meta.get_unchecked_mut(index as usize).location = location;
         this.__meta[index].location = location;
     }
 
+    // @ts-expect-error
     private __reserve_generations(index: number, generations: number): boolean {
         if (index >= this.__meta.length) {
             return false
