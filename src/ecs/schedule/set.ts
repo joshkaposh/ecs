@@ -23,6 +23,11 @@ export class SystemTypeSet<T> implements SystemSet {
     constructor(phantom_data: any) {
         this.#phantom_data = phantom_data;
     }
+
+    process_config(schedule_graph: ScheduleGraph, config: NodeConfig<ProcessNodeConfig>): NodeId {
+        return config.process_config(schedule_graph)
+    }
+
     clone() {
         return this;
     }
@@ -37,9 +42,14 @@ export class SystemTypeSet<T> implements SystemSet {
 }
 
 export class AnonymousSet implements SystemSet {
-    // #id: number;
-    constructor(id?: number) {
-        // this.#id = id;
+    #id: number;
+    constructor(id: number) {
+        this.#id = id;
+    }
+
+    process_config(schedule_graph: ScheduleGraph, config: NodeConfig<ProcessNodeConfig>): NodeId {
+        return config.process_config(schedule_graph);
+        // return new NodeId.Set(this.#id)
     }
 
     system_type(): Option<UUID> {

@@ -246,4 +246,8 @@ export class Components {
         return iter(this.#components)
     }
 
+    [Symbol.iterator]() {
+        return this.iter();
+    }
+
 }

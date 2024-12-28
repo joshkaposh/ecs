@@ -32,9 +32,8 @@ test('world', () => {
     assert(w.entities().total_count() === 200);
 
     const batch = Array.from({ length: 100 }, () => [new A(), new B(), new C()]);
-
     {
-        using b = w.spawn_batch(batch)
+        using _ = w.spawn_batch(batch)
     }
 
     assert(w.entities().total_count() === 300)

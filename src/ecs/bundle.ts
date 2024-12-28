@@ -183,12 +183,14 @@ export class BundleInfo {
                 const status = bundle_component_status.get_status(bundle_component);
                 const column = table.get_column(component_id)!;
                 if (ComponentStatus.Added === status) {
+                    // @ts-expect-error
                     column.__initialize(
                         table_row,
                         component_ptr,
                         change_tick
                     );
                 } else if (ComponentStatus.Existing === status && insert_mode === InsertMode.Replace) {
+                    // @ts-expect-error
                     column.__replace(
                         table_row,
                         component_ptr,

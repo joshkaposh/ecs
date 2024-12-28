@@ -45,13 +45,6 @@ const Team = {
     Red: define_marker(),
 } as const;
 
-class TestEvent { constructor(public value = 'TestEvent!') { } }
-
-function is_key_pressed(events: Events<typeof TestEvent>) {
-    const is_pressed = events.get_cursor().read(events).find((ev) => ev.value.includes('key'))
-    return is_pressed
-}
-
 test('query_builder', () => {
     const w = World.default();
     const query = new QueryBuilder(w, [A])
@@ -64,88 +57,88 @@ test('query_builder', () => {
     w.spawn([new A('A with B and C'), new B(), new C()])
 
     for (const [a, b, c] of query) {
-        console.log([a, b, c]);
+
     }
 })
 
-// test('query_with_marker', () => {
+test('query_with_marker', () => {
 
-//     const w = World.default();
+    const w = World.default();
 
-//     w.register_component(A)
-//     w.register_component(B)
-//     w.register_component(C)
-//     w.register_component(D)
-//     w.register_component(Team.Red);
-//     w.register_component(Team.Blue)
+    w.register_component(A)
+    w.register_component(B)
+    w.register_component(C)
+    w.register_component(D)
+    w.register_component(Team.Red);
+    w.register_component(Team.Blue)
 
-//     w.spawn([new A('red'), new B('red'), new Team.Red()])
-//     w.spawn([new A('red'), new B('red'), new Team.Red()])
-//     w.spawn([new A('blue'), new B('blue'), new Team.Blue()])
-//     w.spawn([new A('blue'), new B('blue'), new Team.Blue()])
+    w.spawn([new A('red'), new B('red'), new Team.Red()])
+    w.spawn([new A('red'), new B('red'), new Team.Red()])
+    w.spawn([new A('blue'), new B('blue'), new Team.Blue()])
+    w.spawn([new A('blue'), new B('blue'), new Team.Blue()])
 
-//     const q_red = w.query_filtered([A, B], [With(Team.Red)]);
-//     const q_blue = w.query_filtered([A, B], [With(Team.Blue)]);
+    const q_red = w.query_filtered([A, B], [With(Team.Red)]);
+    const q_blue = w.query_filtered([A, B], [With(Team.Blue)]);
 
-//     const q_ab = w.query([A, B]);
+    const q_ab = w.query([A, B]);
 
-//     const q_a = w.query([A]);
-//     const q_a_mut = w.query([Write(A)]);
+    const q_a = w.query([A]);
+    const q_a_mut = w.query([Write(A)]);
 
-//     const query_a_added = w.query_filtered([A], [Added(A)]);
-//     w.clear_trackers();
+    const query_a_added = w.query_filtered([A], [Added(A)]);
+    w.clear_trackers();
 
-//     assert(query_a_added.iter().count() === 0);
-//     w.spawn([new A()])
-//     w.spawn([new A()])
-//     w.spawn([new A()])
-//     assert(query_a_added.iter().count() === 3);
-//     w.clear_trackers();
-//     assert(query_a_added.iter().count() === 0);
+    assert(query_a_added.iter().count() === 0);
+    w.spawn([new A()])
+    w.spawn([new A()])
+    w.spawn([new A()])
+    assert(query_a_added.iter().count() === 3);
+    w.clear_trackers();
+    assert(query_a_added.iter().count() === 0);
 
-//     assert(q_a.iter().count() === 7);
+    assert(q_a.iter().count() === 7);
 
-//     assert(q_red.iter().count() === 2 && q_red.iter().all(([a, b]) => a.value === 'red' && b.value === 'red'));
-//     assert(q_blue.iter().count() === 2 && q_blue.iter().all(([a, b]) => a.value === 'blue' && b.value === 'blue'));
-//     assert(q_ab.iter().count() === 4)
+    assert(q_red.iter().count() === 2 && q_red.iter().all(([a, b]) => a.value === 'red' && b.value === 'red'));
+    assert(q_blue.iter().count() === 2 && q_blue.iter().all(([a, b]) => a.value === 'blue' && b.value === 'blue'));
+    assert(q_ab.iter().count() === 4)
 
-//     for (const [a] of q_a.iter()) {
-//         assert_throws(() => {
-//             a.value = 'not allowed'
-//         })
+    for (const [a] of q_a.iter()) {
+        assert_throws(() => {
+            a.value = 'not allowed'
+        })
 
-//     }
+    }
 
-//     for (const [a] of q_a_mut) {
-//         a.value = 'mutated'
-//     }
+    for (const [a] of q_a_mut) {
+        a.value = 'mutated'
+    }
 
-//     assert(q_a_mut.iter().all(([a]) => a.value === 'mutated'))
+    assert(q_a_mut.iter().all(([a]) => a.value === 'mutated'))
 
-// })
+})
 
-// test('query_mut', () => {
-//     const w = World.new();
-//     w.spawn([new A(), new B()]);
-//     w.spawn([new A(), new B()]);
-//     w.spawn([new A(), new B()]);
+test('query_mut', () => {
+    const w = World.new();
+    w.spawn([new A(), new B()]);
+    w.spawn([new A(), new B()]);
+    w.spawn([new A(), new B()]);
 
-//     const q = w.query([A]);
-//     assert(q.iter().count() === 3);
-//     assert(q.iter().count() === 3);
+    const q = w.query([A]);
+    assert(q.iter().count() === 3);
+    assert(q.iter().count() === 3);
 
-//     for (const [a] of q.iter()) {
-//         assert_throws(() => a.value = 'modified')
-//     }
-//     assert(q.iter().all(([t]) => t.value !== 'modified'))
-//     const qm = w.query([Write(A)])
-//     for (const [a] of qm.iter()) {
-//         a.value = 'modified'
-//     }
+    for (const [a] of q.iter()) {
+        assert_throws(() => a.value = 'modified')
+    }
+    assert(q.iter().all(([t]) => t.value !== 'modified'))
+    const qm = w.query([Write(A)])
+    for (const [a] of qm.iter()) {
+        a.value = 'modified'
+    }
 
-//     assert(q.iter().all(([t]) => t.value === 'modified'))
+    assert(q.iter().all(([t]) => t.value === 'modified'))
 
-// })
+})
 
 test('query_entity', () => {
     const w = World.default();

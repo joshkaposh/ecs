@@ -4,6 +4,7 @@ import { ComponentTicks, Tick } from "../..";
 import { capacity, replace, reserve, swap, swap_remove } from "../../../array-helpers";
 import { debug_assert } from "../../../util";
 import { TODO } from "joshkaposh-iterator/src/util";
+import { iter } from "joshkaposh-iterator";
 
 function alloc(array: any[], new_capacity: number) {
     TODO('alloc', array, new_capacity)
@@ -52,7 +53,7 @@ export class Column {
         return this.data.length;
     }
 
-    __push(ptr: {}, ticks: ComponentTicks) {
+    private __push(ptr: {}, ticks: ComponentTicks) {
         this.data.push(ptr);
         this.added_ticks.push(ticks.added);
         this.changed_ticks.push(ticks.changed);
@@ -118,25 +119,25 @@ export class Column {
         return new ComponentTicks(this.added_ticks[row], this.changed_ticks[row]);
     }
 
-    __swap_remove_unchecked(row: TableRow) {
+    private __swap_remove_unchecked(row: TableRow) {
         swap_remove(this.data, row)
         swap_remove(this.added_ticks, row)
         swap_remove(this.changed_ticks, row)
     }
 
-    __drop_last_component(last_element_index: number) {
+    private __drop_last_component(last_element_index: number) {
         this.data.pop();
         this.added_ticks.pop();
         this.changed_ticks.pop();
     }
 
-    __swap_remove_and_drop_unchecked_nonoverlapping(last_element_index: number, row: TableRow) {
+    private __swap_remove_and_drop_unchecked_nonoverlapping(last_element_index: number, row: TableRow) {
         swap_remove_unchecked_nonoverlapping(this.data, row, last_element_index);
         swap_remove_unchecked_nonoverlapping(this.added_ticks, row, last_element_index);
         swap_remove_unchecked_nonoverlapping(this.changed_ticks, row, last_element_index);
     }
 
-    __swap_remove_and_forget_unchecked(last_element_index: number, row: TableRow) {
+    private __swap_remove_and_forget_unchecked(last_element_index: number, row: TableRow) {
         swap_remove_unchecked(this.data, row, last_element_index)
         swap_remove_unchecked(this.added_ticks, row, last_element_index)
         swap_remove_unchecked(this.changed_ticks, row, last_element_index)
@@ -146,13 +147,13 @@ export class Column {
      * Call to expand / shrink the memory allocation for this Column
      * The caller should make sure their saved capacity is updated to new_capacity after this operation
      */
-    __realloc(current_capacity: number, new_capacity: number) {
+    private __realloc(current_capacity: number, new_capacity: number) {
         realloc(this.data, current_capacity, new_capacity)
         realloc(this.added_ticks, current_capacity, new_capacity)
         realloc(this.changed_ticks, current_capacity, new_capacity)
     }
 
-    __alloc(new_capacity: number) {
+    private __alloc(new_capacity: number) {
         alloc(this.data, new_capacity)
         alloc(this.added_ticks, new_capacity)
         alloc(this.changed_ticks, new_capacity)
@@ -163,13 +164,13 @@ export class Column {
      * Assumes the slot in unintialized
      * To overwrite existing initialized value, use Column.replace() instead
      */
-    __initialize(row: TableRow, data: {}, change_tick: Tick) {
+    private __initialize(row: TableRow, data: {}, change_tick: Tick) {
         this.data[row] = data;
         this.added_ticks[row] = change_tick;
         this.changed_ticks[row] = change_tick;
     }
 
-    __replace(row: TableRow, data: {}, change_tick: Tick) {
+    private __replace(row: TableRow, data: {}, change_tick: Tick) {
         replace(this.data, row, data);
         this.changed_ticks[row].set(change_tick.get());
     }
@@ -178,7 +179,7 @@ export class Column {
      * Removes the element from `other` at `src_row` and inserts it
      * into the current column to initialize the values at `dst_row`
      */
-    __initialize_from_unchecked(other: Column, other_last_element_index: number, src_row: TableRow, dst_row: TableRow) {
+    private __initialize_from_unchecked(other: Column, other_last_element_index: number, src_row: TableRow, dst_row: TableRow) {
         // Init data
         const src_val = swap_remove(other.data, src_row)!;
         this.#initialize_unchecked(this.data, dst_row, src_val)
@@ -203,7 +204,7 @@ export class Column {
         this.changed_ticks.length = 0;
     }
 
-    __reserve_exact(additional: number) {
+    private __reserve_exact(additional: number) {
         reserve(this.data, additional);
     }
 

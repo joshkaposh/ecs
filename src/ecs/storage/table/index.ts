@@ -102,7 +102,6 @@ export class Table {
         return this.#columns.values();
     }
 
-
     clear() {
         this.#entities.length = 0;
         for (const column of this.#columns.values()) {
@@ -120,6 +119,7 @@ export class Table {
             let new_capacity = capacity(this.#entities.length);
 
             for (const column of this.#columns.values()) {
+                // @ts-expect-error
                 column.__reserve_exact(new_capacity - column.len());
             }
         }
@@ -146,17 +146,19 @@ export class Table {
     ///
     /// # Safety
     /// `row` must be in-bounds
-    // @ts-expect-error
+
     private __swap_remove_unchecked(row: TableRow) {
         debug_assert(row < this.entity_count());
         const last_element_index = this.entity_count() - 1;
 
         if (row !== last_element_index) {
             for (const column of this.#columns.values()) {
+                // @ts-expect-error
                 column.__swap_remove_and_drop_unchecked_nonoverlapping(last_element_index, row)
             }
         } else {
             for (const col of this.#columns.values()) {
+                // @ts-expect-error
                 col.__drop_last_component(last_element_index);
             }
         }
@@ -178,7 +180,6 @@ export class Table {
     ///
     /// # Safety
     /// Row must be in-bounds
-    // @ts-expect-error
     private __move_to_and_forget_missing_unchecked(row: TableRow, new_table: Table): TableMoveResult {
         const last_element_index = this.#entities.length - 1
         const is_last = row === last_element_index;
@@ -186,8 +187,10 @@ export class Table {
         for (const [component_id, column] of this.#columns.iter()) {
             let new_column = new_table.get_column(component_id);
             if (is_some(new_column)) {
+                // @ts-expect-error
                 new_column.__initialize_from_unchecked(column, last_element_index, row, new_row)
             } else {
+                // @ts-expect-error
                 column.__swap_remove_unchecked(row)
             }
         }
@@ -203,7 +206,6 @@ export class Table {
     ///
     /// # Safety
     /// row must be in-bounds
-    // @ts-expect-error
     private __move_to_and_drop_missing_unchecked(row: TableRow, new_table: Table): TableMoveResult {
         const last_element_index = this.#entities.length - 1
         const is_last = row === last_element_index;
@@ -211,8 +213,10 @@ export class Table {
         for (const [component_id, column] of this.#columns.iter()) {
             const new_column = new_table.get_column(component_id)
             if (new_column) {
+                // @ts-expect-error
                 new_column.__initialize_from_unchecked(column, last_element_index, row, new_row)
             } else {
+                // @ts-expect-error
                 column.__swap_remove_unchecked(row)
             }
         }
@@ -228,7 +232,6 @@ export class Table {
     ///
     /// # Safety
     /// `row` must be in-bounds. `new_table` must contain every component this table has
-    // @ts-expect-error
     private __move_to_superset_unchecked(row: TableRow, new_table: Table): TableMoveResult {
         debug_assert(row < this.entity_count());
         const last_element_index = this.entity_count() - 1;
@@ -239,13 +242,19 @@ export class Table {
         for (const [component_id, column] of this.#columns.iter()) {
 
             new_table
-                .get_column(component_id)!.__initialize_from_unchecked(column, last_element_index, row, new_row)
+                .get_column(component_id)!
+                // @ts-expect-error
+                .__initialize_from_unchecked(column, last_element_index, row, new_row)
         }
 
         return {
             new_row,
             swapped_entity: is_last ? null : this.#entities[row]
         }
+    }
+
+    [Symbol.iterator]() {
+        return this.iter();
     }
 }
 

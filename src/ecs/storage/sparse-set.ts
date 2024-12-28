@@ -81,9 +81,11 @@ export class ComponentSparseSet {
     private __insert(entity: Entity, value: {}, change_tick: Tick) {
         const dense_index = this.#sparse.get(entity.index());
         if (is_some(dense_index)) {
+            // @ts-expect-error
             this.#dense.__replace(dense_index, value, change_tick);
         } else {
             const dense_index = this.#dense.len();
+            // @ts-expect-error
             this.#dense.__push(value, ComponentTicks.new(change_tick));
             this.#sparse.insert(entity.index(), dense_index);
             this.#entities.push(entity.index());
@@ -150,6 +152,7 @@ export class ComponentSparseSet {
             swap_remove(this.#entities, dense_index);
             const is_last = dense_index === this.#dense.len() - 1;
 
+            // @ts-expect-error
             const [value] = this.#dense.__swap_remove_unchecked(dense_index) as any
             if (!is_last) {
                 const index = this.#entities[dense_index];
@@ -169,6 +172,7 @@ export class ComponentSparseSet {
             swap_remove(this.#entities, dense_index)
             const is_last = dense_index === this.#dense.len() - 1;
 
+            // @ts-expect-error
             this.#dense.__swap_remove_unchecked(dense_index);
 
             if (!is_last) {

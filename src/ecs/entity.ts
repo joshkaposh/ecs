@@ -475,7 +475,6 @@ export class Entities {
     ///  - `index` must be a valid entity index.
     ///  - `location` must be valid for the entity at `index` or immediately made valid afterwards
     ///    before handing control to unknown code.
-    // @ts-expect-error
     private __set(index: number, location: EntityLocation) {
         // SAFETY: Caller guarantees that `index` a valid entity index
         // self.meta.get_unchecked_mut(index as usize).location = location;
