@@ -5,26 +5,24 @@ import { u32 } from "../../Intrinsics";
 import type { Option } from "joshkaposh-option";
 import { EventCursor } from "./event_cursor";
 import { assert } from "joshkaposh-iterator/src/util";
+import { Instance } from "../../util";
+import { Default } from "../default";
 
-export class Events<E extends new (...args: any[]) => any> {
-    __events_a: EventSequence<InstanceType<E>>;
-    __events_b: EventSequence<InstanceType<E>>;
+export class Events<E extends Event> {
+    __events_a: EventSequence<E>;
+    __events_b: EventSequence<E>;
     #event_count: number;
     #ty: E;
-    private constructor(events_a: EventSequence<InstanceType<E>>, events_b: EventSequence<InstanceType<E>>, event_count: number, ty: E) {
+    constructor(
+        ty: E,
+        event_count: number = 0,
+        events_a: EventSequence<E> = { events: [], start_event_count: 0 },
+        events_b: EventSequence<E> = { events: [], start_event_count: 0 },
+    ) {
         this.__events_a = events_a;
         this.__events_b = events_b;
-        this.#event_count = event_count;
         this.#ty = ty;
-    }
-
-    static default<E extends Event>(ty: E): Events<E> {
-        return new Events<E>(
-            { events: [], start_event_count: 0 },
-            { events: [], start_event_count: 0 },
-            0,
-            ty
-        );
+        this.#event_count = event_count;
     }
 
     get event_count(): number {
@@ -44,17 +42,17 @@ export class Events<E extends new (...args: any[]) => any> {
      * the event.
      * This method returns the `EventId` of the sent `event`
      */
-    send(event: InstanceType<E>): EventId<E> {
+    send(event: Instance<E>): EventId<E> {
         return this.send_with_caller(event);
 
     }
 
-    send_with_caller(event: InstanceType<E>): EventId<E> {
+    send_with_caller(event: Instance<E>): EventId<E> {
         const event_id = this.event_count;
         const event_instance = {
             event_id,
             event
-        }
+        } as EventInstance<E>;
 
         this.__events_b.events.push(event_instance)
         this.#event_count += 1;
@@ -66,7 +64,7 @@ export class Events<E extends new (...args: any[]) => any> {
      * This is more efficient than sending each event individually.
      * This method returns the [IDs](`EventId`) of the sent `events`. 
      */
-    send_batch(events: Iterator<E>): SendBatchIds<E> {
+    send_batch(events: Iterator<Instance<E>>): SendBatchIds<E> {
         const last_count = this.#event_count;
 
         this.extend(events);
@@ -74,16 +72,16 @@ export class Events<E extends new (...args: any[]) => any> {
         return new SendBatchIds(last_count, this.#event_count);
     }
 
-    send_default<T extends E extends { default(): InstanceType<E> } ? EventId<E> : never>(): T {
+    send_default<T extends E extends Default<E> ? EventId<E> : never>(): T {
         // @ts-expect-error
-        return this.send(this.#ty.default());
+        return this.send(new this.#ty());
     }
 
     /**
      * @summary Gets a new [`ManualEventReader`]. This will include all events already in the event buffers.
      */
     get_cursor(): EventCursor<E> {
-        return EventCursor.default() as EventCursor<E>;
+        return new EventCursor() as EventCursor<E>;
     }
 
     /**
@@ -98,7 +96,7 @@ export class Events<E extends new (...args: any[]) => any> {
      * @deprecated `get_reader()` is deprecated. Please use `get_cursor()` instead.
      */
     get_reader(): EventCursor<E> {
-        return EventCursor.default();
+        return new EventCursor();
     }
 
     /**

@@ -21,8 +21,8 @@ test('archetype', () => {
     assert(is_some(archetypes.get(0)) === true)
     assert(is_some(archetypes.get(1)) === false)
 
-    const components = Components.default();
-    const storages = Storages.default();
+    const components = new Components();
+    const storages = new Storages();
 
     const a_id = components.init_component(A as Component, storages)
     const b_id = components.init_component(B as Component, storages)

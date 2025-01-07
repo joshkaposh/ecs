@@ -6,13 +6,9 @@ export class EventCursor<E extends Event> {
     __last_event_count: number;
     #marker: any;
 
-    constructor(last_event_count: number, marker: any) {
+    constructor(last_event_count: number = 0, marker: any = undefined) {
         this.__last_event_count = last_event_count;
         this.#marker = marker;
-    }
-
-    static default<E extends Event>() {
-        return new EventCursor<E>(0, undefined);
     }
 
     clone() {

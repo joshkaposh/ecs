@@ -7,7 +7,7 @@ class SparseStored { constructor(public value: number) { } }
 define_component(SparseStored, StorageType.SparseSet)
 
 test('random_access', () => {
-    const world = World.default();
+    const world = new World();
 
     const a = new TableStored('aaaaa');
 

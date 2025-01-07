@@ -16,8 +16,7 @@ export class ScheduleSystem extends System<any, any> {
 
 
     static Infallible(system: System<any, void>) {
-        console.log('creating Infallible ScheduleSystem', system);
-
+        // console.log('creating Infallible ScheduleSystem ', system);
         return new ScheduleSystem(system, false)
 
     }
@@ -56,10 +55,10 @@ export class ScheduleSystem extends System<any, any> {
     // @ts-expect-error
     run_unsafe(input: SystemIn<System<any, any>>, world: World) {
         if (this.fallible) {
-            console.log('SCHEDULESYSTEM RUN_UNSAFE FALLIBLE', input, this.#system);
+            // console.log('SCHEDULESYSTEM RUN_UNSAFE FALLIBLE', input, this.#system);
             return this.#system.run_unsafe(input, world);
         } else {
-            console.log('SCHEDULESYSTEM RUN_UNSAFE INFALLIBLE', input, this.#system);
+            // console.log('SCHEDULESYSTEM RUN_UNSAFE INFALLIBLE', input, this.#system);
             this.#system.run_unsafe(input, world);
             return unit
         }
@@ -68,10 +67,10 @@ export class ScheduleSystem extends System<any, any> {
     // @ts-expect-error
     run(input: SystemIn<System<any, any>>, world: World) {
         if (this.fallible) {
-            console.log('SCHEDULESYSTEM RUN FALLIBLE');
+            // console.log('SCHEDULESYSTEM RUN FALLIBLE');
             return this.#system.run(input, world);
         } else {
-            console.log('SCHEDULESYSTEM RUN INFALLIBLE');
+            // console.log('SCHEDULESYSTEM RUN INFALLIBLE');
             this.#system.run(input, world);
             return unit;
         }

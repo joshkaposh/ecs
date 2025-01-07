@@ -193,10 +193,10 @@ export class Mut<T> extends DetectChangesMut<T> {
     }
 }
 
-export class Res<T extends Resource> extends DetectChanges<InstanceType<T>> {
-    value: InstanceType<T>;
+export class Res<T> extends DetectChanges<T> {
+    value: T;
     ticks: Ticks;
-    constructor(type: InstanceType<T>, ticks: Ticks) {
+    constructor(type: T, ticks: Ticks) {
         super()
         this.value = type;
         this.ticks = ticks;
@@ -211,10 +211,11 @@ export class Res<T extends Resource> extends DetectChanges<InstanceType<T>> {
     }
 }
 
-export class ResMut<T extends Resource> {
-    value: InstanceType<T>;
+export class ResMut<T> extends DetectChangesMut<T> {
+    value: T;
     ticks: TicksMut;
-    constructor(type: InstanceType<T>, ticks: TicksMut) {
+    constructor(type: T, ticks: TicksMut) {
+        super();
         this.value = type;
         this.ticks = ticks;
     }

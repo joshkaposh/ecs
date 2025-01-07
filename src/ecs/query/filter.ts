@@ -122,14 +122,20 @@ class _Added<T extends Component> extends QueryFilter<boolean, AddedFetch<T>, Co
         this.IS_ARCHETYPAL = false;
     }
 
-    init_fetch(world: World, id: number, last_run: Tick, this_run: Tick) {
+    init_fetch(world: World, component_id: ComponentId, last_run: Tick, this_run: Tick) {
         const fetch = {
-            ticks: StorageSwitch.new(this.#ty, () => undefined, () => world.storages().sparse_sets.get(id)),
+            ticks: StorageSwitch.new(
+                this.#ty,
+                () => undefined,
+                () => world.storages().sparse_sets.get(component_id)
+            ),
             last_run,
             this_run
+
         }
         this.__fetch = fetch;
         return fetch;
+
     }
 
     set_archetype(fetch: AddedFetch<T>, component_id: number, _archetype: Archetype, table: Table): void {

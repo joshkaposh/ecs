@@ -9,7 +9,7 @@ class C { constructor(public value: number) { } }
 define_component(C)
 
 test('builder_with_without_static', () => {
-    const world = World.default();
+    const world = new World();
     const entity_a = world.spawn([new A(0), new B(0)]).id();
     const entity_b = world.spawn([new A(0), new C(0)]).id();
 

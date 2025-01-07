@@ -10,6 +10,8 @@ type Hint = 'string' | 'number' | 'default';
 
 export type Class<Static extends {} = {}, Inst extends {} = {}> = (new (...args: any[]) => Inst) & Static
 
+export type Instance<T> = T extends new (...args: any[]) => any ? InstanceType<T> : T;
+
 export function is_primitive(value: unknown): value is Primitive {
     const ty = typeof value;
     return is_none(value) || (ty === 'bigint' || ty === 'number' || ty === 'string' || ty === 'symbol' || ty === 'boolean')

@@ -48,7 +48,7 @@ test('reserve_generations', () => {
     const entities = new Entities();
     const entity = entities.alloc();
     entities.free(entity);
-
+    // @ts-expect-error
     assert(entities.__reserve_generations(entity.index(), 1));
 })
 
@@ -58,7 +58,7 @@ test('reserve_generations_and_alloc', () => {
     const entities = new Entities();
     const entity = entities.alloc();
     entities.free(entity);
-
+    // @ts-expect-error
     assert(entities.__reserve_generations(entity.index(), GENERATIONS));
 
     // The very next entity allocated should be a further generation on the same index

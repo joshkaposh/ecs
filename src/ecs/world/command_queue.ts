@@ -9,7 +9,7 @@ export class CommandQueue {
     #cursor: number;
     #panic_recovery: any[]; // u8[]
 
-    constructor(bytes: any[], cursor: number, panic_recovery: any[]) {
+    constructor(bytes: any[] = [], cursor: number = 0, panic_recovery: any[] = []) {
         this.#bytes = bytes;
         this.#cursor = cursor;
         this.#panic_recovery = panic_recovery;

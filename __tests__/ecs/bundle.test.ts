@@ -13,9 +13,7 @@ define_component(C)
 
 
 test('bundle', () => {
-    const w = World.default();
-    const MyBundle = define_bundle([A as Component, B as Component], w);
-
+    const w = new World();
 
     const e0 = w.spawn([new A('in table A')]);
     const e1 = w.spawn([new A('2nd in table A')]);
@@ -59,10 +57,9 @@ test('bundle', () => {
     assert(id0.index() === id2.index()
         && id0.generation() !== id2.generation());
 
-    // w.spawn_batch(
-    //     [new A('4th in table A')],
-    //     [new A('5th in table A')],
-    //     [new A('6th in table A')]
-    // ).collect();
-
+    w.spawn_batch([
+        [new A('4th in table A')],
+        [new A('5th in table A')],
+        [new A('6th in table A')]
+    ]).collect();
 })

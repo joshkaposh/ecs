@@ -8,7 +8,6 @@ test('eq', () => {
 
     eq(e1, e2);
 
-
     assert(eq(0, 0));
     assert(!eq(0, 1));
     assert(eq(Entity.from_raw(0), Entity.from_raw(0), 'string'));

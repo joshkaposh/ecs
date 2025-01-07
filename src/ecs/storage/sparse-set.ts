@@ -191,7 +191,7 @@ export class SparseSet<I extends number, V> {
     #dense: V[];
     #indices: I[];
     #sparse: SparseArray<I, number>;
-    constructor(indices: I[], dense: V[], sparse: SparseArray<I, number>) {
+    constructor(indices: I[] = [], dense: V[] = [], sparse: SparseArray<I, number> = new SparseArray()) {
         this.#indices = indices
         this.#dense = dense;
         this.#sparse = sparse;

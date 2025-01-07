@@ -1,4 +1,4 @@
-import { iter, range } from "joshkaposh-iterator";
+import { iter } from "joshkaposh-iterator";
 import { Option, result } from "joshkaposh-option";
 import { ExecutorKind, SystemExecutor, SystemSchedule, is_apply_deferred } from ".";
 import { FixedBitSet } from "fixed-bit-set";
@@ -45,8 +45,6 @@ export class SingleThreadedExecutor implements SystemExecutor {
     init(schedule: SystemSchedule): void {
         const sys_count = schedule.__system_ids.length;
         const set_count = schedule.__set_ids.length;
-        console.log('Executable init', sys_count, set_count);
-
         this.#evaluated_sets = FixedBitSet.with_capacity(set_count);
         this.#completed_systems = FixedBitSet.with_capacity(sys_count);
         this.#unapplied_systems = FixedBitSet.with_capacity(sys_count);
@@ -78,10 +76,8 @@ export class SingleThreadedExecutor implements SystemExecutor {
 
             const res = result(() => {
                 if (system.is_exclusive()) {
-                    console.log('RUNNING SYSTEM EXCLUSIVE', system);
                     return system.run(undefined, world)
                 } else {
-                    console.log('RUNNING SYSTEM NON-EXCLUSIVE', system);
                     return system.run_unsafe(undefined, world);
                 }
             })
@@ -97,7 +93,6 @@ export class SingleThreadedExecutor implements SystemExecutor {
 
         this.#evaluated_sets.clear();
         this.#completed_systems.clear();
-
     }
 
     apply_deferred(schedule: SystemSchedule, world: World) {

@@ -21,8 +21,4 @@ export class Storages {
         this.sparse_sets = sparse_sets;
         this.resources = resources;
     }
-
-    static default() {
-        return new Storages(Tables.default(), new SparseSets(), new Resources())
-    }
 }

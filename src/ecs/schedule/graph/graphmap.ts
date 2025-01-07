@@ -6,19 +6,18 @@ import { assert } from "joshkaposh-iterator/src/util";
 import { is_none } from "joshkaposh-option";
 import { swap_remove } from "joshkaposh-graph/src/array-helpers";
 
-export class Graph<const DIRECTED extends boolean, S extends { hash(value: any): number | string } = { hash(value: any): number | string }> {
+export class Graph<const DIRECTED extends boolean, S extends (value: any) => number | string = (value: any) => number | string> {
     #DIRECTED: DIRECTED;
-    #nodes: IndexMap<string, CompactNodeIdAndDirection[]>;
+    #nodes: IndexMap<NodeId, CompactNodeIdAndDirection[], S>;
     #edges: Set<CompactNodeIdPair>
-    constructor(nodes: IndexMap<string, CompactNodeIdAndDirection[]>, edges: Set<CompactNodeIdPair>, DIRECTED: DIRECTED) {
+    constructor(DIRECTED: DIRECTED = true as DIRECTED, nodes: IndexMap<NodeId, CompactNodeIdAndDirection[], S> = IndexMap.with_capacity_and_hasher(0, (n => n.to_primitive()) as S), edges: Set<CompactNodeIdPair> = new Set()) {
         this.#nodes = nodes
         this.#edges = edges;
         this.#DIRECTED = DIRECTED;
     }
 
-    // @ts-expect-error
-    static with_capacity<const DIRECTED extends boolean>(nodes: number, edges: number, directed: DIRECTED): Graph<DIRECTED> {
-        return new Graph(IndexMap.with_capacity(nodes), new Set(), directed);
+    static with_capacity<const DIRECTED extends boolean>(nodes: number, _edges: number, directed: DIRECTED): Graph<DIRECTED> {
+        return new Graph(directed, IndexMap.with_capacity_and_hasher(nodes, (n) => n.to_primitive()), new Set());
     }
 
     static default<const DIRECTED extends boolean>(DIRECTED: DIRECTED) {
@@ -26,7 +25,7 @@ export class Graph<const DIRECTED extends boolean, S extends { hash(value: any):
     }
 
     clone() {
-        return new Graph(IndexMap.from(this.#nodes.entries()), new Set(this.#edges), this.#DIRECTED)
+        return new Graph(this.#DIRECTED, IndexMap.from(this.#nodes.entries()), new Set(this.#edges))
     }
 
     edge_key(a: NodeId, b: NodeId) {
@@ -39,14 +38,13 @@ export class Graph<const DIRECTED extends boolean, S extends { hash(value: any):
     }
 
     add_node(n: NodeId) {
-        // console.log('graph adding node', n);
-        if (!this.#nodes.contains_key(n.to_primitive())) {
-            this.#nodes.insert(n.to_primitive(), []);
+        if (!this.#nodes.contains_key(n)) {
+            this.#nodes.insert(n, []);
         }
     }
 
     remove_node(n: NodeId) {
-        const links_ = this.#nodes.swap_remove(n.to_primitive());
+        const links_ = this.#nodes.swap_remove(n);
         if (!links_) {
             return
         }
@@ -64,7 +62,7 @@ export class Graph<const DIRECTED extends boolean, S extends { hash(value: any):
     }
 
     contains_node(n: NodeId) {
-        return this.#nodes.contains_key(n.to_primitive());
+        return this.#nodes.contains_key(n);
     }
 
     add_edge(a: NodeId, b: NodeId) {
@@ -74,21 +72,19 @@ export class Graph<const DIRECTED extends boolean, S extends { hash(value: any):
 
         if (is_new_edge) {
             // insert into adjacency list if new edge
-            let list = this.#nodes.get(a.to_primitive());
+            let list = this.#nodes.get(a);
             if (!list) {
                 list = []
-                this.#nodes.insert(a.to_primitive(), list)
+                this.#nodes.insert(a, list)
             }
             list.push(CompactNodeIdAndDirection.store(b, Outgoing))
 
             if (!a.eq(b)) {
-                let list = this.#nodes.get(b.to_primitive());
+                let list = this.#nodes.get(b);
 
                 if (!list) {
                     list = []
-                    console.log(`inserting into nodes: `, b);
-
-                    this.#nodes.insert(b.to_primitive(), list)
+                    this.#nodes.insert(b, list)
                 }
                 list.push(CompactNodeIdAndDirection.store(a, Incoming))
 
@@ -99,7 +95,7 @@ export class Graph<const DIRECTED extends boolean, S extends { hash(value: any):
     }
 
     remove_single_edge(a: NodeId, b: NodeId, dir: Direction): boolean {
-        const sus = this.#nodes.get(a.to_primitive());
+        const sus = this.#nodes.get(a);
         if (!sus) {
             return false
         }
@@ -133,12 +129,11 @@ export class Graph<const DIRECTED extends boolean, S extends { hash(value: any):
     }
 
     nodes() {
-        return this.#nodes.keys().map(k => NodeId.to_node_id(k))
-
+        return this.#nodes.keys()
     }
 
     neighbors(a: NodeId) {
-        const neighbors = this.#nodes.get(a.to_primitive());
+        const neighbors = this.#nodes.get(a);
         const it = neighbors ? iter(neighbors) : iter([]);
         return it
             .map(c => c.load())
@@ -149,15 +144,12 @@ export class Graph<const DIRECTED extends boolean, S extends { hash(value: any):
     }
 
     neighbors_directed(a: NodeId, dir: Direction) {
-        const neighbors = this.#nodes.get(a.to_primitive());
-        const it = neighbors ? iter(neighbors) : iter([]);
-
-        return it
-            .map(c => c.load())
-            .filter_map(([n, d]) => {
-                const bool = !this.#DIRECTED || d.value === dir.value || n.index === a.index;
-                return bool ? n : undefined;
-            })
+        const neighbors = this.#nodes.get(a);
+        return iter(neighbors ?? []).filter_map((c) => {
+            const [n, d] = c.load();
+            const bool = !this.#DIRECTED || d.value === dir.value || n.eq(a);
+            return bool ? n : undefined;
+        })
     }
 
     edges(a: NodeId) {
@@ -184,7 +176,7 @@ export class Graph<const DIRECTED extends boolean, S extends { hash(value: any):
     }
 
     to_index(ix: NodeId) {
-        return this.#nodes.get_index_of(ix.to_primitive())!;
+        return this.#nodes.get_index_of(ix)!;
     }
 
     iter_sccs() {
@@ -270,10 +262,8 @@ class CompactNodeIdPair {
 
     load(): [NodeId, NodeId] {
         const { index_a, index_b, is_system_a, is_system_b } = this;
-        let a, b
-        a = is_system_a ? new NodeId.System(index_a) : new NodeId.Set(index_a)
-        b = is_system_b ? new NodeId.System(index_b) : new NodeId.Set(index_b);
-
+        const a = is_system_a ? new NodeId.System(index_a) : new NodeId.Set(index_a)
+        const b = is_system_b ? new NodeId.System(index_b) : new NodeId.Set(index_b);
         return [a, b]
     }
 

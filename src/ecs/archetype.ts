@@ -71,14 +71,14 @@ export class Edges {
     #insert_bundle: SparseArray<BundleId, ArchetypeAfterBundleInsert>;
     #remove_bundle: SparseArray<BundleId, Option<ArchetypeId>>
     #take_bundle: SparseArray<BundleId, Option<ArchetypeId>>
-    constructor(insert_bundle: SparseArray<BundleId, ArchetypeAfterBundleInsert>, remove_bundle: SparseArray<BundleId, Option<ArchetypeId>>, take_bundle: SparseArray<BundleId, Option<ArchetypeId>>) {
+    constructor(
+        insert_bundle: SparseArray<BundleId, ArchetypeAfterBundleInsert> = new SparseArray(),
+        remove_bundle: SparseArray<BundleId, Option<ArchetypeId>> = new SparseArray(),
+        take_bundle: SparseArray<BundleId, Option<ArchetypeId>> = new SparseArray(),
+    ) {
         this.#insert_bundle = insert_bundle;
         this.#remove_bundle = remove_bundle;
         this.#take_bundle = take_bundle;
-    }
-
-    static default() {
-        return new Edges(new SparseArray(), new SparseArray(), new SparseArray())
     }
 
     get_archetype_after_bundle_insert(bundle_id: BundleId): Option<ArchetypeId> {
@@ -194,7 +194,7 @@ export class Archetype {
         this.#table_id = table_id;
         this.#entities = [];
         this.#components = archetype_components.into_immutable();
-        this.#edges = Edges.default();
+        this.#edges = new Edges();
     }
 
     id(): ArchetypeId {
@@ -422,7 +422,7 @@ export class Archetypes {
         this.#by_component = new Map();
         this.#archetype_component_count = 0;
 
-        this.get_id_or_insert(Components.default(), TableId.empty, [], [])
+        this.get_id_or_insert(new Components(), TableId.empty, [], [])
     }
 
     get inner() {

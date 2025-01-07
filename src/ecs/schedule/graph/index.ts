@@ -90,13 +90,11 @@ export function check_graph(graph: DiGraph, topological_order: NodeId[]): CheckG
     if (n === 0) {
         return default_check_graph_results()
     }
-    // console.log('topo order', topological_order);
-
     const map = new Map<string, number>();
     const topsorted = DiGraph();
 
-    for (const [i, node] of iter(topological_order).enumerate()) {
-
+    for (let i = 0; i < topological_order.length; i++) {
+        const node = topological_order[i];
         map.set(node.to_primitive(), i);
         topsorted.add_node(node);
 
@@ -104,7 +102,6 @@ export function check_graph(graph: DiGraph, topological_order: NodeId[]): CheckG
         for (const pred of graph.neighbors_directed(node, Direction.Incoming())) {
             topsorted.add_edge(pred, node);
         }
-
     }
 
     const reachable = FixedBitSet.with_capacity(n * n);
@@ -168,9 +165,6 @@ export function check_graph(graph: DiGraph, topological_order: NodeId[]): CheckG
             }
         }
     }
-
-    // console.log('transitive', transitive_reduction.nodes().collect())
-
 
     return {
         reachable,

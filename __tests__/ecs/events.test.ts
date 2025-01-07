@@ -6,7 +6,7 @@ class TestEvent {
 }
 
 test('events', () => {
-    const events = Events.default(TestEvent);
+    const events = new Events(TestEvent);
     const event_0 = new TestEvent(0)
     const event_1 = new TestEvent(1)
     const event_2 = new TestEvent(2)
@@ -58,7 +58,7 @@ test('events', () => {
 class E { constructor(public value: number) { } }
 
 function events_clear_and_read_impl(clear_func: (events: Events<typeof E>) => void) {
-    const events = Events.default<typeof E>(E);
+    const events = new Events(E);
     const reader = events.get_cursor();
 
     assert(reader.read(events).next().done);
@@ -84,7 +84,7 @@ test('events_clear_and_read_impl', () => {
 })
 
 test('events_extend_impl', () => {
-    const events = Events.default<typeof TestEvent>(TestEvent);
+    const events = new Events(TestEvent);
     const reader = events.get_cursor();
 
     events.extend([new TestEvent(0), new TestEvent(1)] as any);
@@ -93,7 +93,7 @@ test('events_extend_impl', () => {
 })
 
 test('events_empty', () => {
-    const events = Events.default(TestEvent);
+    const events = new Events(TestEvent);
     assert(events.is_empty());
     events.send(new TestEvent(0))
     assert(!events.is_empty());
@@ -106,7 +106,7 @@ test('events_empty', () => {
 })
 
 test('events_reader_len empty/filled', () => {
-    const events = Events.default(TestEvent);
+    const events = new Events(TestEvent);
 
     assert(events.get_cursor().len(events) === 0);
     assert(events.get_cursor().is_empty(events));
@@ -117,7 +117,7 @@ test('events_reader_len empty/filled', () => {
 })
 
 test('event_iter_len_updated', () => {
-    const events = Events.default(TestEvent);
+    const events = new Events(TestEvent);
     events.send(new TestEvent(0))
     events.send(new TestEvent(1))
     events.send(new TestEvent(2))
@@ -133,7 +133,7 @@ test('event_iter_len_updated', () => {
 })
 
 test('event_reader_len_current', () => {
-    const events = Events.default(TestEvent);
+    const events = new Events(TestEvent);
     events.send(new TestEvent(0))
     const reader = events.get_cursor_current()
     assert(reader.is_empty(events));
@@ -144,7 +144,7 @@ test('event_reader_len_current', () => {
 
 
 test('event_reader_len_update', () => {
-    const events = Events.default(TestEvent);
+    const events = new Events(TestEvent);
     events.send(new TestEvent(0))
     events.send(new TestEvent(0))
     const reader = events.get_cursor();

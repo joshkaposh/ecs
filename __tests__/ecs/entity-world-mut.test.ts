@@ -1,6 +1,5 @@
 import { expect, test, assert } from "vitest";
 import { Component, define_component, EntityLocation, World } from "../../src/ecs";
-import { is_class_ctor } from "../../src/util";
 import { is_some } from "joshkaposh-option";
 
 class AComp { constructor(public value = 'a') { } }
@@ -11,7 +10,7 @@ class CComp { constructor(public value = 'c') { } }
 define_component(CComp)
 
 test('entity_world_mut', () => {
-    const w = World.default();
+    const w = new World();
 
     w.register_component(AComp as Component)
     w.register_component(BComp as Component)

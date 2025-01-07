@@ -15,7 +15,7 @@ class Counter { }
 define_resource(Counter);
 
 test('world', () => {
-    const w = World.default();
+    const w = new World();
 
     const id4 = w.register_component(A as Component);
     const id5 = w.register_component(B as Component);

@@ -20,8 +20,8 @@ export const ExecutorKind = {
 
 export class SystemSchedule {
     __systems: System<any, any>[];
-    __system_conditions: Array<Condition>[];
-    __set_conditions: Array<Condition>[];
+    __system_conditions: Array<Condition<any>>[];
+    __set_conditions: Array<Condition<any>>[];
     __system_ids: NodeId[];
     __set_ids: NodeId[];
     __system_dependencies: number[];
@@ -31,8 +31,8 @@ export class SystemSchedule {
 
     constructor(
         systems: System<any, any>[],
-        system_conditions: Array<Condition>[],
-        set_conditions: Array<Condition>[],
+        system_conditions: Array<Condition<any>>[],
+        set_conditions: Array<Condition<any>>[],
         system_ids: NodeId[],
         set_ids: NodeId[],
         system_dependencies: number[],
@@ -53,7 +53,9 @@ export class SystemSchedule {
         // console.log('SystemSchedule ctor', this);
     }
 
-    transfer(schedule: SystemSchedule) {
+    copy_from(schedule: SystemSchedule) {
+        // console.log('SystemSchedule copy_from()', this, schedule);
+
         this.__systems = schedule.__systems;
         this.__system_conditions = schedule.__system_conditions;
         this.__set_conditions = schedule.__set_conditions;

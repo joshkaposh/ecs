@@ -45,8 +45,11 @@ export class Tick {
     }
 
     is_newer_than(last_run: Tick, this_run: Tick) {
+        // console.log('is_new_than result', this_run, last_run);
+
         const ticks_since_insert = Math.min(this_run.relative_to(this).#tick, MAX_CHANGE_AGE);
         const ticks_since_system = Math.min(this_run.relative_to(last_run).#tick, MAX_CHANGE_AGE);
+        // console.log('is_new_than result', ticks_since_insert > ticks_since_insert, ticks_since_system, ticks_since_insert);
 
         return ticks_since_system > ticks_since_insert;
     }
@@ -132,14 +135,10 @@ export class Components {
     #indices: Map<UUID, ComponentId>;
     #resource_indices: Map<UUID, ComponentId>;
 
-    constructor(components: ComponentInfo[], indices: Map<UUID, ComponentId>, resource_indices: Map<UUID, ComponentId>) {
+    constructor(components: ComponentInfo[] = [], indices: Map<UUID, ComponentId> = new Map(), resource_indices: Map<UUID, ComponentId> = new Map()) {
         this.#components = components;
         this.#indices = indices;
         this.#resource_indices = resource_indices;
-    }
-
-    static default() {
-        return new Components([], new Map(), new Map())
     }
 
     has_type_id(type_id: UUID): boolean {

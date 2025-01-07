@@ -46,7 +46,7 @@ const Team = {
 } as const;
 
 test('query_builder', () => {
-    const w = World.default();
+    const w = new World();
     const query = new QueryBuilder(w, [A])
         .with(B)
         .without(C)
@@ -63,7 +63,7 @@ test('query_builder', () => {
 
 test('query_with_marker', () => {
 
-    const w = World.default();
+    const w = new World();
 
     w.register_component(A)
     w.register_component(B)
@@ -118,7 +118,7 @@ test('query_with_marker', () => {
 })
 
 test('query_mut', () => {
-    const w = World.new();
+    const w = new World();
     w.spawn([new A(), new B()]);
     w.spawn([new A(), new B()]);
     w.spawn([new A(), new B()]);
@@ -141,7 +141,7 @@ test('query_mut', () => {
 })
 
 test('query_entity', () => {
-    const w = World.default();
+    const w = new World();
     w.spawn([new A()]);
     w.spawn([new A()]);
     w.spawn([new A()]);
@@ -155,7 +155,7 @@ test('query_entity', () => {
 })
 
 test('query_entity_ref', () => {
-    const w = World.default();
+    const w = new World();
     w.spawn([new A()]);
     w.spawn([new A()]);
     w.spawn([new A()]);
@@ -169,7 +169,7 @@ test('query_entity_ref', () => {
 })
 
 test('query', () => {
-    const w = World.default();
+    const w = new World();
 
     w.spawn([new A(), new B()])
     w.spawn([new A('second a'), new B('second b')])
@@ -188,7 +188,7 @@ test('query', () => {
 })
 
 test('query_with', () => {
-    const w = World.default();
+    const w = new World();
     w.register_component(A)
     w.register_component(B)
     w.register_component(C)
@@ -214,7 +214,7 @@ test('query_with', () => {
 })
 
 test('query_without', () => {
-    const w = World.default();
+    const w = new World();
     w.spawn([new A('with_b'), new B()]);
     w.spawn([new A('with_b'), new B()]);
     w.spawn([new A('without_b')]);
@@ -249,7 +249,7 @@ test('query_without', () => {
 })
 
 test('query_with_without', () => {
-    const w = World.default();
+    const w = new World();
     w.spawn([new A('lonely a')]);
     w.spawn([new A('lonely a')]);
     w.spawn([new B()])
@@ -266,7 +266,7 @@ test('query_with_without', () => {
 })
 
 test('query_maybe', () => {
-    const w = World.default();
+    const w = new World();
     w.spawn([new A()])
     w.spawn([new A()])
     w.spawn([new A(), new B()])
@@ -287,7 +287,7 @@ test('query_maybe', () => {
 })
 
 test('query_or', () => {
-    const w = World.default();
+    const w = new World();
 
     w.spawn([new A(), new B(), new C()]);
     w.spawn([new A(), new B()]);
@@ -299,44 +299,56 @@ test('query_or', () => {
 })
 
 test('query_added', () => {
-    const w = World.new();
+    const w = new World();
 
-    let q = w.query_filtered([A], [Added(A)])
-    w.spawn([new A(), new B(), new C()])
-    w.spawn([new A(), new B(), new C()])
-    w.spawn([new A(), new B(), new C()])
+    let q_normal = w.query([A])
+    let q_added = w.query_filtered([A], [Added(A)])
 
-    assert(q.iter().count() === 3)
+    const b = () => [new A(), new B(), new C()]
+
+    w.spawn(b())
+    w.spawn(b())
+    w.spawn(b())
+
+    w.clear_trackers();
+
+    w.spawn(b())
+    w.spawn(b())
+    w.spawn(b())
+
+    assert(q_added.iter().count() === 3)
+    assert(q_normal.iter().count() === 6)
 
     w.clear_trackers();
 
-    w.spawn([new A(), new B(), new C()])
-    w.spawn([new A(), new B(), new C()])
-    w.spawn([new A(), new B(), new C()])
-
-    assert(q.iter().count() === 3)
-
-    w.clear_trackers();
-    assert(q.iter().count() === 0)
+    assert(q_added.iter().count() === 0);
+    assert(q_normal.iter().count() === 6)
 })
 
+
 test('changed', () => {
-    const w = World.new();
+    const w = new World();
 
-    let q = w.query_filtered([Write(A)], [Changed(A)])
-    w.spawn([new A(), new B(), new C()])
-    w.spawn([new A(), new B(), new C()])
-    w.spawn([new A(), new B(), new C()])
+    let q_normal = w.query([A])
+    let q_added = w.query_filtered([A], [Changed(A)])
 
-    assert(q.iter().count() === 3);
+    const b = () => [new A(), new B(), new C()]
 
-    w.clear_trackers()
-    assert(q.iter().count() === 0);
-    w.spawn([new A(), new B(), new C()])
-    w.spawn([new A(), new B(), new C()])
-    w.spawn([new A(), new B(), new C()])
+    w.spawn(b())
+    w.spawn(b())
+    w.spawn(b())
 
     w.clear_trackers();
 
-    w.spawn([new A(), new B(), new C()])
+    w.spawn(b())
+    w.spawn(b())
+    w.spawn(b())
+
+    assert(q_added.iter().count() === 3)
+    assert(q_normal.iter().count() === 6)
+
+    w.clear_trackers();
+
+    assert(q_added.iter().count() === 0);
+    assert(q_normal.iter().count() === 6)
 })

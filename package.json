@@ -22,8 +22,8 @@
   "dependencies": {
     "fixed-bit-set": "^1.1.0",
     "joshkaposh-graph": "^1.0.16",
-    "joshkaposh-heap": "^1.2.0",
-    "joshkaposh-index-map": "^1.0.5",
+    "joshkaposh-heap": "^1.2.1",
+    "joshkaposh-index-map": "^1.0.9",
     "joshkaposh-iterator": "^1.1.11",
     "joshkaposh-option": "^1.0.2",
     "uuid": "^9.0.1"

@@ -2,8 +2,9 @@ import { iter, item, done, Iterator, ExactSizeIterator } from "joshkaposh-iterat
 import { Event, EventInstance, Events, EventCursor } from ".";
 import { u32 } from "../../Intrinsics";
 import { is_some, Option } from "joshkaposh-option";
+import { Instance } from "../../util";
 
-export class EventIterator<E extends Event> extends ExactSizeIterator<InstanceType<E>> {
+export class EventIterator<E extends Event> extends ExactSizeIterator<Instance<E>> {
     #iter: EventIteratorWithId<E>;
 
     constructor(it: EventIteratorWithId<E>) {
@@ -11,12 +12,12 @@ export class EventIterator<E extends Event> extends ExactSizeIterator<InstanceTy
         this.#iter = it;
     }
 
-    into_iter(): ExactSizeIterator<InstanceType<E>> {
+    into_iter(): ExactSizeIterator<Instance<E>> {
         this.#iter.into_iter();
         return this;
     }
 
-    next(): IteratorResult<InstanceType<E>, any> {
+    next(): IteratorResult<Instance<E>, any> {
         const n = this.#iter.next();
         return n.done ? done() : item(n.value[0]);
     }
@@ -34,7 +35,7 @@ export class EventIterator<E extends Event> extends ExactSizeIterator<InstanceTy
         return is_some(l) ? l[0] : undefined
     }
 
-    nth(n: number): IteratorResult<InstanceType<E>> {
+    nth(n: number): IteratorResult<Instance<E>> {
         const el = this.#iter.nth(n);
         return el.done ? done() : item(el.value[0]);
     }
@@ -44,7 +45,7 @@ export class EventIterator<E extends Event> extends ExactSizeIterator<InstanceTy
     }
 }
 
-export class EventIteratorWithId<E extends Event> extends ExactSizeIterator<[InstanceType<E>, number]> {
+export class EventIteratorWithId<E extends Event> extends ExactSizeIterator<[Instance<E>, number]> {
     #reader: EventCursor<E>
     #chain: Iterator<EventInstance<E>>;
     #unread: number;
@@ -69,16 +70,16 @@ export class EventIteratorWithId<E extends Event> extends ExactSizeIterator<[Ins
         return new EventIterator(this);
     }
 
-    into_iter(): ExactSizeIterator<[InstanceType<E>, number]> {
+    into_iter(): ExactSizeIterator<[Instance<E>, number]> {
         this.#chain.into_iter();
         return this;
     }
 
-    next(): IteratorResult<[InstanceType<E>, number]> {
+    next(): IteratorResult<[Instance<E>, number]> {
         const n = this.#chain.next();
 
         if (!n.done) {
-            const elt = [n.value.event, n.value.event_id] as [InstanceType<E>, number]
+            const elt = [n.value.event, n.value.event_id] as [Instance<E>, number]
             this.#reader.__last_event_count += 1;
             this.#unread -= 1;
             return item(elt);
@@ -90,7 +91,7 @@ export class EventIteratorWithId<E extends Event> extends ExactSizeIterator<[Ins
         return this.#chain.size_hint() as [number, number];
     }
 
-    last(): Option<[InstanceType<E>, number]> {
+    last(): Option<[Instance<E>, number]> {
         const n = this.#chain.last();
         if (!is_some(n)) {
             return
@@ -100,13 +101,13 @@ export class EventIteratorWithId<E extends Event> extends ExactSizeIterator<[Ins
         return [event, event_id];
     }
 
-    nth(n: number): IteratorResult<[InstanceType<E>, number]> {
+    nth(n: number): IteratorResult<[Instance<E>, number]> {
         const next = this.#chain.nth(n);
         if (!next.done) {
             const { event_id, event } = next.value;
             this.#reader.__last_event_count += n + 1;
             this.#unread -= n + 1;
-            return item<[InstanceType<E>, number]>([event, event_id])
+            return item<[Instance<E>, number]>([event, event_id])
         } else {
             this.#reader.__last_event_count += this.#unread;
             this.#unread = 0;

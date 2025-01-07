@@ -318,4 +318,7 @@ export class QueryState<D extends QueryData<any, any, any>, F extends QueryFilte
         }
     }
 
+
+    [Symbol.iterator]() {
+    }
 }

@@ -25,13 +25,9 @@ export class RemovedComponentEvents extends SystemParam<unit, RemovedComponentEv
     Item!: RemovedComponentEvents;
     #events_sets: SparseSet<ComponentId, Events<typeof RemovedComponentEntity>>;
 
-    constructor(event_sets: SparseSet<ComponentId, Events<typeof RemovedComponentEntity>>) {
+    constructor(event_sets: SparseSet<ComponentId, Events<typeof RemovedComponentEntity>> = new SparseSet()) {
         super();
         this.#events_sets = event_sets;
-    }
-
-    static default() {
-        return new RemovedComponentEvents(SparseSet.default());
     }
 
     update() {
@@ -50,7 +46,7 @@ export class RemovedComponentEvents extends SystemParam<unit, RemovedComponentEv
 
     send(component_id: ComponentId, entity: Entity) {
         this.#events_sets
-            .get_or_insert_with(component_id, () => Events.default(RemovedComponentEntity))
+            .get_or_insert_with(component_id, () => new Events(RemovedComponentEntity))
             .send(new RemovedComponentEntity(entity));
     }
 

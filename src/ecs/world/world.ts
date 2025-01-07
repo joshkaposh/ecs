@@ -15,10 +15,11 @@ import { UnsafeEntityCell } from "./unsafe-world-cell";
 import { CommandQueue } from "./command_queue";
 import { define_component } from "../define";
 import { IntoSystemTrait, RunSystemError, System, SystemInput } from "../system";
-import { unit } from "../../util";
+import { Instance, unit } from "../../util";
 import { u32 } from "../../Intrinsics";
 import { CHECK_TICK_THRESHOLD, TicksMut } from "../change_detection";
 import { Schedule, ScheduleLabel, Schedules } from "../schedule";
+import { Default } from "../default";
 
 export type WorldId = number;
 
@@ -61,19 +62,20 @@ export class World {
     #last_check_tick: Tick;
     #last_trigger_id: number;
     #command_queue: CommandQueue;
-    private constructor(
-        id: number,
-        entities: Entities,
-        components: Components,
-        archetypes: Archetypes,
-        storages: Storages,
-        bundles: Bundles,
-        removed_components: RemovedComponentEvents,
-        change_tick: number,
-        last_change_tick: Tick,
-        last_check_tick: Tick,
-        last_trigger_id: number,
-        command_queue: CommandQueue
+
+    constructor(
+        id: number = 0,
+        entities: Entities = new Entities(),
+        components: Components = new Components(),
+        archetypes: Archetypes = new Archetypes(),
+        storages: Storages = new Storages(),
+        bundles: Bundles = new Bundles(),
+        removed_components: RemovedComponentEvents = new RemovedComponentEvents(),
+        change_tick: number = 0,
+        last_change_tick: Tick = new Tick(0),
+        last_check_tick: Tick = new Tick(0),
+        last_trigger_id: number = 0,
+        command_queue: CommandQueue = new CommandQueue()
     ) {
         this.#id = id;
         this.#entities = entities;
@@ -87,28 +89,10 @@ export class World {
         this.#last_check_tick = last_check_tick;
         this.#last_trigger_id = last_trigger_id;
         this.#command_queue = command_queue;
-    }
 
-    static new() {
-        return this.default();
-    }
 
-    static default() {
-        const world = new World(0,
-            new Entities(),
-            Components.default(),
-            new Archetypes(),
-            Storages.default(),
-            new Bundles(),
-            RemovedComponentEvents.default(),
-            1,
-            new Tick(0),
-            new Tick(0),
-            0,
-            CommandQueue.default()
-        )
-        world.#bootstrap();
-        return world;
+        this.#bootstrap();
+
     }
 
     id() {
@@ -490,8 +474,8 @@ export class World {
         return this.send_event_batch(type, once(event))?.next().value
     }
 
-    send_event_default<E extends Event>(type: Events<E>, event: E & { default(): E }): Option<EventId> {
-        return this.send_event(type, event.default())
+    send_event_default<E extends Event>(type: Events<E>, event: E): Option<EventId> {
+        return this.send_event(type, new event())
     }
 
     send_event_batch<E extends Event>(type: Events<E>, events: Iterable<E>): SendBatchIds<E> {

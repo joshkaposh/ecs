@@ -193,67 +193,6 @@ class RefComponent<T extends Component, R extends Ref<T>> extends WorldQuery<Ins
     }
 }
 
-type OptionFetch<T extends WorldQuery<any, any, any>> = {
-    fetch: T['__fetch'];
-    matches: boolean;
-}
-
-class OptionComponent<T extends Component> extends WorldQuery<Option<InstanceType<T>>, OptionFetch<WorldQuery<any, any, any>>, ComponentId> {
-    #T: WorldQuery<any, any, any>
-    IS_DENSE: boolean;
-    constructor(component: Component) {
-        super()
-        this.#T = new ReadComponent(component);
-        this.IS_DENSE = this.#T.IS_DENSE
-
-    }
-
-    init_fetch(world: World, state: any, last_run: Tick, this_run: Tick): any {
-        return {
-            fetch: this.#T.init_fetch(world, state, last_run, this_run),
-            matches: false
-        };
-    }
-
-    set_archetype(fetch: any, state: any, archetype: Archetype, table: Table): void {
-        fetch.matches = this.#T.matches_component_set(state, id => archetype.contains(id));
-        if (fetch.matches) {
-            this.#T.set_archetype(fetch.fetch, state, archetype, table)
-        }
-    }
-
-    set_table(fetch: any, state: any, table: Table): void {
-        fetch.matches = this.#T.matches_component_set(state, id => table.has_column(id))
-        if (fetch.matches) {
-            this.#T.set_table(fetch.fetch, state, table)
-        }
-    }
-
-    fetch(fetch: any, entity: Entity, table_row: TableRow) {
-        if (fetch.matches) {
-            return this.#T.fetch(fetch.fetch, entity, table_row)
-        }
-    }
-
-    update_component_access(state: number, access: FilteredAccess<ComponentId>): void {
-        const intermediate = access.clone();
-        this.#T.update_component_access(state, intermediate);
-        access.extend_access(intermediate);
-    }
-
-    init_state(world: World) {
-        return this.#T.init_state(world);
-    }
-
-    get_state(components: Components): Option<number> {
-        return this.#T.get_state(components)
-    }
-
-    matches_component_set(_state: any, _set_contains_id: (component_id: ComponentId) => boolean): boolean {
-        return true
-    }
-}
-
 type ReadFetch<T extends Component> = {
     components: StorageSwitch<T, Option<InstanceType<T>>, ComponentSparseSet>;
 };
@@ -268,6 +207,7 @@ class ReadComponent<T extends Component> extends WorldQuery<DeepReadonly<T>, Rea
     }
 
     init_fetch(world: World, component_id: number, _last_run: Tick, _this_run: Tick) {
+
         const fetch = {
             components: StorageSwitch.new(this.#ty, () => undefined, () => world.storages().sparse_sets.get(component_id)!)
         } as ReadFetch<T>
@@ -287,6 +227,13 @@ class ReadComponent<T extends Component> extends WorldQuery<DeepReadonly<T>, Rea
     }
 
     fetch(fetch: ReadFetch<T>, entity: Entity, table_row: number): InstanceType<T> {
+        const c = fetch.components.extract(
+            (table) => {
+                return table![table_row]
+            },
+            (sparse_set) => sparse_set.get(entity)
+        ) as InstanceType<T>
+
         return $readonly(fetch.components.extract(
             (table) => {
                 return table![table_row]
@@ -396,6 +343,68 @@ class WriteComponent<T extends Component> extends WorldQuery<InstanceType<T>, Wr
 
     matches_component_set(state: number, set_contains_id: (component_id: ComponentId) => boolean): boolean {
         return set_contains_id(state);
+    }
+}
+
+type OptionFetch<T extends WorldQuery<any, any, any>> = {
+    fetch: T['__fetch'];
+    matches: boolean;
+}
+
+class OptionComponent<T extends Component> extends WorldQuery<Option<InstanceType<T>>, OptionFetch<WorldQuery<any, any, any>>, ComponentId> {
+    #T: WorldQuery<any, any, any>
+    IS_DENSE: boolean;
+    constructor(component: Component) {
+        super()
+        this.#T = new ReadComponent(component);
+        this.IS_DENSE = this.#T.IS_DENSE
+
+    }
+
+    init_fetch(world: World, state: any, last_run: Tick, this_run: Tick): any {
+        return {
+            fetch: this.#T.init_fetch(world, state, last_run, this_run),
+            matches: false
+        };
+
+    }
+
+    set_archetype(fetch: any, state: any, archetype: Archetype, table: Table): void {
+        fetch.matches = this.#T.matches_component_set(state, id => archetype.contains(id));
+        if (fetch.matches) {
+            this.#T.set_archetype(fetch.fetch, state, archetype, table)
+        }
+    }
+
+    set_table(fetch: any, state: any, table: Table): void {
+        fetch.matches = this.#T.matches_component_set(state, id => table.has_column(id))
+        if (fetch.matches) {
+            this.#T.set_table(fetch.fetch, state, table)
+        }
+    }
+
+    fetch(fetch: any, entity: Entity, table_row: TableRow) {
+        if (fetch.matches) {
+            return this.#T.fetch(fetch.fetch, entity, table_row)
+        }
+    }
+
+    update_component_access(state: number, access: FilteredAccess<ComponentId>): void {
+        const intermediate = access.clone();
+        this.#T.update_component_access(state, intermediate);
+        access.extend_access(intermediate);
+    }
+
+    init_state(world: World) {
+        return this.#T.init_state(world);
+    }
+
+    get_state(components: Components): Option<number> {
+        return this.#T.get_state(components)
+    }
+
+    matches_component_set(_state: any, _set_contains_id: (component_id: ComponentId) => boolean): boolean {
+        return true
     }
 }
 

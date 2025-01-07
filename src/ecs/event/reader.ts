@@ -1,12 +1,14 @@
 import { Res } from "../change_detection";
-import { Event, EventIterator, EventIteratorWithId, Events, ManualEventReader } from "./event";
+import { Event } from "./base";
+import { Events } from "./collections";
+import { EventCursor } from "./event_cursor";
+import { EventIterator, EventIteratorWithId } from "./iterators";
 
 export class EventReader<E extends Event> {
-    #reader: ManualEventReader<E>;
-    // @ts-expect-error
+    #reader: EventCursor<E>;
     #events: Res<Events<E>>;
 
-    constructor(reader: ManualEventReader<E>, events: Res<Events<E>>) {
+    constructor(reader: EventCursor<E>, events: Res<Events<E>>) {
         this.#reader = reader;
         this.#events = events;
     }

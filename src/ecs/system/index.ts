@@ -5,7 +5,7 @@ import { System, SystemMeta } from '../system'
 import { World } from '../world';
 import { ComponentId, is_component, Tick } from '../component';
 import { define_type } from '../define';
-import { assert } from 'joshkaposh-iterator/src/util';
+import { assert, Prettify } from 'joshkaposh-iterator/src/util';
 import { SystemState } from './function-system';
 import { Option } from 'joshkaposh-option';
 import { SystemParam } from './system-param';
@@ -82,8 +82,27 @@ export function define_params<P extends readonly any[]>(...params: P) {
     return new ParamImpl(params);
 }
 
-export function define_system<F extends (...args: any[]) => void, P extends Parameters<F>>(fn: F, fallible: boolean, ...params: P): System<any, any> {
-    class SystemImpl extends System<any, any> {
+type SysBase<T extends (...arngs: any[]) => any> = (ReturnType<T> extends boolean ? { condition: T } : { system: T }) & {
+    params?: Parameters<T>;
+}
+
+export type SystemDefinition<T extends (...args: any[]) => any> = Parameters<T> extends readonly [] ? SysBase<T> : Required<SysBase<T>>;
+export function define_system<const F extends (...args: any[]) => any>(
+    config: SystemDefinition<F>
+): System<any, any> {
+
+    const fallible = 'condition' in config;
+    let system
+    const params = 'params' in config ? config.params : [];
+
+    if (fallible) {
+        system = config.condition
+    } else {
+        // @ts-expect-error
+        system = config.system;
+    }
+
+    class SystemImpl<const P extends Parameters<F>> extends System<any, any> {
         #fn: F;
         #name: string;
         #params_initial: P;
@@ -114,9 +133,12 @@ export function define_system<F extends (...args: any[]) => void, P extends Para
         }
 
         name(): string {
-            return this.#fn.name
+            return this.#name
         }
 
+        /**
+         * Useful if system passed was an anonymous function and you want a better name for it.
+         */
         set_name(new_name: string) {
             this.#name = new_name;
         }
@@ -127,6 +149,8 @@ export function define_system<F extends (...args: any[]) => void, P extends Para
             } else {
                 this.#state = SystemState.new(world, this.#params)
             }
+            console.log('System initialize', this.#state, this.#params);
+
             this.#system_meta.last_run = world.change_tick().relative_to(Tick.MAX);
         }
 
@@ -143,7 +167,6 @@ export function define_system<F extends (...args: any[]) => void, P extends Para
         }
 
         check_change_tick(change_tick: Tick): void {
-
         }
 
         component_access(): Access<ComponentId> {
@@ -168,6 +191,7 @@ export function define_system<F extends (...args: any[]) => void, P extends Para
 
         // @ts-expect-error
         run(input: SystemIn<System<any, any>>, world: World) {
+            console.log('SystemImpl run');
             return this.run_unsafe(input, world);
         }
 
@@ -178,6 +202,7 @@ export function define_system<F extends (...args: any[]) => void, P extends Para
                 throw new Error(`System's state was not found. Did you forget to initialize this system before running it?`)
             }
             const param_state = this.#state.get(world);
+            console.log('SystemImpl run_unsafe', input, param_state);
             return this.#fn(param_state)
         }
 
@@ -196,5 +221,5 @@ export function define_system<F extends (...args: any[]) => void, P extends Para
     }
 
     define_type(SystemImpl)
-    return new SystemImpl(fn, ...params);
+    return new SystemImpl(system, ...params as Parameters<F>);
 }
