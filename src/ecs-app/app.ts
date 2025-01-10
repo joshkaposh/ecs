@@ -1,18 +1,19 @@
 import { ErrorExt, Option, Result, is_error, is_some } from "joshkaposh-option";
 import { Component, Resource } from "../ecs/component";
-import { Plugin, Plugins } from "../ecs/plugin";
+import { PlaceholderPlugin, Plugin, Plugins, PluginsState } from "./plugin";
 import { Schedule, ScheduleBuildSettings, ScheduleLabel, Schedules } from "../ecs/schedule";
 import { World } from "../ecs/world";
-import { Event } from "../ecs/event";
-import { IntoSytemSetConfigs } from "../ecs/schedule/config";
+import { Event, EventCursor, Events, internal_get_event } from "../ecs/event";
+import { IntoSystemConfigs, IntoSystemSetConfigs } from "../ecs/schedule/config";
 import { SubApp, SubApps } from "./sub_app";
+import { $First, $Main, MainSchedulePlugin } from "./main_schedule";
 
 type States = any;
 
 export class AppExit {
     #ty: 0 | 1;
     #err?: number;
-    private constructor(ty: 0 | 1, err?: number) {
+    constructor(ty: 0 | 1, err?: number) {
         this.#ty = ty;
         this.#err = err;
     }
@@ -48,22 +49,12 @@ export class AppExit {
 
 export type AppLabel = string;
 
-type AppError = { plugin_name: string }
-const AppError = {
+export type AppError = { plugin_name: string }
+export const AppError = {
     DuplicatePlugin(plugin_name: string) {
-        return {
-            plugin_name
-        } as AppError
+        return new ErrorExt({ plugin_name: plugin_name })
     }
 }
-
-export type PluginsState = 0 | 1 | 2 | 3;
-export const PluginsState = {
-    Adding: 0,
-    Ready: 1,
-    Finished: 2,
-    Cleaned: 3
-} as const
 
 function run_once(app: App): AppExit {
     app.finish();
@@ -88,22 +79,29 @@ export class App {
         this.#runner = runner;
     }
 
+    get __sub_apps() {
+        return this.#sub_apps;
+    }
+
+    set __sub_apps(sub_apps: SubApps) {
+        this.#sub_apps = sub_apps;
+    }
+
     static new() {
         return App.default();
     }
 
     static default() {
         const app = App.empty();
-        // app.#sub_apps.main.update_schedule = Main.intern();
+        app.#sub_apps.main().update_schedule = $Main
 
-        // app.add_plugins(MainSchedulePlugin);
-        // app.add_systems(First,
+        app.add_plugins(MainSchedulePlugin);
+        // app.add_systems($First,
         //     event_update_system
         //         .run_if(event_update_condition)
         // )
 
-        // app.add_event(AppExit);
-
+        app.add_event(AppExit);
         return app;
     }
 
@@ -128,7 +126,19 @@ export class App {
         }
 
         const runner = this.#runner;
-        runner(this)
+        this.#runner = run_once;
+        const app = App.empty();
+
+        const temp_apps = this.#sub_apps;
+        this.#sub_apps = app.#sub_apps;
+        app.#sub_apps = temp_apps;
+
+        const temp_runner = this.#runner;
+        this.#runner = app.#runner;
+        app.#runner = temp_runner;
+
+
+        (runner)(app);
     }
 
     set_runner(runner: (app: App) => AppExit) {
@@ -137,23 +147,23 @@ export class App {
     }
 
     plugins_state() {
-        const plugins_state = this.main().plugins_state;
-        let overall_plugins_state: PluginsState;
-        if (plugins_state === PluginsState.Adding) {
+        let overall_plugins_state = this.main().__plugins_state;
+        if (PluginsState.Adding === overall_plugins_state) {
+            const main = this.main();
             let state = PluginsState.Ready as PluginsState;
-            const plugins = this.main().plugin_registry;
-            this.main().plugin_registry = undefined;
-            for (const plugin of plugins) {
-                if (plugin.ready(this)) {
-                    state = PluginsState.Adding
+            const plugins = main.__plugin_registry;
+            main.__plugin_registry = [];
+            for (let i = 0; i < plugins.length; i++) {
+                if (!plugins[i].ready(this)) {
+                    state = PluginsState.Adding;
+                    break;
                 }
-            }
-            this.main().plugin_registry = plugins;
-            overall_plugins_state = state;
-        } else {
-            overall_plugins_state = plugins_state;
-        }
 
+            }
+
+            this.main().__plugin_registry = plugins;
+            overall_plugins_state = state;
+        }
         this.#sub_apps.iter().skip(1).for_each(s => {
             overall_plugins_state = Math.min(overall_plugins_state, s.plugins_state()) as PluginsState;
         })
@@ -162,35 +172,38 @@ export class App {
     }
 
     finish() {
-        const plugins = this.main().plugin_registry;
-        for (const plugin of plugins) {
-            plugin.finish(this);
+        const main = this.main();
+        const plugins = main.__plugin_registry;
+
+        main.__plugin_registry = [];
+        for (let i = 0; i < plugins.length; i++) {
+            plugins[i].finish(this);
         }
 
-        const main = this.main();
-        main.plugin_registry = plugins;
-        main.plugins_state = PluginsState.Finished;
+        main.__plugin_registry = plugins;
+        main.__plugins_state = PluginsState.Finished;
         this.#sub_apps.iter().skip(1).for_each(s => s.finish())
     }
 
     cleanup() {
-        const plugins = this.main().plugin_registry;
-        for (const plugin of plugins) {
-            plugin.cleanup(this)
-        };
-
         const main = this.main();
-        main.plugin_registry = plugins;
-        main.plugins_state = PluginsState.Cleaned;
-        this.#sub_apps.iter().skip(1).for_each(s => s.cleanup(this))
+        const plugins = main.__plugin_registry;
+        main.__plugin_registry = [];
+        for (let i = 0; i < plugins.length; i++) {
+            plugins[i].cleanup(this);
+        }
+
+        main.__plugin_registry = plugins;
+        main.__plugins_state = PluginsState.Cleaned;
+        this.#sub_apps.iter().skip(1).for_each(s => s.cleanup())
     }
 
     is_building_plugins() {
         return this.#sub_apps.iter().any(s => s.is_building_plugins())
     }
 
-    add_systems(schedule: ScheduleLabel, systems: IntoSystemConfigs<any>) {
-        this.main().add_systems(schedule, systems);
+    add_systems(schedule: ScheduleLabel, ...systems: IntoSystemConfigs<any>[]) {
+        this.main().add_systems(schedule, ...systems);
         return this;
     }
 
@@ -198,7 +211,7 @@ export class App {
         return this.main().register_system(system);
     }
 
-    configure_sets(schedule: ScheduleLabel, sets: IntoSytemSetConfigs) {
+    configure_sets(schedule: ScheduleLabel, sets: IntoSystemSetConfigs<any>) {
         this.main().configure_sets(schedule, sets);
         return this;
     }
@@ -206,6 +219,14 @@ export class App {
     add_event(type: Event) {
         this.main().add_event(type);
         return this;
+    }
+
+    get_event<E extends Event>(type: E): Option<Events<E>> {
+        return this.world().get_resource(internal_get_event(type)) as Events<E>;
+    }
+
+    event<E extends Event>(type: E) {
+        return this.world().resource(internal_get_event(type)) as Events<E>;
     }
 
     insert_resource(resource: Resource) {
@@ -218,14 +239,14 @@ export class App {
         return this;
     }
 
-    add_boxed_plugin(plugin: Plugin): Result<this, ErrorExt<AppError>> {
-        if (plugin.is_unique() && this.main().plugin_names.contains(plugin.name())) {
+    add_plugin(plugin: Plugin): Result<this, ErrorExt<AppError>> {
+        if (plugin.is_unique() && this.main().__plugin_names.has(plugin.name())) {
             return new ErrorExt(AppError.DuplicatePlugin(plugin.name()))
         }
 
-        const index = this.main().plugin_registry.len();
-        this.main().plugin_registry.push(PlaceholderPlugin);
-        this.main().plugin_building_depth += 1;
+        const index = this.main().__plugin_registry.length;
+        this.main().__plugin_registry.push(new PlaceholderPlugin());
+        this.main().__plugin_build_depth += 1;
 
         let result;
         try {
@@ -234,25 +255,28 @@ export class App {
             result = error
         }
 
-        this.main().plugin_names.insert(plugin.name());
-        this.main().plugin_build_depth -= 1;
+        this.main().__plugin_names.add(plugin.name());
+        this.main().__plugin_build_depth -= 1;
 
 
         if (result) {
             throw result;
         }
 
-        this.main().plugin_registry[index] = plugin;
+        this.main().__plugin_registry[index] = plugin;
         return this;
     }
 
     add_plugins(plugins: Plugins) {
         const s = this.plugins_state();
-        if (s === PluginsState.Cleaned || s === PluginsState.Finished) {
+        if (PluginsState.Cleaned === s ||
+            PluginsState.Finished === s
+        ) {
             throw new Error('Plugins cannot be added after App.cleanup() or App.finish() has been called')
         }
 
-        plugins.add_to_app(this);
+        // @ts-expect-error
+        new plugins().add_to_app(this);
         return this;
     }
 
@@ -291,15 +315,15 @@ export class App {
     }
 
     get_sub_app(label: AppLabel) {
-        return this.#sub_apps.sub_apps().get(label);
+        return this.#sub_apps.sub_apps.get(label);
     }
 
     insert_sub_app(label: AppLabel, app: SubApp) {
-        return this.#sub_apps.sub_apps().set(label, app);
+        return this.#sub_apps.sub_apps.set(label, app);
     }
 
     remove_sub_app(label: AppLabel) {
-        const subapps = this.#sub_apps.sub_apps();
+        const subapps = this.#sub_apps.sub_apps;
         if (subapps.has(label)) {
             const app = subapps.get(label);
             subapps.delete(label);
@@ -313,13 +337,13 @@ export class App {
         this.#sub_apps.update_sub_app_by_label(label);
     }
 
-    add_schedule(schedule: Schedule) {
-        this.main().add_schedule(schedule);
+    add_schedule(label: Schedule) {
+        this.main().add_schedule(label);
         return this;
     }
 
-    init_schedule(schedule: Schedule) {
-        this.main().init_schedule(schedule);
+    init_schedule(label: ScheduleLabel) {
+        this.main().init_schedule(label);
         return this;
     }
 
@@ -338,9 +362,12 @@ export class App {
     }
 
     should_exit() {
-        const reader = EventCursor.default();
-        const _events = this.world().get_resource(AppExitEvents);
+        const reader = new EventCursor()
+        const _events = this.world().get_resource(internal_get_event(AppExit));
+
         if (!_events) {
+            console.log('Exiting early as AppExit events does not exist');
+
             return
         }
         const events = reader.read(_events);

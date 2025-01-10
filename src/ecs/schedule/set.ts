@@ -2,12 +2,32 @@ import { Option } from "joshkaposh-option";
 import { ProcessNodeConfig, ScheduleGraph } from "./schedule";
 import { NodeConfig } from "./config";
 import { NodeId } from "./graph";
+import { TypeId } from "..";
 
-export interface SystemSet extends ProcessNodeConfig {
-    system_type(): Option<UUID>;
+// export interface SystemSet extends ProcessNodeConfig {
+//     system_type(): Option<UUID>;
 
-    is_anonymous(): boolean;
-};
+//     is_anonymous(): boolean;
+// };
+
+export class SystemSet implements ProcessNodeConfig {
+    process_config(schedule_graph: ScheduleGraph, config: NodeConfig<ProcessNodeConfig>): NodeId {
+        return config.process_config(schedule_graph);
+    }
+
+    /**
+     * Returns UUID if this system set is a SystemTypeSet
+     */
+    system_type(): Option<UUID> {
+        return
+    };
+
+    is_anonymous() {
+        return false;
+    }
+}
+
+
 
 
 /// A [`SystemSet`] grouping instances of the same function.
@@ -19,8 +39,8 @@ export interface SystemSet extends ProcessNodeConfig {
 
 /// - You cannot order something relative to one if it has more than one member.
 export class SystemTypeSet<T> implements SystemSet {
-    #phantom_data: any;
-    constructor(phantom_data: any) {
+    #phantom_data: TypeId;
+    constructor(phantom_data: TypeId) {
         this.#phantom_data = phantom_data;
     }
 
@@ -37,7 +57,7 @@ export class SystemTypeSet<T> implements SystemSet {
     }
 
     system_type(): Option<UUID> {
-        return
+        return this.#phantom_data.type_id;
     }
 }
 
@@ -65,4 +85,3 @@ export class AnonymousSet implements SystemSet {
 export interface IntoSystemSet<M extends SystemSet> {
     into_system_set(): M;
 }
-

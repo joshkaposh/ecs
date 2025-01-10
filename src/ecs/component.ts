@@ -4,19 +4,17 @@ import { StorageType, Storages } from "./storage";
 import { World } from "./world";
 import { u32 } from "../Intrinsics";
 import { MAX_CHANGE_AGE } from "./change_detection";
+import { Class, TypeId } from "../define";
 
-export type Class<Static = {}, Inst = {}> = (new (...args: any[]) => Inst) & Static;
-
-export type TypeId = { readonly type_id: UUID }
 export type ComponentMetadata = TypeId & { readonly storage_type: StorageType };
 export type ComponentId = number;
 export type ComponentType<T extends new (...args: any[]) => any> = T extends Component ? T : never;
-export type Component = (new (...args: any[]) => any) & ComponentMetadata;
+export type Component<T = any> = (new (...args: any[]) => T) & ComponentMetadata;
 export type UninitComonent<T = any> = (new (...args: any[]) => T)
 
 export type ResourceId = number;
-export type ResouceMetadata<R extends new (...args: any[]) => any> = { from_world(world: World): InstanceType<R> };
-export type Resource<R extends Component = Component> = R extends Component ? R & Component & ResouceMetadata<R> : never;
+export type ResourceMetadata<R extends new (...args: any[]) => any> = { from_world(world: World): InstanceType<R> };
+export type Resource<R = Component> = R extends Class ? R & ComponentMetadata & ResourceMetadata<R> : never;
 
 export function is_component(ty: any): ty is Component {
     return ty && typeof ty === 'object' && ty.type_id

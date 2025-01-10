@@ -1,7 +1,11 @@
 import { v4 } from "uuid";
 import { is_some } from "joshkaposh-option";
-import { StorageType } from "./storage";
-import { Class, Component, ComponentMetadata, TypeId, World } from ".";
+import { StorageType } from "./ecs/storage";
+import { Component, ComponentMetadata, Resource, ResourceMetadata } from "./ecs/component";
+import { World } from "./ecs/world/world";
+// import { Class, Component, ComponentMetadata, ResourceMetadata, Resource, TypeId, World } from ".";
+export type Class<Static = {}, Inst = {}> = (new (...args: any[]) => Inst) & Static;
+export type TypeId = { readonly type_id: UUID }
 
 export function define_type<T extends Record<PropertyKey, any>>(type: T & {
     type_id?: UUID;
@@ -26,13 +30,15 @@ function assert_component<T extends Component>(ty: Partial<ComponentMetadata>): 
     return is_some(ty.type_id);
 }
 
-export function define_resource<T>(ty: Class<T> & Partial<ComponentMetadata> & { from_world?(world: World): InstanceType<typeof ty> }): void {
+export function define_resource<R extends Class>(ty: R & Partial<ComponentMetadata> & Partial<ResourceMetadata<R>> & {}): Resource<R> {
     define_component(ty, StorageType.SparseSet);
-    ty.from_world = (_world: World) => {
+    ty.from_world ??= (_world: World) => {
         return new ty();
     }
+
+    return ty as any
 }
 
 export function define_event() { }
 
-export { define_system } from './system'
+// export { define_system } from './system'

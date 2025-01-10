@@ -1,15 +1,15 @@
 import { Iterator, done, from_fn, iter, once } from "joshkaposh-iterator";
 import { assert, TODO } from "joshkaposh-iterator/src/util";
-import { Err, Option, Result, is_error, is_none, is_some, ErrorExt } from 'joshkaposh-option';
-import { Archetype, ArchetypeComponentId, ArchetypeGeneration, Archetypes } from "../archetype";
+import { Err, Option, Result, is_none, is_some, ErrorExt } from 'joshkaposh-option';
+import { Archetype, ArchetypeComponentId, Archetypes } from "../archetype";
 import { Component, ComponentId, ComponentInfo, Components, ComponentTicks, Resource, ResourceId, Tick, TypeId } from "../component";
 import { Storages } from "../storage";
-import { AllocAtWithoutReplacement, Entities, Entity, EntityLocation } from "../entity";
-import { Bundle, BundleInserter, Bundles, BundleSpawner, DynamicBundle } from "../bundle";
+import { AllocAtWithoutReplacement, Entities, Entity } from "../entity";
+import { Bundle, Bundles, BundleSpawner, DynamicBundle } from "../bundle";
 import { Query, QueryData, QueryEntityError, QueryFilter, QueryState, WorldQuery } from "../query";
 import { RemovedComponentEvents } from "../removal-detection";
 import { Event, EventId, Events, SendBatchIds } from "../event";
-import { EntityMut, EntityRef, EntityWorldMut } from './entity-ref'
+import { EntityRef, EntityWorldMut } from './entity-ref'
 import { SpawnBatchIter } from "./spawn-batch";
 import { UnsafeEntityCell } from "./unsafe-world-cell";
 import { CommandQueue } from "./command_queue";
@@ -19,7 +19,7 @@ import { Instance, unit } from "../../util";
 import { u32 } from "../../Intrinsics";
 import { CHECK_TICK_THRESHOLD, TicksMut } from "../change_detection";
 import { Schedule, ScheduleLabel, Schedules } from "../schedule";
-import { Default } from "../default";
+import { v4 } from "uuid";
 
 export type WorldId = number;
 
@@ -36,14 +36,27 @@ export const ON_REMOVE = 3;
 
 type ObserverId = ON_ADD | ON_INSERT | ON_REPLACE | ON_REMOVE;
 
-export class OnAdd { }
-export class OnInsert { }
-export class OnReplace { }
-export class OnRemove { }
-define_component(OnAdd);
-define_component(OnInsert);
-define_component(OnReplace);
-define_component(OnRemove);
+export class OnAdd {
+    static readonly type_id = v4() as UUID;
+    static readonly storage_type = 1;
+}
+export class OnInsert {
+    static readonly type_id = v4() as UUID;
+    static readonly storage_type = 1;
+}
+export class OnReplace {
+    static readonly type_id = v4() as UUID;
+    static readonly storage_type = 1;
+}
+export class OnRemove {
+    static readonly type_id = v4() as UUID;
+    static readonly storage_type = 1;
+}
+
+// define_component(OnAdd);
+// define_component(OnInsert);
+// define_component(OnReplace);
+// define_component(OnRemove);
 
 class TryRunScheduleError extends ErrorExt {
 
@@ -136,7 +149,7 @@ export class World {
     }
 
     // I: SystemInput, system: IntoSystem<I, O, M>
-    register_system<I extends any, O, M>(system: any, input: I) {
+    register_system<I extends any, O, M>(system: any) {
 
     }
 
@@ -337,7 +350,6 @@ export class World {
         return from_fn(() => { return done() })
     }
 
-
     trigger_on_add(archetype: Archetype, entity: Entity, archetype_after_insert: any) { }
     trigger_on_insert(archetype: Archetype, entity: Entity, archetype_after_insert: any) { }
     trigger_on_replace(archetype: Archetype, entity: Entity, archetype_after_insert: any) { }
@@ -370,7 +382,7 @@ export class World {
         return this.#storages.resources.get(id)?.is_present() ?? false;
     }
 
-    resource<R extends Resource>(resource: R): InstanceType<R> {
+    resource<R>(resource: R): Instance<R> {
         const res = this.get_resource(resource);
         if (!res) {
             throw new Error("Requested resource does not exist in the `World`. Did you forget to add it using `app.insert_resource` / `app.init_resource`? Resources are also implicitly added via `app.add_event and can be added by plugins.`")
@@ -378,7 +390,7 @@ export class World {
         return res;
     }
 
-    resource_mut<R extends Resource>(resource: R): InstanceType<R> {
+    resource_mut<R>(resource: R): Instance<R> {
         const res = this.get_resource_mut(resource);
         if (!res) {
             throw new Error("Requested resource does not exist in the `World`. Did you forget to add it using `app.insert_resource` / `app.init_resource`? Resources are also implicitly added via `app.add_event and can be added by plugins.`")
@@ -407,8 +419,8 @@ export class World {
         return component_id;
     }
 
-    get_resource<R extends Resource>(resource: R): Option<InstanceType<R>> {
-        const id = this.#components.resource_id(resource);
+    get_resource<R>(resource: R): Option<Instance<R>> {
+        const id = this.#components.get_resource_id(resource);
         if (!is_some(id)) {
             return
         }
@@ -416,7 +428,7 @@ export class World {
         return this.#storages.resources.get(id)?.get()
     }
 
-    get_resource_mut<R extends Resource>(resource: R): Option<InstanceType<R>> {
+    get_resource_mut<R>(resource: R): Option<Instance<R>> {
         const id = this.#components.resource_id(resource);
         if (is_none(id)) {
             return
@@ -584,6 +596,7 @@ export class World {
         if (!schedule) {
             return new TryRunScheduleError(label);
         }
+
         const value = scope(this, schedule);
         const old = this.resource_mut(Schedules)?.insert(schedule);
         if (is_some(old)) {
@@ -599,6 +612,11 @@ export class World {
         }
         return res;
     }
+
+    // add_systems(label: ScheduleLabel, ...systems: readonly System<any, any>[]): this {
+    //     this.resource(Schedules).get(label)!.add_systems(systems as any)
+    //     return this;
+    // }
 
     try_run_schedule(label: ScheduleLabel) {
         return this.try_schedule_scope(label, (world, sched) => sched.run(world))

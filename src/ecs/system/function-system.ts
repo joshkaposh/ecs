@@ -278,21 +278,26 @@ export class FunctionSystem<Marker, F extends SystemParamFunction<any>> {
     constructor(
         marker: Marker,
         func: F,
-        state: Option<FunctionSystemState<F['Param']>>,
-        system_meta: SystemMeta,
-        archetype_generation: ArchetypeGeneration,
+        state: Option<FunctionSystemState<F['Param']>> = undefined,
+        system_meta: SystemMeta = SystemMeta.new(func),
+        archetype_generation: ArchetypeGeneration = ArchetypeGeneration.initial(),
     ) {
         this.#func = func;
         this.#state = state;
         this.#system_meta = system_meta;
         this.#archetype_generation = archetype_generation;
         this.#marker = marker
-
     }
 
-    static new<Marker, F extends SystemParamFunction<any>>(marker: Marker, f: F) {
-        return new FunctionSystem(marker, f, undefined, SystemMeta.new(f), ArchetypeGeneration.initial())
-    }
+    // static new<Marker, F extends SystemParamFunction<any>>(marker: Marker, f: F) {
+    //     return new FunctionSystem(
+    //         marker,
+    //         f,
+    //         undefined,
+    //         SystemMeta.new(f),
+    //         ArchetypeGeneration.initial()
+    //     )
+    // }
 
     with_name(new_name: string) {
         this.#system_meta.set_name(new_name);
@@ -458,7 +463,7 @@ export abstract class SystemParamFunction<Marker> {
     into_system_set() {
         type Set = SystemTypeSet<FunctionSystem<any, SystemParamFunction<any>>>
 
-        return new SystemTypeSet(FunctionSystem.new(this.marker, this)) as Set
+        return new SystemTypeSet(new FunctionSystem(this.marker, this) as any) as Set
     }
 
 }

@@ -1,5 +1,6 @@
 import { test, expect } from 'vitest';
-import { World, Schedule, define_component, define_system } from '../../src/ecs'
+import { World, Schedule, define_system, set, Schedules } from '../../src/ecs'
+import { define_component } from '../../src/define';
 
 
 // function a() {
@@ -20,18 +21,21 @@ type True = IfNoArgs<() => any, { sys: 'a', params: never }, 'params'>;
 type True1 = IfNoArgs<typeof testfn, { condition: 'b', params: never }, 'params'>;
 type Args = IfNoArgs<(a: any) => any, { system: 'a1', params: [any] }, 'params'>
 
-function sys_a() { console.log('sys_a running!') }
 const sA = define_system({
-    system: sys_a
-})
+    system: () => console.log('system_a running!')
+}).set_name('system_a')
 
-function sys_b() {
-    console.log('sys_b running!');
-}
+const sB = define_system({ system: () => console.log('system_b running!') })
+    .set_name('system_b');
 
-const sB = define_system({
-    system: sys_b
-})
+
+const sC = define_system({ system: () => console.log('system_c running!') })
+    .set_name('system_c');
+
+
+const sD = define_system({ system: () => console.log('system_d running!') })
+    .set_name('system_d');
+
 
 type NeverArray<T> = T extends readonly [] ? true : false;
 
@@ -43,16 +47,11 @@ type Aparam = NeverArray<Parameters<typeof a>>;
 
 class Test { x = 5 }
 
-test('schedule_add_one', () => {
+test('schedule_add_systems', () => {
     const w = new World();
-    const s = new Schedule('Update');
+    w.add_schedule(new Schedule('Update'));
 
-    s.add_systems(sA);
-    s.run(w);
-    s.add_systems(sB);
-    s.run(w);
-    // for (let i = 0; i < 10; i++) {
-    //     s.run(w);
-    // }
+    w.resource(Schedules).add_systems('Update', sA, sB, sC, sD)
 
-}, 5000)
+    w.run_schedule('Update');
+}, 5000);

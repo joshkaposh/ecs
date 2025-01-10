@@ -5,7 +5,7 @@ import { Entity, EntityLocation } from "./entity";
 import { StorageType, Storages } from "./storage";
 import { SparseSets } from "./storage/sparse-set";
 import { Table, TableRow } from "./storage/table";
-import { entry, is_class_ctor } from "../util";
+import { entry, is_class_ctor, recursively_flatten_nested_arrays } from "../util";
 import { ArchetypeAfterBundleInsert, ON_ADD, TypeId, World } from '.';
 import { iter, Iterator } from 'joshkaposh-iterator';
 import { TODO } from 'joshkaposh-iterator/src/util';
@@ -75,21 +75,13 @@ function bundle_hash(ids: number[]): string {
 export function define_bundle(bundle: any[], world: World): Bundle & DynamicBundle {
     const bundles: (Bundle & DynamicBundle)[] = [];
 
-    const ids: ComponentId[] = [];
-    function rec(b: any[]) {
-        b.forEach(c => {
-            if (Array.isArray(c)) {
-                rec(c)
-            }
+    const ids: ComponentId[] = recursively_flatten_nested_arrays(bundle, (c) => {
+        bundles.push(BundleFromComponent(c));
 
-            bundles.push(BundleFromComponent(c));
+        c = is_class_ctor(c) ? c : c.constructor;
+        return world.register_component(c)
+    })
 
-            c = is_class_ctor(c) ? c : c.constructor;
-            const component_id = world.register_component(c as any);
-            ids.push(component_id);
-        })
-    }
-    rec(bundle);
     const hash = bundle_hash(ids);
     const name = hash;
 

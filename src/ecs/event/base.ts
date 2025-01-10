@@ -1,5 +1,6 @@
-export type Event<T = new () => any> = T extends new () => any ? T : never;
+import type { Class } from "../../util";
 
+export type Event = Class
 // @ts-ignore
 export type EventId<T = any> = number;
 

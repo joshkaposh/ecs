@@ -1,5 +1,5 @@
 import { assert, expect, test } from 'vitest'
-import { Events, EventCursor } from '../../src/ecs';
+import { Events, EventCursor, World } from '../../src/ecs';
 
 class TestEvent {
     constructor(public i: number) { }
@@ -154,4 +154,3 @@ test('event_reader_len_update', () => {
     assert(reader.len(events) === 3)
     events.update();
 })
-

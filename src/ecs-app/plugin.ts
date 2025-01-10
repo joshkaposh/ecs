@@ -1,5 +1,5 @@
 import { App } from "./app";
-import { is_error } from "joshkaposh-option";
+import { ErrorExt, is_error } from "joshkaposh-option";
 import { v4 } from "uuid";
 
 export abstract class Plugin {
@@ -30,17 +30,32 @@ export abstract class Plugin {
     }
 
     add_to_app(app: App) {
-        const err = app.add_plugins(this);
-        if (is_error(err)) {
+        const err = app.add_plugin(this);
+        if (err instanceof ErrorExt) {
             const plugin_name = err.get();
             throw new Error(`Error adding plugin ${plugin_name} : plugin was already added in application`)
-        }
+        };
+
     }
 }
+
+export type PluginsState = 0 | 1 | 2 | 3;
+export const PluginsState = {
+    Adding: 0,
+    Ready: 1,
+    Finished: 2,
+    Cleaned: 3
+} as const
+
+export class PlaceholderPlugin extends Plugin {
+    build() { }
+}
+
 
 export type Plugins = {
     add_to_app(app: App): void;
 }
+
 
 export function PluginFromFn(fn: (app: App) => void): typeof Plugin {
     class PluginFn extends Plugin {

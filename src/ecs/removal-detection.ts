@@ -64,7 +64,7 @@ export class RemovedComponentReader<T extends Component> {
     constructor(public reader: EventCursor<typeof RemovedComponentEntity>) { }
 
     static default<T extends Component>() {
-        return new RemovedComponentReader<T>(EventCursor.default())
+        return new RemovedComponentReader<T>(new EventCursor())
     }
 }
 export class RemovedComponents<T extends Component> extends SystemParam<any, any> {

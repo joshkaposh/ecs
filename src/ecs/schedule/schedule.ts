@@ -7,15 +7,16 @@ import { writeln } from "../../util";
 import { Component, Components, Resource, Tick, type ComponentId } from '../component'
 import { ExecutorKind, is_apply_deferred, SystemExecutor, SystemSchedule } from "../executor";
 import { DiGraph, UnGraph, Outgoing, Incoming, GraphInfo, DependencyKind, check_graph, index, Graph, Ambiguity } from './graph'
-import { IntoSystemConfigs, IntoSystemSetConfigs, NodeConfig, NodeConfigs, SystemConfig, SystemSetConfig } from "./config";
+import { Configs, IntoSystemConfigs, IntoSystemSetConfigs, NodeConfig, NodeConfigs, SystemConfig, SystemSetConfig } from "./config";
 import { define_resource } from "../define";
 import { StorageType } from "../storage";
-import { IntoSystemTrait, ScheduleSystem } from "../system";
+import { IntoSystemTrait, ScheduleSystem, set } from "../system";
 import { FixedBitSet } from "fixed-bit-set";
 import { NodeId } from "./graph/node";
 import { CheckGraphResults, simple_cycles_in_component } from "./graph";
 import { SingleThreadedExecutor } from "../executor/single-threaded";
 import { SystemSet } from "./set";
+import { v4 } from "uuid";
 // * --- TEMP Variables and Types ---
 
 // * ECS Types
@@ -45,9 +46,9 @@ export type ScheduleId = number;
 export class Schedules {
     #schedules: Map<ScheduleLabel, Schedule>;
     ignored_scheduling_ambiguities: Heap<ComponentId>;
-    static readonly type_id: UUID;
-    static readonly storage_type: StorageType;
-    static from_world: (world: World) => Schedules;
+    static readonly type_id: UUID = v4() as UUID;
+    static readonly storage_type = 1;
+    static from_world = (world: World) => new Schedules();
 
     constructor(schedules: Map<ScheduleLabel, Schedule> = new Map(), ignored_scheduling_ambiguities: Heap<ComponentId> = Heap.Min()) {
         this.#schedules = schedules;
@@ -139,13 +140,13 @@ export class Schedules {
         console.log(message);
     }
 
-    add_systems<M>(schedule: ScheduleLabel, systems: IntoSytemSetConfigs<M>) {
-        this.entry(schedule).add_systems(systems)
+    add_systems<M extends readonly any[]>(schedule: ScheduleLabel, ...systems: M) {
+        this.entry(schedule).add_systems(...systems)
         return this;
 
     }
 
-    configure_sets<M>(schedule: ScheduleLabel, sets: IntoSytemSetConfigs<M>) {
+    configure_sets<M>(schedule: ScheduleLabel, sets: IntoSystemSetConfigs<M>) {
         this.entry(schedule).configure_sets(sets);
         return this;
     }
@@ -155,8 +156,6 @@ export class Schedules {
         return this;
     }
 };
-define_resource(Schedules);
-
 
 const DefaultSchedule = 'DefaultSchedule'
 export class Schedule {
@@ -181,11 +180,17 @@ export class Schedule {
         return this.#label
     }
 
-    add_systems<M>(systems: IntoSystemConfigs<M>) {
-        // TODO: need `M` type
+    add_systems<M extends (System<any, any> | ReturnType<typeof set>)[]>(...systems: M) {
+        if (systems.length === 1) {
+            // @ts-expect-error
+            systems = systems[0];
+        } else {
+            systems = set(systems as any) as any;
+        }
+
+        // @ts-expect-error
         this.#graph.process_configs(systems.into_configs(), false)
         return this;
-
     }
 
     ignore_ambiguity<M1, M2, S1 extends IntoSystemSet<M1>, S2 extends IntoSystemSet<M2>>(a: S1, b: S2) {
@@ -554,7 +559,7 @@ export class ScheduleGraph {
 
     }
 
-    apply_collective_conditions<T extends ProcessNodeConfig>(configs: NodeConfigs<T>[], collective_conditions: Condition<any>[]) {
+    apply_collective_conditions<T extends ProcessNodeConfig>(configs: readonly NodeConfigs<T>[], collective_conditions: Condition<any>[]) {
         if (collective_conditions.length !== 0) {
             const [config] = configs;
             if (config) {
@@ -577,8 +582,10 @@ export class ScheduleGraph {
     process_configs<T extends ProcessNodeConfig>(configs: NodeConfigs<T>, collect_nodes: boolean): ProcessConfigsResult {
         if (configs instanceof NodeConfig) {
             return this.process_config(configs, collect_nodes);
-        } else {
+        } else if (configs instanceof Configs) {
+
             const { configs: _configs, collective_conditions, chained: _chained } = configs;
+
             this.apply_collective_conditions(_configs, collective_conditions as any);
 
             const ignored_deferred = _chained === Chain.YesIgnoreDeferred;
@@ -589,23 +596,22 @@ export class ScheduleGraph {
              * unchained with a single densely chained config
              */
             let densely_chained = chained || _configs.length === 1;
-            const configs_iter = iter(_configs);
             const nodes = [];
 
-            const _first = configs_iter.next();
-            if (_first.done) {
+            if (_configs.length === 0) {
                 return {
                     densely_chained,
-                    nodes: []
+                    nodes: [],
                 }
             }
-            const first = _first.value;
+            const first = _configs[0];
 
             let previous_result = this.process_configs(first, collect_nodes || chained);
             // @ts-expect-error
             densely_chained &= previous_result.densely_chained;
 
-            for (const current of configs_iter) {
+            for (let i = 1; i < _configs.length; i++) {
+                const current = _configs[i];
                 const current_result = this.process_configs(current, collect_nodes || chained);
                 // @ts-expect-error
                 densely_chained &= current_result.densely_chained;
@@ -621,14 +627,16 @@ export class ScheduleGraph {
                         previous_result.nodes[previous_result.nodes.length - 1] :
                         previous_result.nodes) as NodeId[]
 
-                    for (const previous_node of previous_nodes) {
-                        for (const current_node of current_nodes) {
+                    for (let i = 0; i < previous_nodes.length; i++) {
+                        const previous_node = previous_nodes[i]
+                        for (let j = 0; j < current_nodes.length; j++) {
+                            const current_node = current_nodes[j]
                             this.#dependency.graph().add_edge(previous_node, current_node);
-
                             if (ignored_deferred) {
                                 this.#no_sync_edges.push(
                                     `${previous_node.to_primitive()}//${current_node.to_primitive()}`);
                             }
+
                         }
                     }
                 }
@@ -638,6 +646,7 @@ export class ScheduleGraph {
                 }
 
                 previous_result = current_result;
+
             }
 
             if (collect_nodes) {
@@ -649,6 +658,7 @@ export class ScheduleGraph {
                 nodes
             }
         }
+        throw new Error('unreachable')
     }
 
     configure_sets<M>(sets: IntoSystemSetConfigs<M>) {

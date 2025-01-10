@@ -1,7 +1,8 @@
 import { iter } from "joshkaposh-iterator";
 import { Schedule, ScheduleLabel } from "../ecs/schedule";
 import { is_some } from "joshkaposh-option";
-import { define_resource, define_type, Resource, StorageType, World } from "../ecs";
+import { Resource, StorageType, World } from "../ecs";
+import { define_resource, define_type } from '../define'
 import { Plugin } from "./plugin";
 import { App } from "./app";
 import { ExecutorKind } from "../ecs/executor";
@@ -174,14 +175,14 @@ export class MainSchedulePlugin extends Plugin {
             .add_schedule(fixed_main_loop_schedule)
             .init_resource(MainScheduleOrder)
             .init_resource(FixedMainScheduleOrder)
-            .add_systems($Main, Main.run_main)
-            .add_systems($FixedMain, FixedMain.run_fixed_main)
-            .configure_sets($RunFixedMainLoop, [
-                RunFixedMainLoopSystem.BeforeFixedMainLoop,
-                RunFixedMainLoopSystem.FixedMainLoop,
-                RunFixedMainLoopSystem.AfterFixedMainLoop,
-            ].chain()
-            )
+        // .add_systems($Main, Main.run_main)
+        // .add_systems($FixedMain, FixedMain.run_fixed_main)
+        // .configure_sets($RunFixedMainLoop, [
+        // RunFixedMainLoopSystem.BeforeFixedMainLoop,
+        // RunFixedMainLoopSystem.FixedMainLoop,
+        // RunFixedMainLoopSystem.AfterFixedMainLoop,
+        // ].chain()
+        // )
 
     }
 }

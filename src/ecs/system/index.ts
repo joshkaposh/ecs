@@ -4,12 +4,15 @@ import { Archetype, ArchetypeComponentId } from '../archetype';
 import { System, SystemMeta } from '../system'
 import { World } from '../world';
 import { ComponentId, is_component, Tick } from '../component';
-import { define_type } from '../define';
+import { define_type } from '../../define';
 import { assert, Prettify } from 'joshkaposh-iterator/src/util';
 import { SystemState } from './function-system';
 import { Option } from 'joshkaposh-option';
 import { SystemParam } from './system-param';
-import { unit } from '../../util';
+import { recursively_flatten_nested_arrays, unit } from '../../util';
+import { NodeConfigs } from '../schedule/config';
+import { Chain } from '../schedule';
+import { SystemSet } from '../schedule/set';
 export * from './system-param';
 export * from './input';
 export * from './system';
@@ -87,20 +90,19 @@ type SysBase<T extends (...arngs: any[]) => any> = (ReturnType<T> extends boolea
 }
 
 export type SystemDefinition<T extends (...args: any[]) => any> = Parameters<T> extends readonly [] ? SysBase<T> : Required<SysBase<T>>;
+export type SystemImpl<In, Out> = System<In, Out> & {
+    set_name(new_name: string): SystemImpl<In, Out>;
+}
+
 export function define_system<const F extends (...args: any[]) => any>(
     config: SystemDefinition<F>
-): System<any, any> {
+): SystemImpl<Parameters<F>, ReturnType<F>> {
 
     const fallible = 'condition' in config;
-    let system
     const params = 'params' in config ? config.params : [];
 
-    if (fallible) {
-        system = config.condition
-    } else {
-        // @ts-expect-error
-        system = config.system;
-    }
+    // @ts-expect-error
+    const system = fallible ? config.condition : config.system
 
     class SystemImpl<const P extends Parameters<F>> extends System<any, any> {
         #fn: F;
@@ -120,6 +122,7 @@ export function define_system<const F extends (...args: any[]) => any>(
             this.#system_meta = SystemMeta.new(fn)
             this.#name = fn.name;
         }
+
         has_deferred(): boolean {
             return false
         }
@@ -141,6 +144,7 @@ export function define_system<const F extends (...args: any[]) => any>(
          */
         set_name(new_name: string) {
             this.#name = new_name;
+            return this
         }
 
         initialize(world: World): void {
@@ -165,6 +169,8 @@ export function define_system<const F extends (...args: any[]) => any>(
         into_system(): this {
             return this
         }
+
+        // into_system_set() {}
 
         check_change_tick(change_tick: Tick): void {
         }
@@ -222,4 +228,24 @@ export function define_system<const F extends (...args: any[]) => any>(
 
     define_type(SystemImpl)
     return new SystemImpl(system, ...params as Parameters<F>);
+}
+
+export function set<const S extends readonly System<any, any>[]>(system_sets: S) {
+    class SystemSetImpl {
+        #sets: SystemSet[];
+        constructor(sets: SystemSet[]) {
+            this.#sets = sets;
+        }
+
+        into_configs() {
+            return new NodeConfigs.Configs(
+                sets.map(s => s.into_configs()),
+                [],
+                Chain.No
+            )
+        }
+    }
+
+    const sets = recursively_flatten_nested_arrays(system_sets)
+    return new SystemSetImpl(sets as SystemSet[]);
 }

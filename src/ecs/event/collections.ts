@@ -4,15 +4,43 @@ import { Event, EventId, EventInstance } from "./base";
 import { u32 } from "../../Intrinsics";
 import type { Option } from "joshkaposh-option";
 import { EventCursor } from "./event_cursor";
-import { assert } from "joshkaposh-iterator/src/util";
 import { Instance } from "../../util";
 import { Default } from "../default";
+import { define_resource } from "../../define";
+import { Resource, StorageType, World } from "..";
+import { v4 } from "uuid";
+
+const events: Map<Event, Events<Event>> = new Map();
+
+export function internal_get_event<E extends Event>(type: E): Events<Instance<E>> {
+    // @ts-expect-error
+    return events.get(type) as typeof Events<E> & Resource;
+}
+export const EventRegistry = {
+    get_event<E extends Event>(type: E): Option<Events<E>> {
+        return events.get(type) as Events<E>;
+    },
+    register_event(type: Event, world: World) {
+        // const ev = events.get(type);
+        if (!events.has(type)) {
+            const ty = Events.for_type(type);
+            events.set(type, ty);
+            // console.log('Initializing ');
+
+            world.init_resource(ty as unknown as Resource);
+            return ty;
+        } else {
+            return events.get(type)!;
+        }
+    }
+}
 
 export class Events<E extends Event> {
     __events_a: EventSequence<E>;
     __events_b: EventSequence<E>;
     #event_count: number;
     #ty: E;
+
     constructor(
         ty: E,
         event_count: number = 0,
@@ -23,6 +51,19 @@ export class Events<E extends Event> {
         this.__events_b = events_b;
         this.#ty = ty;
         this.#event_count = event_count;
+    }
+
+    static for_type<E extends Event>(type: E): typeof Events<E> {
+        const events = class extends Events<E> {
+            static readonly storage_type: StorageType = 1;
+            static readonly type_id: UUID = v4() as UUID;
+            static from_world = <E extends Event>(world: World): Events<E> => new events() as unknown as Events<E>;
+
+            constructor() {
+                super(type)
+            }
+        }
+        return events as any
     }
 
     get event_count(): number {
@@ -150,7 +191,6 @@ export class Events<E extends Event> {
     }
 
     len(): number {
-        // console.log('a %d b %d', this.__events_a.events.length, this.__events_b.events.length)
         return this.__events_a.events.length + this.__events_b.events.length;
     }
 
@@ -207,6 +247,7 @@ export class Events<E extends Event> {
 
 
 }
+// define_resource(Events);
 
 export type EventSequence<E extends Event> = {
     events: EventInstance<E>[];

@@ -45,7 +45,7 @@ export abstract class IntoSystemConfigs<Marker> {
     }
 
     distributive_run_if<M>(condition: Condition<M>) {
-
+        return this.into_configs().distributive_run_if(condition);
     }
 
     run_if<M>(condition: Condition<M>): SystemConfigs {
@@ -405,12 +405,13 @@ export type SystemConfig = NodeConfig<ScheduleSystem>;
 
 export class Configs<T extends ProcessNodeConfig> extends IntoSystemConfigs<any> {
     constructor(
-        public configs: NodeConfigs<T>[],
+        public configs: readonly NodeConfigs<T>[],
         public collective_conditions: Condition<any>[],
         public chained: Chain
     ) {
         super()
     }
+
 
     in_set_inner!: (this: Configs<T>, set: SystemSet) => void;
     before_inner!: (this: Configs<T>, set: SystemSet) => void;
@@ -478,9 +479,9 @@ export class Configs<T extends ProcessNodeConfig> extends IntoSystemConfigs<any>
         return this as unknown as SystemConfigs
     }
 
-    distributive_run_if<M>(condition: Condition<M>): void {
+    distributive_run_if<M>(condition: Condition<M>): Configs<T> {
         this.distributive_run_if_inner(condition);
-        return this as unknown as SystemConfigs
+        return this
     }
 
     run_if<M>(condition: Condition<M>): SystemConfigs {
@@ -495,16 +496,12 @@ export class Configs<T extends ProcessNodeConfig> extends IntoSystemConfigs<any>
         return this as unknown as SystemConfigs
     }
 
-    chain(): this {
-        return this.chain_inner() as this
+    chain() {
+        return this.chain_inner() as unknown as SystemConfigs
     }
 
-    chain_ignore_deferred(): this {
-        return this.chain_ignore_deferred_inner() as this;
-    }
-
-    [Symbol.iterator]() {
-        return iter(this.configs);
+    chain_ignore_deferred(): SystemConfigs {
+        return this.chain_ignore_deferred_inner() as unknown as SystemConfigs;
     }
 }
 

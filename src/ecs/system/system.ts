@@ -1,7 +1,7 @@
 import { NodeId } from "../schedule/graph";
 import { World } from "../world";
 import { Access } from "../query";
-import { ArchetypeComponentId, ComponentId, IntoSystemTrait, ScheduleSystem, SystemInput, Tick } from "..";
+import { ArchetypeComponentId, ComponentId, FunctionSystem, IntoSystemTrait, ScheduleSystem, SystemInput, SystemParamFunction, Tick, TypeId } from "..";
 import { unit } from "../../util";
 import { ErrorExt } from "joshkaposh-option";
 import { SystemTypeSet } from "../schedule/set";
@@ -17,15 +17,12 @@ export type BoxedCondition<In extends any[] = any[]> = Condition<In>;
 export type SystemIn<T> = any;
 
 export abstract class System<In, Out> extends IntoSystemConfigs<unit> {
-
-
     static readonly type_id: UUID;
 
     /**
      * A system is fallible if it returns a value
      */
-    abstract readonly fallible: boolean;
-
+    static readonly fallible: boolean;
 
     abstract is_send(): boolean;
     abstract is_exclusive(): boolean;
@@ -66,7 +63,7 @@ export abstract class System<In, Out> extends IntoSystemConfigs<unit> {
 
     default_system_sets(): any[] {
         return [
-            new ScheduleSystem(this, this.fallible)
+            new ScheduleSystem(this, System.fallible)
         ];
 
     }
@@ -87,7 +84,6 @@ export abstract class System<In, Out> extends IntoSystemConfigs<unit> {
         return this.type_id();
     }
 
-
     //* IntoSystem impl
 
     into_system() {
@@ -97,9 +93,15 @@ export abstract class System<In, Out> extends IntoSystemConfigs<unit> {
     //* IntoSystemConfigs impl
 
     into_configs(): SystemConfigs {
-        return this.fallible ?
+        return System.fallible ?
             NodeConfigs.new_system(ScheduleSystem.Fallible(this)) :
             NodeConfigs.new_system(ScheduleSystem.Infallible(this as System<In, void>))
+    }
+
+    //* IntoSystemSet impl
+    into_system_set<T extends FunctionSystem<any, SystemParamFunction<any>>>() {
+        type Set = SystemTypeSet<T>;
+        return new SystemTypeSet(this.constructor as unknown as TypeId) as Set;
     }
 
 };
@@ -126,7 +128,7 @@ export class AnonymousSet {
 }
 
 export function assert_is_system(system: System<any, any>) {
-    const world = World.default();
+    const world = new World();
     system.initialize(world);
 }
 

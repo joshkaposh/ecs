@@ -32,6 +32,23 @@ export function is_class<T extends Class>(value: unknown): value is T {
     return is_class_ctor(value) || is_class_instance(value);
 }
 
+export function recursively_flatten_nested_arrays<T1, T2>(arrays: readonly T1[] | T1[], process?: (element: T1) => T2) {
+    const flattened: any[] = []
+    function process_element(el: T1): T2 {
+        return process ? process(el) : el as unknown as T2;
+    }
+
+    for (let i = 0; i < arrays.length; i++) {
+        const element = arrays[i];
+        if (Array.isArray(element)) {
+            recursively_flatten_nested_arrays(element);
+        }
+
+
+        flattened.push(process_element(element))
+    }
+    return flattened;
+}
 
 export function debug_assert(is_true: boolean, msg?: string) {
     console.assert(is_true, msg)

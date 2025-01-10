@@ -8,11 +8,21 @@ export const CHECK_TICK_THRESHOLD = 518_400_000;
 
 export const MAX_CHANGE_AGE = u32.MAX - (2 * CHECK_TICK_THRESHOLD - 1);
 
+function read(target: Record<string | symbol, any>, p: string | symbol, receiver: any): any {
+    const value = target[p];
+    if (value instanceof Function) {
+        return function (this: any, ...args: any[]) {
+            return value.apply(this === receiver ? target : this, args)
+        }
+    }
+
+    return value;
+}
 
 export function $readonly<T extends Component>(ty: T, ticks?: Ticks): DeepReadonly<InstanceType<T>> {
-    return new Proxy(ty, {
+    return new Proxy(ty as { [key: string | symbol]: any }, {
         get(target, p, receiver) {
-            return Reflect.get(target, p, receiver)
+            return read(target, p, receiver);
         },
         set(_target, _p, _newValue, _receiver) {
             return false;
@@ -23,9 +33,9 @@ export function $readonly<T extends Component>(ty: T, ticks?: Ticks): DeepReadon
 
 export function $read_and_write<T>(type: T, ticks: TicksMut) {
     const mut = new Mut(type, ticks);
-    const proxy = new Proxy(type as object, {
+    const proxy = new Proxy(type as { [key: string | symbol]: any }, {
         get(target, p, receiver) {
-            return Reflect.get(target, p, receiver)
+            return read(target, p, receiver);
         },
 
         set(target, p, newValue, receiver) {
