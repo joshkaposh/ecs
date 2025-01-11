@@ -1,5 +1,6 @@
 import { test, assert, expect } from "vitest";
-import { define_resource, define_system, Resource, World } from "../../src/ecs";
+import { define_system, Resource, World } from "../../src/ecs";
+import { define_resource } from "../../src/define";
 
 class _Counter { constructor(public count = 0) { } }
 const Counter = _Counter as Resource

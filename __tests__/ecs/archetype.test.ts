@@ -1,7 +1,8 @@
 import { test, assert } from 'vitest'
 import { range } from 'joshkaposh-iterator'
 import { is_some, } from 'joshkaposh-option';
-import { Archetype, Archetypes, define_component, Component, Components, StorageType, Storages, Entity } from '../../src/ecs'
+import { Archetype, Archetypes, Component, Components, StorageType, Storages, Entity } from '../../src/ecs'
+import { define_component } from '../../src/define';
 
 class A { constructor(public value = 'A') { } }
 define_component(A);

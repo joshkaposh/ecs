@@ -1,5 +1,6 @@
 import { assert, test } from 'vitest'
-import { World, StorageType, Component, Resource, define_component, define_resource, System, Condition } from '../../src/ecs'
+import { World, StorageType, Component, Resource, System, Condition } from '../../src/ecs'
+import { define_component, define_resource } from '../../src/define'
 
 class A { constructor(public value = 'A') { } }
 define_component(A)

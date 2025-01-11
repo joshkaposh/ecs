@@ -1,7 +1,8 @@
 import { test, assert } from 'vitest'
 import { iter, range } from 'joshkaposh-iterator';
-import { Entity, Components, Storages, Tick, define_component, Component, } from '../../src/ecs'
+import { Entity, Components, Storages, Tick, Component, } from '../../src/ecs'
 import { Table, TableBuilder, TableId, TableRow, Tables } from '../../src/ecs/storage/table';
+import { define_component } from '../../src/define';
 
 class W {
     constructor(public table_row: TableRow) { }

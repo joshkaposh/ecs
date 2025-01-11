@@ -3,7 +3,7 @@ import { is_some } from "joshkaposh-option";
 import { StorageType } from "./ecs/storage";
 import { Component, ComponentMetadata, Resource, ResourceMetadata } from "./ecs/component";
 import { World } from "./ecs/world/world";
-// import { Class, Component, ComponentMetadata, ResourceMetadata, Resource, TypeId, World } from ".";
+
 export type Class<Static = {}, Inst = {}> = (new (...args: any[]) => Inst) & Static;
 export type TypeId = { readonly type_id: UUID }
 

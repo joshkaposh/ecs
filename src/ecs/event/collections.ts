@@ -6,7 +6,6 @@ import type { Option } from "joshkaposh-option";
 import { EventCursor } from "./event_cursor";
 import { Instance } from "../../util";
 import { Default } from "../default";
-import { define_resource } from "../../define";
 import { Resource, StorageType, World } from "..";
 import { v4 } from "uuid";
 
@@ -21,12 +20,9 @@ export const EventRegistry = {
         return events.get(type) as Events<E>;
     },
     register_event(type: Event, world: World) {
-        // const ev = events.get(type);
         if (!events.has(type)) {
             const ty = Events.for_type(type);
-            events.set(type, ty);
-            // console.log('Initializing ');
-
+            events.set(type, ty as any);
             world.init_resource(ty as unknown as Resource);
             return ty;
         } else {

@@ -1,5 +1,6 @@
 import { assert, test } from 'vitest';
-import { Component, StorageType, World, define_component } from '../../src/ecs'
+import { Component, StorageType, World } from '../../src/ecs'
+import { define_component } from '../../src/define';
 
 class TableStored { constructor(public value: string) { } }
 define_component(TableStored)

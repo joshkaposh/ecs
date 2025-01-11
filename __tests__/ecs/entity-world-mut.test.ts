@@ -1,6 +1,7 @@
 import { expect, test, assert } from "vitest";
-import { Component, define_component, EntityLocation, World } from "../../src/ecs";
+import { Component, World } from "../../src/ecs";
 import { is_some } from "joshkaposh-option";
+import { define_component } from "../../src/define";
 
 class AComp { constructor(public value = 'a') { } }
 define_component(AComp)
