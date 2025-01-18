@@ -7,6 +7,7 @@ import { SystemMeta, SystemParam } from "./system";
 import { unit } from "../util";
 import { World } from "./world";
 import { iter, Iterator } from "joshkaposh-iterator";
+import { Archetype } from ".";
 
 
 class RemovedComponentEntity {
@@ -20,13 +21,12 @@ class RemovedComponentEntity {
     }
 }
 
-export class RemovedComponentEvents extends SystemParam<unit, RemovedComponentEvents> {
+export class RemovedComponentEvents implements SystemParam<unit, RemovedComponentEvents> {
     State!: unit;
     Item!: RemovedComponentEvents;
     #events_sets: SparseSet<ComponentId, Events<typeof RemovedComponentEntity>>;
 
     constructor(event_sets: SparseSet<ComponentId, Events<typeof RemovedComponentEntity>> = new SparseSet()) {
-        super();
         this.#events_sets = event_sets;
     }
 
@@ -50,13 +50,27 @@ export class RemovedComponentEvents extends SystemParam<unit, RemovedComponentEv
             .send(new RemovedComponentEntity(entity));
     }
 
-    init_state(_world: World, _system_meta: SystemMeta): unit { return unit }
+    param_init_state(_world: World, _system_meta: SystemMeta): unit { return unit }
 
-    get_param(_state: unit, _system_meta: SystemMeta, world: World, _change_tick: Tick): RemovedComponentEvents {
+    param_get_param(_state: unit, _system_meta: SystemMeta, world: World, _change_tick: Tick): RemovedComponentEvents {
         return world.removed_components()
     }
 
+    param_apply(_state: typeof unit, _system_meta: SystemMeta, _world: World): void {
 
+    }
+
+    param_new_archetype(_state: typeof unit, _archetype: Archetype, _system_meta: SystemMeta): void {
+
+    }
+
+    param_queue(_state: typeof unit, _system_meta: SystemMeta, _world: World): void {
+
+    }
+
+    param_validate_param(_state: typeof unit, _system_meta: SystemMeta, _world: World): boolean {
+        return true;
+    }
 }
 
 // @ts-expect-error
@@ -67,7 +81,7 @@ export class RemovedComponentReader<T extends Component> {
         return new RemovedComponentReader<T>(new EventCursor())
     }
 }
-export class RemovedComponents<T extends Component> extends SystemParam<any, any> {
+export class RemovedComponents<T extends Component> implements SystemParam<any, any> {
     State!: any;
     Item!: any;
     #component_id: ComponentId;
@@ -75,7 +89,6 @@ export class RemovedComponents<T extends Component> extends SystemParam<any, any
     #event_sets: RemovedComponentEvents;
 
     constructor(component_id: ComponentId, reader: RemovedComponentReader<T>, event_sets: RemovedComponentEvents) {
-        super()
         this.#component_id = component_id;
         this.#reader = reader;
         this.#event_sets = event_sets;
@@ -83,12 +96,28 @@ export class RemovedComponents<T extends Component> extends SystemParam<any, any
 
     //* SystemParam methods
 
-    init_state(_world: World, _system_meta: SystemMeta) {
+    param_init_state(_world: World, _system_meta: SystemMeta) {
 
     }
 
-    get_param(_state: any, _system_meta: SystemMeta, _world: World, _change_tick: Tick) {
+    param_get_param(_state: any, _system_meta: SystemMeta, _world: World, _change_tick: Tick) {
         return this;
+    }
+
+    param_apply(_state: any, _system_meta: SystemMeta, _world: World): void {
+
+    }
+
+    param_new_archetype(_state: any, _archetype: Archetype, _system_meta: SystemMeta): void {
+
+    }
+
+    param_queue(_state: any, _system_meta: SystemMeta, _world: World): void {
+
+    }
+
+    param_validate_param(_state: any, _system_meta: SystemMeta, _world: World): boolean {
+        return true;
     }
 
     //* SystemParam methods end

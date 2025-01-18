@@ -1,5 +1,5 @@
 import { TODO } from "joshkaposh-iterator/src/util";
-import { IdKind, IdKindType } from './kinds';
+import { IdKind } from './kinds';
 import { u32 } from "../../Intrinsics";
 import { carrot_left, shift_left } from "../../bit";
 
@@ -20,56 +20,46 @@ function extract_kind_from_high_entity(value: U32): IdKindType {
 
 
 export const IdentifierMask = {
-    // Returns the low component from a `U64` value
-    get_low(value: U64): U32 {
-        // value as u32
-        return TODO('IdentifierMask::get_low')
-        // return u32.saturating_add(0, value);
+    /**
+     * Returns the low component from a `U64` value
+     * 
+     * This will truncate to the lowest 32 bits
+    */
+    get_low(value: bigint): number {
+        // const int = BigInt(value);
+        // const n = int >> BigInt(u32.BITS);
+        // return Number(n)
+        return Number(BigInt.asUintN(32, value));
     },
 
-    // Returns the high component from a `U64` value
-    get_high(value: U64): U32 {
-        // (value >> u32.BITS) as u32;
-        return TODO('IdentifierMask::get_high')
+    /**
+     * Returns the high component from a `U64` value
+     */
+    get_high(value: bigint): number {
+        return Number(value >> BigInt(u32.BITS));
     },
 
     // Pack a low and high `u32` values into a single `U64` value.
-    pack_into_U64(low: U32, high: U32): U64 {
-        // ((high as U64) << u32::BITS) | (low as U64)
-        return TODO('IdentifierMask::pack_into_U64')
+    pack_into_U64(low: U32, high: U32): bigint {
+        return ((BigInt(high) << BigInt(u32.BITS)) | BigInt(low))
+        // return TODO('IdentifierMask::pack_into_U64')
     },
 
     // Pack the [`IdKind`] bits into a high segment.
-    pack_kind_into_high(value: U32, kind: IdKindType): U32 {
-        // value | ((kind as u32) << 24)
-        // console.log('pack_kind', value, kind << 24, value | (kind << 24));
-        const shift = kind << 24;
-
-        const shift2 = shift_left(kind, 24)
-        // console.log('value = %d, shift = %d, carrot = %d', value, shift, shift2);
-
-
-        // return value | (kind << 24);
-        return u32.wrapping_sub((value | (shift_left(kind, 24))), u32.MAX);
+    pack_kind_into_high(value: U32, kind: IdKind): U32 {
+        return Number(BigInt(value) | (BigInt(kind) << BigInt(24)))
     },
 
     // Extract the value component from a high segment of an [`super::Identifier`].
     extract_value_from_high(value: U32): U32 {
-        return value & HIGH_MASK;
+        return Number(BigInt(value) & BigInt(HIGH_MASK));
     },
 
-    extract_kind_from_high(value: U32): IdKindType {
+    extract_kind_from_high(value: U32): IdKind {
         // The negated HIGH_MASK will extract just the bit we need for kind.
-        let kind_mask = !HIGH_MASK;
-        let bit = value & kind_mask;
-        let kind_mask2 = HIGH_MASK + 1;
-        let bit2 = value & kind_mask2;
-
-        // console.log('BOOLS', bit == kind_mask, bit2 == kind_mask2);
-
-
-        return (bit == kind_mask && bit2 == kind_mask2) ? IdKind.Placeholder : IdKind.Entity
-        // return bit == kind_mask ? IdKind.Placeholder : extract_kind_from_high_entity(value);
+        const kind_mask = ~HIGH_MASK;
+        const bit = value & kind_mask;
+        return (bit === kind_mask && bit === kind_mask) ? IdKind.Placeholder : IdKind.Entity
     },
 
 

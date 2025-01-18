@@ -5,7 +5,6 @@ import { FixedBitSet } from "fixed-bit-set";
 import { World } from "../world";
 import { unit } from "../../util";
 import { BoxedCondition } from "../system";
-import { TODO } from "joshkaposh-iterator/src/util";
 
 export class SingleThreadedExecutor implements SystemExecutor {
     /// System sets whose conditions have been evaluated.
@@ -74,16 +73,17 @@ export class SingleThreadedExecutor implements SystemExecutor {
                 this.apply_deferred(schedule, world)
             }
 
-            const res = result(() => {
-                if (system.is_exclusive()) {
-                    return system.run(undefined, world)
-                } else {
-                    return system.run_unsafe(undefined, world);
-                }
-            })
-            if (res instanceof Error) {
-                throw new Error(`Encontered an error in system ${system.name()}`)
+            // const res = result(() => {
+            if (system.is_exclusive()) {
+                system.run(undefined, world)
+            } else {
+                system.run_unsafe(undefined, world);
             }
+            // })
+            // if (res instanceof Error) {
+            // throw res;
+            // throw new Error(`Encontered an error in system ${system.name()}`)
+            // }
 
             this.#unapplied_systems.insert(system_index);
         }

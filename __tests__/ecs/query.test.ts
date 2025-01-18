@@ -329,26 +329,32 @@ test('query_added', () => {
 test('changed', () => {
     const w = new World();
 
-    let q_normal = w.query([A])
-    let q_added = w.query_filtered([A], [Changed(A)])
+    const q_normal = w.query([Entity, A])
+    const q_changed = w.query_filtered([Entity, A], [Changed(A)]);
 
-    const b = () => [new A(), new B(), new C()]
+    const bundle = () => [new A(), new B(), new C()]
 
-    w.spawn(b())
-    w.spawn(b())
-    w.spawn(b())
+    w.spawn(bundle());
+    w.spawn(bundle());
+    w.spawn(bundle());
+
+    const entities = [];
+    for (const [e, a] of q_normal) {
+        console.log('adding entity %O to entities', e);
+
+    }
 
     w.clear_trackers();
 
-    w.spawn(b())
-    w.spawn(b())
-    w.spawn(b())
+    w.spawn(bundle())
+    w.spawn(bundle())
+    w.spawn(bundle())
 
-    assert(q_added.iter().count() === 3)
+    assert(q_changed.iter().count() === 3)
     assert(q_normal.iter().count() === 6)
 
     w.clear_trackers();
 
-    assert(q_added.iter().count() === 0);
+    assert(q_changed.iter().count() === 0);
     assert(q_normal.iter().count() === 6)
 })

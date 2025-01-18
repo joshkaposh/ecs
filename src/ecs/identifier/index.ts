@@ -1,17 +1,17 @@
 import { ErrorExt, Result } from 'joshkaposh-option';
-import { TODO } from 'joshkaposh-iterator/src/util';
-import { IdKindType } from './kinds';
+import { IdKind } from './kinds';
 import { IdentifierMask } from './mask';
 
 export * from './mask';
 export * from './kinds';
 
 export const IdentifierError = {
-    InvalidEntityId(bits: number) {
-        return {
+    InvalidEntityId(bits: bigint) {
+        return new ErrorExt({
             bits
-        }
-    }
+        }, "InvalidEntityId")
+    },
+    InvalidIdentifier: new ErrorExt('InvalidIdentifier', 'InvalidIdentifier')
 } as const;
 
 export type IdentifierErrorType = typeof IdentifierError[keyof typeof IdentifierError];
@@ -19,11 +19,12 @@ export type IdentifierErrorType = typeof IdentifierError[keyof typeof Identifier
 export class Identifier {
     #low: number // u32;
     #high: number // NonZeroU32
-    constructor(low: number, high: number, kind: IdKindType) {
+    constructor(low: number, high: number, kind: IdKind) {
         const masked_value = IdentifierMask.extract_value_from_high(high);
         const packed_high = IdentifierMask.pack_kind_into_high(masked_value, kind)
-        if (packed_high == - 0) {
-            throw new Error('InvalidIdentifier');
+
+        if (packed_high === 0) {
+            throw IdentifierError.InvalidIdentifier;
         }
 
         this.#low = low;
@@ -50,7 +51,7 @@ export class Identifier {
         return IdentifierMask.pack_into_U64(this.#low, this.#high);
     }
 
-    static from_bits(value: number) {
+    static from_bits(value: bigint) {
         const id = Identifier.try_from_bits(value);
 
         if (id instanceof Error) {
@@ -60,19 +61,18 @@ export class Identifier {
         return id;
     }
 
-    static try_from_bits(value: number): Result<Identifier, ErrorExt> {
+    static try_from_bits(value: bigint): Result<Identifier, ErrorExt> {
+
         const high = IdentifierMask.get_high(value);
-        // let high = NonZeroU32::new(IdentifierMask::get_high(value))
-        /*
-        match high {
-        Some(high) => Ok(Self {
-            low: IdentifierMask::get_low(value),
-            high
-        }),
-        None => Err(IdentifierError::InvalidIdentifier)
-        
+        const low = IdentifierMask.get_low(value)
+        if (high === 0) {
+            return IdentifierError.InvalidIdentifier
+        } else {
+            return new Identifier(
+                low,
+                high,
+                IdKind.Entity,
+            )
         }
-        */
-        return TODO('Identifier::try_from_bits')
     }
 }

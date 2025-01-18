@@ -4,28 +4,71 @@ import { Maybe, QueryData, Read, Write } from "./fetch";
 import { QueryFilter } from "./filter";
 import { Iterator } from "joshkaposh-iterator";
 import { Option } from "joshkaposh-option";
+import { Archetype, Entity, EntityRef, init_query_param, SystemMeta, SystemParam, Tick } from "..";
 
 type Inst<T> = T extends new (...args: any) => infer I ? I : never;
 
 export type RemapToInstance<T extends readonly any[]> = {
     [K in keyof T]:
     // T[K] extends Array<any> ? RemapToInstance<T[K]> :
+    T[K] extends typeof Entity ? Entity :
+    T[K] extends typeof EntityRef ? EntityRef :
+
     T[K] extends Write<infer C> | Read<infer C> ? Inst<C> :
     T[K] extends Maybe<infer C> ? Option<Inst<C>> :
     T[K] extends new (...args: any[]) => infer C ? C :
     never
 }
 
-export class Query<const D extends readonly any[], const F extends readonly any[]> {
+// @ts-expect-error
+export type Single<D, F> = any;
+
+export class Query<const D extends readonly any[], const F extends readonly any[]> implements SystemParam<any, any> {
     #world: World;
     #state: QueryState<QueryData<any, any, any>, QueryFilter<any, any, any>>;
-    #force_read_only_component_access: boolean;
 
-    constructor(world: World, state: QueryState<QueryData<any, any, any>, QueryFilter<any, any, any>>, force_read_only_component_access: boolean = false) {
+
+    constructor(
+        world: World,
+        state: QueryState<QueryData<any, any, any>, QueryFilter<any, any, any>>,
+        last_run: Tick,
+        this_run: Tick
+    ) {
         this.#world = world;
         this.#state = state;
-        this.#force_read_only_component_access = force_read_only_component_access;
     }
+
+    param_init_state(world: World, system_meta: SystemMeta) {
+        const state = QueryState.new_with_access(this.#state.D, this.#state.F, world, system_meta.__archetype_component_access)
+        init_query_param(world, system_meta, state);
+        return state;
+    }
+
+    param_get_param(
+        state: any,
+        system_meta: SystemMeta,
+        world: World,
+        change_tick: Tick
+    ) {
+        return new Query(world, state, system_meta.last_run, change_tick)
+    }
+
+    param_new_archetype(state: any, archetype: Archetype, system_meta: SystemMeta) {
+        state.new_archetype(archetype, system_meta.__archetype_component_access)
+    }
+
+    param_apply(_state: any, _system_meta: SystemMeta, _world: World): void {
+
+    }
+
+    param_queue(_state: any, _system_meta: SystemMeta, _world: World): void {
+
+    }
+
+    param_validate_param(_state: any, _system_meta: SystemMeta, _world: World): boolean {
+        return true;
+    }
+
 
     data(): QueryData<any, any, any> {
         return this.#state.D;
@@ -67,3 +110,4 @@ export class Query<const D extends readonly any[], const F extends readonly any[
         return this.iter()
     }
 }
+

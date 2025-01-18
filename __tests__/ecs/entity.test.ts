@@ -1,12 +1,19 @@
 import { expect, test, assert } from "vitest";
 import { Entities, Entity } from "../../src/ecs";
+import { Identifier, IdKind } from "../../src/ecs/identifier";
 
 
 
-// test('entity_bits_roundtrip', () => {
-//     const e = Entity.from_raw_and_generation(0xDEADBEEF, 0x5AADF00D);
-//     expect(Entity.from_bits(e.to_bits())).toEqual(e);
-// })
+test('entity_bits_roundtrip', () => {
+    const e = Entity.from_raw_and_generation(0xDEADBEEF, 0x5AADF00D);
+    expect(Entity.from_bits(e.to_bits())).toEqual(e);
+})
+
+test('id_construction', () => {
+    const id = new Identifier(12, 55, IdKind.Entity);
+    assert(id.low() === 12);
+    assert(id.high() === 55);
+})
 
 test('reserve_entity_len', () => {
     const e = new Entities();
@@ -32,15 +39,16 @@ test('entity_const', () => {
     assert(42 === C1.index());
     assert(1 === C1.generation());
 
-    // const C2 = Entity.from_bits(0x0000_00ff_0000_00cc);
-    // assert(0x0000_00cc === C2.index());
-    // assert(0x0000_00ff === C2.generation());
+    const C2 = Entity.from_bits(0x0000_00ff_0000_00ccn);
+
+    assert(0x0000_00cc === C2.index());
+    assert(0x0000_00ff === C2.generation());
 
     const C3 = Entity.from_raw(33).index();
     assert(33 === C3);
 
-    // const C4 = Entity.from_bits(0x00dd_00ff_0000_0000).generation();
-    // assert(0x00dd_00ff === C4);
+    const C4 = Entity.from_bits(0x00dd_00ff_0000_0000n).generation();
+    assert(0x00dd_00ff === C4);
 
 })
 

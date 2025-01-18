@@ -8,7 +8,7 @@ import { define_type } from '../../define';
 import { assert, Prettify } from 'joshkaposh-iterator/src/util';
 import { SystemState } from './function-system';
 import { Option } from 'joshkaposh-option';
-import { SystemParam } from './system-param';
+import { ParamBuilder, SystemParam } from './system-param';
 import { recursively_flatten_nested_arrays, unit } from '../../util';
 import { NodeConfigs } from '../schedule/config';
 import { Chain } from '../schedule';
@@ -32,10 +32,12 @@ export abstract class IntoSystemTrait<In extends SystemInput | unit, Out, Marker
     abstract into_system(): System<In, Out>;
 
     pipe<Bin extends SystemInput, Bout, Bmarker, B extends IntoSystemTrait<Bin, Bout, Bmarker>>(system: B) {
+        // @ts-expect-error
         return IntoPipeSystem.new(this, this.#system)
     }
 
     map<T>(fn: (output: Out) => T) {
+        // @ts-expect-error
         IntoAdaperSystem.new(fn, this)
     }
 
@@ -45,39 +47,44 @@ export abstract class IntoSystemTrait<In extends SystemInput | unit, Out, Marker
 }
 
 export function define_params<P extends readonly any[]>(...params: P) {
-    class ParamImpl extends SystemParam<any, any> {
+    class ParamImpl implements SystemParam<any, any> {
         State: any;
         Item: any;
         #param: P;
 
         constructor(params: P) {
-            super();
             this.#param = params;
         }
 
-        init_state(world: World, system_meta: SystemMeta) {
+        param_init_state(world: World, system_meta: SystemMeta) {
             const c = this.#param;
-            // console.log('Param init_state', c);
+            console.log('Param init_state', c);
             if (is_component(c)) {
                 const id = world.register_component(c)
-                assert(!system_meta.__component_access_set.combined_access().has_any_component_read(id))
-                system_meta.__component_access_set.combined_access().add_component_read(id)
+                const set = system_meta.__component_access_set;
+                assert(!set.combined_access().has_any_component_read(id))
+                set.combined_access().add_component_read(id)
             }
         }
 
-        get_param(state: any, system_meta: SystemMeta, world: World, change_tick: Tick) {
+        param_get_param(state: any, system_meta: SystemMeta, world: World, change_tick: Tick) {
+            console.log('SystemParam param_get_param()', state, this.#param);
             return this.#param;
         }
 
-        new_archetype(_state: any, _archetype: Archetype, _system_meta: SystemMeta): void {
+        param_new_archetype(_state: any, _archetype: Archetype, _system_meta: SystemMeta): void {
 
         }
 
-        apply(_state: any, _system_meta: SystemMeta, _world: World): void {
+        param_apply(_state: any, _system_meta: SystemMeta, _world: World): void {
 
         }
 
-        validate_param(_state: any, _system_meta: SystemMeta, _world: World): boolean {
+        param_queue(_state: any, _system_meta: SystemMeta, _world: World): void {
+
+        }
+
+        param_validate_param(_state: any, _system_meta: SystemMeta, _world: World): boolean {
             return true
         }
     }
@@ -85,40 +92,41 @@ export function define_params<P extends readonly any[]>(...params: P) {
     return new ParamImpl(params);
 }
 
-type SysBase<T extends (...arngs: any[]) => any> = (ReturnType<T> extends boolean ? { condition: T } : { system: T }) & {
-    params?: Parameters<T>;
+type SysBase<P extends readonly any[], F extends (...args: P) => any> = {
+    system: F;
+    params: (builder: ParamBuilder<P>) => P;
 }
 
-export type SystemDefinition<T extends (...args: any[]) => any> = Parameters<T> extends readonly [] ? SysBase<T> : Required<SysBase<T>>;
+export type SystemDefinition<P extends readonly any[], F extends (...args: P) => any> = P extends readonly [] ? Omit<SysBase<P, F>, 'params'> : SysBase<P, F>;
+
 export type SystemImpl<In, Out> = System<In, Out> & {
     set_name(new_name: string): SystemImpl<In, Out>;
 }
 
-export function define_system<const F extends (...args: any[]) => any>(
-    config: SystemDefinition<F>
+export function define_system<const P extends readonly any[], const F extends (...args: P) => any>(
+    config: SystemDefinition<P, F>
 ): SystemImpl<Parameters<F>, ReturnType<F>> {
 
     const fallible = 'condition' in config;
-    const params = 'params' in config ? config.params : [];
+    const params = 'params' in config ? config.params! : () => [];
 
-    // @ts-expect-error
-    const system = fallible ? config.condition : config.system
+    const system = config.system;
 
     class SystemImpl<const P extends Parameters<F>> extends System<any, any> {
         #fn: F;
         #name: string;
-        #params_initial: P;
-        #params: SystemParam<any, any>;
+        // #params_initial: P;
+        #params!: SystemParam<any, any>;
         #state: Option<SystemState<any>>;
         #system_meta: SystemMeta;
 
         readonly fallible = fallible;
 
-        constructor(fn: F, ...params: P) {
+        constructor(fn: F) {
             super()
             this.#fn = fn;
-            this.#params_initial = params;
-            this.#params = define_params(...params);
+            // this.#params_initial = params;
+            // this.#params = define_params(...params);
             this.#system_meta = SystemMeta.new(fn)
             this.#name = fn.name;
         }
@@ -151,7 +159,9 @@ export function define_system<const F extends (...args: any[]) => any>(
             if (this.#state) {
                 assert(this.#state.matches_world(world.id()), 'System built with a different world than the one it was added to');
             } else {
-                this.#state = SystemState.new(world, this.#params)
+                const p = define_params(...params(new ParamBuilder(world)))
+                this.#params = p;
+                this.#state = SystemState.new(world, p)
             }
             console.log('System initialize', this.#state, this.#params);
 
@@ -209,7 +219,7 @@ export function define_system<const F extends (...args: any[]) => any>(
             }
             const param_state = this.#state.get(world);
             console.log('SystemImpl run_unsafe', input, param_state);
-            return this.#fn(param_state)
+            return this.#fn(...param_state)
         }
 
         validate_param(world: World): boolean {
@@ -227,7 +237,7 @@ export function define_system<const F extends (...args: any[]) => any>(
     }
 
     define_type(SystemImpl)
-    return new SystemImpl(system, ...params as Parameters<F>);
+    return new SystemImpl(system);
 }
 
 export function set<const S extends readonly System<any, any>[]>(system_sets: S) {

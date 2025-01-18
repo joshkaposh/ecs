@@ -12,29 +12,42 @@ const count_up = define_system({
 
         counter.count += 1;
     },
-    params: [Counter]
+    params: (b) => b.res(Counter).params()
 })
 
 test('system', () => { })
 
-// test('run_system_once_with', () => {
+test('run_system_once_with', () => {
 
-//     class Test { constructor(public value: number) { } }
-//     define_resource(Test);
+    const Test = define_resource(class Test { constructor(public value: number = 0) { } });
+    type Test = InstanceType<typeof Test>;
+    const w = new World();
+    w.init_resource(Test);
 
-//     const w = new World();
+    const system_test = define_system({
+        system: (t: Test) => {
+            console.log('system_test running!', t.value);
 
-//     const system = define_system({
-//         system: function system(input: number) {
-//             console.log('system running!', input);
-//             return input + 1;
-//         },
-//         params: [1]
-//     });
+        },
+        params: (b) => b.res(Test).params()
+    })
 
-//     let n = w.run_system_once_with(system, 1);
-//     // assert(n === 2);
-// })
+    const system = define_system({
+        system: function system(input: number) {
+            console.log('system running!', input);
+
+            return input + 1;
+        },
+        params: () => [1]
+    });
+
+    let n = w.run_system_once_with(system, 1);
+    console.log('n result', n);
+
+    assert(n === 2);
+
+    w.run_system_once(system_test)
+})
 
 // test('run_two_systems', () => {
 //     const world = new World();

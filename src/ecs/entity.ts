@@ -4,7 +4,7 @@ import { Err, ErrorExt, Option, Result, is_error, is_some } from 'joshkaposh-opt
 import { ArchetypeId, ArchetypeRow } from "./archetype";
 import { TableId, TableRow } from "./storage/table";
 import { extend, reserve, swap_remove } from "../array-helpers";
-import { IdKind, Identifier, IdentifierError, IdentifierErrorType } from "./identifier";
+import { HIGH_MASK, IdKind, Identifier, IdentifierError, IdentifierErrorType, IdentifierMask } from "./identifier";
 import { u32, u8 } from "../Intrinsics";
 
 export type EntityId = number;
@@ -61,15 +61,14 @@ export class Entity {
         return new Entity(this.#index, this.#generation);
     }
 
-    /// Convert to a form convenient for passing outside of rust.
+    /// Convert to a form convenient for passing outside of JavaScript.
     ///
     /// Only useful for identifying entities within the same instance of an application. Do not use
     /// for serialization between runs.
     ///
     /// No particular structure is guaranteed for the returned bits.
-    to_bits(): number {
-        // IdentifierMask::pack_into_u64(self.index, self.generation.get())
-        return TODO('Entity::to_bits')
+    to_bits(): bigint {
+        return IdentifierMask.pack_into_U64(this.#index, this.#generation);
     }
 
     static default() {
@@ -84,7 +83,7 @@ export class Entity {
     ///
     /// This method will likely panic if given `u64` values that did not come from [`Entity::to_bits`].
     // bits: u64
-    static from_bits(bits: number) {
+    static from_bits(bits: bigint) {
         const entity = Entity.try_from_bits(bits);
 
         if (entity instanceof Error) {
@@ -100,10 +99,11 @@ export class Entity {
     ///
     /// This method is the fallible counterpart to [`Entity::from_bits`].
     // bits: u64
-    static try_from_bits(bits: number): Result<Entity, Err<ReturnType<IdentifierErrorType>>> {
+    static try_from_bits(bits: bigint): Result<Entity, Err<IdentifierErrorType>> {
         const id = Identifier.try_from_bits(bits) as Identifier;
+
         if (!is_error(id)) {
-            // let kind = id.kind() as u8;
+
             const kind = u8.from(id.kind());
             if (kind === IdKind.Entity) {
                 return new Entity(id.low(), id.high());
@@ -111,18 +111,6 @@ export class Entity {
         }
 
         return new ErrorExt(IdentifierError.InvalidEntityId(bits)) as any
-        // if let Ok(id) = Identifier::try_from_bits(bits) {
-        //     let kind = id.kind() as u8;
-
-        //     if kind == (IdKind::Entity as u8) {
-        //         return Ok(Self {
-        //             index: id.low(),
-        //             generation: id.high(),
-        //         });
-        //     }
-        // }
-
-        // Err(IdentifierError::InvalidEntityId(bits))
     }
 
     static from_raw(index: number) {
@@ -137,22 +125,22 @@ export class Entity {
         return a.#index === b.#index && a.#generation === b.#generation;
     }
 
-    static ge(a: Entity, b: Entity) {
-        return TODO('Entity::ge()', a, b)
-    }
-    static le(a: Entity, b: Entity): boolean {
-        return TODO('Entity::le()', a, b)
+    // static ge(a: Entity, b: Entity) {
+    //     return TODO('Entity::ge()', a, b)
+    // }
+    // static le(a: Entity, b: Entity): boolean {
+    //     return TODO('Entity::le()', a, b)
 
-    }
+    // }
 
-    static gt(a: Entity, b: Entity): boolean {
-        return TODO('Entity::gt()', a, b)
+    // static gt(a: Entity, b: Entity): boolean {
+    //     return TODO('Entity::gt()', a, b)
 
-    }
+    // }
 
-    static lt(a: Entity, b: Entity): boolean {
-        return TODO('Entity::lt()', a, b)
-    }
+    // static lt(a: Entity, b: Entity): boolean {
+    //     return TODO('Entity::lt()', a, b)
+    // }
 
     index(): number {
         return this.#index

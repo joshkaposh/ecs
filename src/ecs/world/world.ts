@@ -322,7 +322,13 @@ export class World {
     }
 
     query_filtered<const D extends readonly any[], const F extends readonly any[]>(data: D, filter: F): Query<D, F> {
-        return new Query(this, QueryState.new(data as any, filter as any, this) as QueryState<QueryData, QueryFilter>, false);
+        const state = QueryState.new(data as any, filter as any, this) as QueryState<QueryData, QueryFilter>
+        return new Query(
+            this,
+            state,
+            this.last_change_tick(),
+            this.change_tick()
+        );
     }
 
     removed(type: Component) {

@@ -186,6 +186,13 @@ export class QueryState<D extends QueryData<any, any, any>, F extends QueryFilte
         )
     }
 
+    new_archetype(archetype: Archetype, access: Access) {
+        const matches = this.#new_archetype_internal(archetype);
+        if (matches) {
+            this.update_archetype_component_access(archetype, access);
+        }
+    }
+
     update_archetypes(world: World) {
         this.validate_world(world.id())
         if (this.__component_access.__required.is_empty()) {
