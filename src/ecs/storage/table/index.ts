@@ -57,18 +57,24 @@ export class Table {
         return this.get_column(component_id)?.data[row];
     }
 
+    get_added_tick(component_id: ComponentId, row: TableRow) {
+        return this.get_column(component_id)?.added_ticks[row];
+    }
+
+    get_changed_tick(component_id: ComponentId, row: TableRow) {
+        return this.get_column(component_id)?.changed_ticks[row];
+    }
+
+
     get_data_slice_for(component_id: ComponentId) {
-        // @ts-expect-error
         return this.get_column(component_id)?.get_data_slice(this.entity_count())
     }
 
     get_changed_ticks_slice_for(component_id: ComponentId) {
-        // @ts-expect-error
         return this.get_column(component_id)?.get_changed_ticks_slice(this.entity_count())
     }
 
     get_added_ticks_slice_for(component_id: ComponentId) {
-        // @ts-expect-error
         return this.get_column(component_id)?.get_changed_ticks_slice(this.entity_count())
     }
 

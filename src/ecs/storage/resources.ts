@@ -71,7 +71,7 @@ class ResourceData {
         this.#changed_ticks = change_ticks.changed;
     }
 
-    remove(): Option<[InstanceType<Component>, ComponentTicks]> {
+    remove<T extends Resource>(): Option<[InstanceType<T>, ComponentTicks]> {
         if (!this.is_present()) {
             return;
         }

@@ -264,59 +264,6 @@ export class EntityWorldMut {
         entities.__set(entity.index(), new_location);
     }
 
-    // static #remove_bundle_info(
-    //     entity: Entity,
-    //     self_location: EntityLocation,
-    //     old_location: EntityLocation,
-    //     bundle_info: BundleInfo,
-    //     archetypes: Archetypes,
-    //     storages: Storages,
-    //     components: Components,
-    //     entities: Entities,
-    //     removed_components: RemovedComponentEvents
-    // ) {
-    //     const new_archetype_id = remove_bundle_from_archetype(
-    //         archetypes,
-    //         storages,
-    //         components,
-    //         old_location.archetype_id,
-    //         bundle_info,
-    //         true
-    //     )
-    //     if (!is_some(new_archetype_id)) {
-    //         throw new Error('Intersections should always return a result')
-    //     }
-
-    //     if (new_archetype_id === old_location.archetype_id) {
-    //         return
-    //     }
-
-    //     const old_archetype = archetypes.get(old_location.archetype_id)!;
-    //     for (const component_id of bundle_info.components()) {
-    //         if (old_archetype.contains(component_id)) {
-    //             removed_components.send(component_id, entity);
-
-    //             // Make sure to drop components stored in sparse sets.
-    //             // Dense components are dropped later in `move_to_and_drop_missing_unchecked`.
-    //             if (old_archetype.get_storage_type(component_id) === StorageType.SparseSet) {
-    //                 storages.sparse_sets.get(component_id)!.__remove(entity);
-    //             }
-    //         }
-    //     }
-
-    //     EntityWorldMut.#move_entity_from_remove(
-    //         true,
-    //         entity,
-    //         self_location,
-    //         old_location.archetype_id,
-    //         old_location,
-    //         entities,
-    //         archetypes,
-    //         storages,
-    //         new_archetype_id,
-    //     )
-    // }
-
     #error_despawned() {
         throw new Error(`Entity ${this.#entity} does not exist`)
     }

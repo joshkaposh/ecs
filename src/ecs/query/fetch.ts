@@ -147,10 +147,11 @@ class RefComponent<T extends Component, R extends Ref<T>> extends WorldQuery<Ins
 
     set_table(fetch: RefFetch<T>, component_id: number, table: Table): void {
         const column = table.get_column(component_id)!;
+        const len = table.entity_count();
         const table_data = [
-            column.get_data_slice()!,
-            column.get_added_ticks_slice()!,
-            column.get_changed_ticks_slice()!,
+            column.get_data_slice(len)!,
+            column.get_added_ticks_slice(len)!,
+            column.get_changed_ticks_slice(len)!,
         ] as const;
         fetch.components.set_table(table_data as any);
     }
@@ -293,13 +294,11 @@ class WriteComponent<T extends Component> extends WorldQuery<InstanceType<T>, Wr
 
     set_table(fetch: WriteFetch<T>, component_id: number, table: Table): void {
         const column = table.get_column(component_id)!;
+        const len = table.entity_count();
         const table_data = [
-            // @ts-expect-error
-            column.get_data_slice(table.entity_count()),
-            // @ts-expect-error
-            column.get_added_ticks_slice(table.entity_count()),
-            // @ts-expect-error
-            column.get_changed_ticks_slice(table.entity_count()),
+            column.get_data_slice(len),
+            column.get_added_ticks_slice(len),
+            column.get_changed_ticks_slice(len),
         ] as const
         fetch.components.set_table(table_data as any)
     }

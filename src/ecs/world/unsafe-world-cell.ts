@@ -1,5 +1,5 @@
 import { Option, is_none, is_some } from "joshkaposh-option";
-import { Archetype, Component, ComponentId, ComponentTicks, Entity, EntityLocation, QueryDataTuple, RemapToInstance, StorageType, World } from "..";
+import { Archetype, Component, ComponentId, ComponentTicks, Entity, EntityLocation, fetch_sparse_set, fetch_table, QueryDataTuple, RemapToInstance, StorageType, TickCells, World } from "..";
 import { $read_and_write, $readonly, Ref, Ticks, TicksMut } from "../change_detection";
 
 export class UnsafeEntityCell {
@@ -91,19 +91,33 @@ export class UnsafeEntityCell {
     }
 
     get_mut<T extends Component>(type: T): Option<InstanceType<T>> {
-        const component_id = this.#world.components().get_id(type);
-        if (!is_some(component_id)) {
-            return null;
+        const world = this.#world;
+        const component_id = world.components().get_id(type);
+        if (typeof component_id !== 'number') {
+            return;
         }
-        const [elt, ticks] = get_component_with_ticks(
-            this.#world,
+        const last_change_tick = world.last_change_tick();
+        const change_tick = world.change_tick();
+
+        const tup = get_component_and_ticks(
+            world,
             component_id,
             type.storage_type,
             this.#entity,
             this.#location
-        )!
+        )
+        if (!tup) {
+            return
+        }
+        const [value, cells] = tup;
 
-        return $read_and_write(elt, new TicksMut(ticks.added, ticks.changed, this.#world.last_change_tick(), this.#world.change_tick())) as InstanceType<T>;
+        return $read_and_write(value,
+            new TicksMut(
+                cells.added,
+                cells.changed,
+                last_change_tick,
+                change_tick
+            )) as InstanceType<T>;
     }
 
     get_by_id<T extends Component>(component_id: ComponentId): Option<InstanceType<T>> {
@@ -173,7 +187,7 @@ export class UnsafeEntityCell {
             return
         }
 
-        const tuple = get_component_with_ticks(world, component_id, type.storage_type, this.#entity, this.#location);
+        const tuple = get_component_and_ticks(world, component_id, type.storage_type, this.#entity, this.#location);
         if (!tuple) {
             return
         }
@@ -229,26 +243,29 @@ function get_ticks(
     }
 }
 
-function get_component_with_ticks(
+function get_component_and_ticks<T extends Component>(
     world: World,
     component_id: ComponentId,
     storage_type: StorageType,
     entity: Entity,
     location: EntityLocation
-): Option<[{}, ComponentTicks]> {
+): Option<[InstanceType<T>, TickCells]> {
     if (storage_type === StorageType.Table) {
-        return world.storages()
-            .tables
-            .get(location.table_id)
-            ?.get_column(component_id)
-            ?.get_with_ticks(location.table_row)
-    } else if (storage_type === StorageType.SparseSet) {
-        return world
-            .storages()
-            .sparse_sets
-            .get(component_id)
-            ?.get_with_ticks(entity);
+        const table = fetch_table(world, location);
+        if (!table) {
+            return
+        }
+        const value = table.get_component(component_id, location.table_row);
+        if (!value) {
+            return
+        }
+
+
+        return [value as InstanceType<T>, new TickCells(
+            table.get_added_tick(component_id, location.table_row)!,
+            table.get_changed_tick(component_id, location.table_row)!
+        )]
     } else {
-        throw new Error(`Unreachable: ${storage_type} has to be either StorageType::Table - ${StorageType.Table} or StorageType::SparseSet - ${StorageType.SparseSet}`)
+        return fetch_sparse_set(world, component_id)?.get_with_ticks(entity);
     }
 }

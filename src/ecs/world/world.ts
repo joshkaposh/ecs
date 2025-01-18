@@ -1,29 +1,27 @@
 import { Iterator, done, from_fn, iter, once } from "joshkaposh-iterator";
 import { assert, TODO } from "joshkaposh-iterator/src/util";
-import { Err, Option, Result, is_none, is_some, ErrorExt } from 'joshkaposh-option';
+import { Option, Result, is_none, ErrorExt } from 'joshkaposh-option';
+import { v4 } from "uuid";
 import { Archetype, ArchetypeComponentId, Archetypes } from "../archetype";
-import { Component, ComponentId, ComponentInfo, Components, ComponentTicks, Resource, ResourceId, Tick, TypeId } from "../component";
+import { Component, ComponentId, ComponentInfo, Components, ComponentTicks, Resource, ResourceId, Tick } from "../component";
 import { Storages } from "../storage";
-import { AllocAtWithoutReplacement, Entities, Entity } from "../entity";
+import { AllocAtWithoutReplacement, Entities, Entity, EntityLocation } from "../entity";
 import { Bundle, Bundles, BundleSpawner, DynamicBundle } from "../bundle";
-import { Query, QueryData, QueryEntityError, QueryFilter, QueryState, WorldQuery } from "../query";
+import { Query, QueryData, QueryEntityError, QueryFilter, QueryState } from "../query";
 import { RemovedComponentEvents } from "../removal-detection";
 import { Event, EventId, Events, SendBatchIds } from "../event";
 import { EntityRef, EntityWorldMut } from './entity-ref'
 import { SpawnBatchIter } from "./spawn-batch";
 import { UnsafeEntityCell } from "./unsafe-world-cell";
 import { CommandQueue } from "./command_queue";
-import { define_component } from "../define";
 import { IntoSystemTrait, RunSystemError, System, SystemInput } from "../system";
 import { Instance, unit } from "../../util";
 import { u32 } from "../../Intrinsics";
 import { CHECK_TICK_THRESHOLD, TicksMut } from "../change_detection";
 import { Schedule, ScheduleLabel, Schedules } from "../schedule";
-import { v4 } from "uuid";
+import { Class, define_component, TypeId } from "../../define";
 
 export type WorldId = number;
-
-type AllTuples<T> = T | T[] | T[][]
 
 export type ON_ADD = typeof ON_ADD;
 export const ON_ADD = 0;
@@ -53,10 +51,10 @@ export class OnRemove {
     static readonly storage_type = 1;
 }
 
-// define_component(OnAdd);
-// define_component(OnInsert);
-// define_component(OnReplace);
-// define_component(OnRemove);
+define_component(OnAdd);
+define_component(OnInsert);
+define_component(OnReplace);
+define_component(OnRemove);
 
 class TryRunScheduleError extends ErrorExt {
 
@@ -149,6 +147,7 @@ export class World {
     }
 
     // I: SystemInput, system: IntoSystem<I, O, M>
+    // @ts-expect-error
     register_system<I extends any, O, M>(system: any) {
 
     }
@@ -206,7 +205,7 @@ export class World {
 
     component_info(component: Component): Option<ComponentInfo> {
         const id = this.component_id(component);
-        return is_some(id) ? this.#components.get_info(id) : null;
+        return typeof id === 'number' ? this.#components.get_info(id) : null;
     }
 
     inspect_entity(entity: Entity): ComponentInfo[] {
@@ -333,7 +332,7 @@ export class World {
 
     removed(type: Component) {
         const id = this.#components.get_id(type);
-        if (is_some(id)) {
+        if (typeof id === 'number') {
             return this.removed_with_id(id)
                 .into_iter()
                 .flatten()
@@ -370,14 +369,14 @@ export class World {
         this.insert_resource_by_id(component_id, resource);
     }
 
-    remove_resource<R extends Resource>(resource: R): Option<R> {
+    remove_resource<R extends Resource>(resource: R): Option<InstanceType<R>> {
         const component_id = this.#components.get_resource_id(resource);
-        if (is_none(component_id)) {
+        if (typeof component_id !== 'number') {
             return null
         }
 
-        const res = this.#storages.resources.get(component_id)?.remove() as Option<R>
-        return res;
+        const res = this.#storages.resources.get(component_id)?.remove();
+        return res ? res[0] : undefined;
     }
 
     contains_resource(resource: Resource): boolean {
@@ -386,22 +385,6 @@ export class World {
             return false
         }
         return this.#storages.resources.get(id)?.is_present() ?? false;
-    }
-
-    resource<R>(resource: R): Instance<R> {
-        const res = this.get_resource(resource);
-        if (!res) {
-            throw new Error("Requested resource does not exist in the `World`. Did you forget to add it using `app.insert_resource` / `app.init_resource`? Resources are also implicitly added via `app.add_event and can be added by plugins.`")
-        }
-        return res;
-    }
-
-    resource_mut<R>(resource: R): Instance<R> {
-        const res = this.get_resource_mut(resource);
-        if (!res) {
-            throw new Error("Requested resource does not exist in the `World`. Did you forget to add it using `app.insert_resource` / `app.init_resource`? Resources are also implicitly added via `app.add_event and can be added by plugins.`")
-        }
-        return res;
     }
 
     /**
@@ -425,18 +408,34 @@ export class World {
         return component_id;
     }
 
-    get_resource<R>(resource: R): Option<Instance<R>> {
+    resource<R extends Resource>(resource: R): Instance<R> {
+        const res = this.get_resource(resource);
+        if (!res) {
+            throw new Error("Requested resource does not exist in the `World`. Did you forget to add it using `app.insert_resource` / `app.init_resource`? Resources are also implicitly added via `app.add_event and can be added by plugins.`")
+        }
+        return res;
+    }
+
+    resource_mut<R extends Resource>(resource: R): Instance<R> {
+        const res = this.get_resource_mut(resource);
+        if (!res) {
+            throw new Error("Requested resource does not exist in the `World`. Did you forget to add it using `app.insert_resource` / `app.init_resource`? Resources are also implicitly added via `app.add_event and can be added by plugins.`")
+        }
+        return res;
+    }
+
+    get_resource<R extends Resource>(resource: R): Option<Instance<R>> {
         const id = this.#components.get_resource_id(resource);
-        if (!is_some(id)) {
+        if (typeof id !== 'number') {
             return
         }
 
         return this.#storages.resources.get(id)?.get()
     }
 
-    get_resource_mut<R>(resource: R): Option<Instance<R>> {
+    get_resource_mut<R extends Resource>(resource: R): Option<Instance<R>> {
         const id = this.#components.resource_id(resource);
-        if (is_none(id)) {
+        if (typeof id !== 'number') {
             return
         }
 
@@ -488,17 +487,17 @@ export class World {
 
     }
 
-    send_event<E extends Event>(type: Events<E>, event: E): Option<EventId> {
+    send_event<E extends Event>(type: Events<E>, event: InstanceType<E>): Option<EventId> {
         return this.send_event_batch(type, once(event))?.next().value
     }
 
     send_event_default<E extends Event>(type: Events<E>, event: E): Option<EventId> {
-        return this.send_event(type, new event())
+        return this.send_event(type as any, new event())
     }
 
-    send_event_batch<E extends Event>(type: Events<E>, events: Iterable<E>): SendBatchIds<E> {
+    send_event_batch<E extends Event>(type: Events<E>, events: Iterable<InstanceType<E>>): SendBatchIds<E> {
         const events_resource = this.get_resource(type as any)
-        return TODO('World::send_event_batch()', events, events_resource)
+        return TODO('World::send_event_batch()', events, events_resource);
     }
 
     change_tick(): Tick {
@@ -605,7 +604,7 @@ export class World {
 
         const value = scope(this, schedule);
         const old = this.resource_mut(Schedules)?.insert(schedule);
-        if (is_some(old)) {
+        if (old) {
             console.warn(`Schedule ${label} was inserted during a call to World.try_schedule_scope`);
         }
         return value;
@@ -724,4 +723,12 @@ export class World {
         this.#entities.__set(entity.index(), location);
         return new EntityWorldMut(this, entity, location);
     }
+}
+
+export function fetch_table(world: World, location: EntityLocation) {
+    return world.storages().tables.get(location.table_id);
+}
+
+export function fetch_sparse_set(world: World, component_id: ComponentId) {
+    return world.storages().sparse_sets.get(component_id);
 }

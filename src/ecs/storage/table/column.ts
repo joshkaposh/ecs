@@ -59,16 +59,16 @@ export class Column {
         this.changed_ticks.push(ticks.changed);
     }
 
-    get_data_slice() {
-        return this.data.slice();
+    get_data_slice(len: number) {
+        return this.data.slice(0, len);
     }
 
-    get_added_ticks_slice() {
-        return this.added_ticks;
+    get_added_ticks_slice(len: number) {
+        return this.added_ticks.slice(0, len);
     }
 
-    get_changed_ticks_slice() {
-        return this.changed_ticks;
+    get_changed_ticks_slice(len: number) {
+        return this.changed_ticks.slice(0, len);
     }
 
     get(row: TableRow): Option<[{}, ComponentTicks]> {

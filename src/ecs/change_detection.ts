@@ -102,11 +102,12 @@ export abstract class DetectChangesMut<T extends any> extends DetectChanges<T> {
     }
 
     set_changed() {
-        this.ticks.changed = this.ticks.this_run;
+        const { changed, this_run } = this.ticks
+        changed.set(this_run.get());
     }
 
     set_last_changed(last_changed: Tick) {
-        this.ticks.changed = last_changed;
+        this.ticks.changed.set(last_changed.get());
     }
 
     set_if_neq(value: T) {

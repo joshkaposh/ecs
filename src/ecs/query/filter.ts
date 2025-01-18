@@ -29,7 +29,7 @@ function is_dense_arch(filter: QueryFilter[]) {
 }
 
 type ChangedFetch<T extends Component> = {
-    ticks: StorageSwitch<T, Option<Tick>, ComponentSparseSet>
+    ticks: StorageSwitch<T, Option<Tick[]>, ComponentSparseSet>
     last_run: Tick;
     this_run: Tick;
 
@@ -49,7 +49,10 @@ class _Changed<T extends Component> extends QueryFilter<boolean, ChangedFetch<T>
 
     init_fetch(world: World, id: number, last_run: Tick, this_run: Tick) {
         const f = {
-            ticks: StorageSwitch.new(this.#ty, () => undefined, () => world.storages().sparse_sets.get(id)),
+            ticks: StorageSwitch.new(this.#ty,
+                () => undefined,
+                () => world.storages().sparse_sets.get(id)
+            ),
             last_run,
             this_run
         }
@@ -71,8 +74,10 @@ class _Changed<T extends Component> extends QueryFilter<boolean, ChangedFetch<T>
 
     fetch(fetch: ChangedFetch<T>, entity: Entity, table_row: TableRow): boolean {
         return fetch.ticks.extract(
-            // @ts-expect-error
-            table => table[table_row]!.is_newer_than(fetch.last_run, fetch.this_run),
+            table => {
+                const tick = table![table_row];
+                return tick.is_newer_than(fetch.last_run, fetch.this_run)
+            },
             sparse_set => sparse_set.get_changed_tick(entity)!.is_newer_than(fetch.last_run, fetch.this_run)
         )
 

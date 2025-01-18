@@ -1,6 +1,6 @@
 import { Iterator, iter } from "joshkaposh-iterator";
 import { Option, is_some } from 'joshkaposh-option'
-import { ComponentId, ComponentInfo, ComponentTicks, Tick } from "../component";
+import { Component, ComponentId, ComponentInfo, ComponentTicks, Tick, TickCells } from "../component";
 import { Entity, EntityId } from "../entity";
 import { Column, TableRow } from "./table";
 import { swap_remove } from "../../array-helpers";
@@ -110,13 +110,19 @@ export class ComponentSparseSet {
         }
     }
 
-    get_with_ticks(entity: Entity): Option<[{}, ComponentTicks]> {
+    get_with_ticks<T extends Component>(entity: Entity): Option<[InstanceType<T>, TickCells]> {
         const dense_index = this.#sparse.get(entity.index());
         if (!is_some(dense_index)) {
             return
         }
 
-        return [this.#dense.get_data_unchecked(dense_index), new ComponentTicks(this.#dense.get_added_tick(dense_index)!, this.#dense.get_changed_tick(dense_index)!)]
+        return [
+            this.#dense.get_data_unchecked(dense_index) as InstanceType<T>,
+            new TickCells(
+                this.#dense.get_added_tick(dense_index)!,
+                this.#dense.get_changed_tick(dense_index)!
+            )
+        ]
     }
 
     get_added_tick(entity: Entity) {
@@ -198,7 +204,7 @@ export class SparseSet<I extends number, V> {
     }
 
     static default<I extends number, V>(): SparseSet<I, V> {
-        return new SparseSet([], [], new SparseArray())
+        return new SparseSet<I, V>([], [], new SparseArray())
     }
 
     static with_capacity(capacity: number) {

@@ -97,6 +97,18 @@ export class ComponentTicks {
         this.changed = change_tick;
     }
 }
+
+export class TickCells {
+    constructor(
+        public added: Tick,
+        public changed: Tick
+    ) { }
+
+    read() {
+        return new ComponentTicks(this.added, this.changed)
+    }
+}
+
 export type ComponentDescriptor = {
     readonly type: Component;
     readonly storage_type: StorageType;
