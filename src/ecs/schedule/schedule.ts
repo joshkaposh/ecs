@@ -7,9 +7,7 @@ import { writeln } from "../../util";
 import { Component, Components, Resource, Tick, type ComponentId } from '../component'
 import { ExecutorKind, is_apply_deferred, SystemExecutor, SystemSchedule } from "../executor";
 import { DiGraph, UnGraph, Outgoing, Incoming, GraphInfo, DependencyKind, check_graph, index, Graph, Ambiguity } from './graph'
-import { Configs, IntoSystemConfigs, IntoSystemSetConfigs, NodeConfig, NodeConfigs, SystemConfig, SystemSetConfig } from "./config";
-import { define_resource } from "../define";
-import { StorageType } from "../storage";
+import { Configs, IntoSystemConfigs, IntoSystemSetConfigs, NodeConfig, NodeConfigs, SystemConfig, SystemConfigs, SystemSetConfig } from "./config";
 import { IntoSystemTrait, ScheduleSystem, set } from "../system";
 import { FixedBitSet } from "fixed-bit-set";
 import { NodeId } from "./graph/node";
@@ -27,7 +25,6 @@ type IntoSystemSet<T> = {
     into_system_set(): SystemSet;
 };
 type InternedSystemSet = SystemSet;
-ScheduleSystem
 function make_executor(kind: ExecutorKind): SystemExecutor {
     switch (kind) {
         case 0:
@@ -180,13 +177,8 @@ export class Schedule {
         return this.#label
     }
 
-    add_systems<M extends (System<any, any> | ReturnType<typeof set>)[]>(...systems: M) {
-        if (systems.length === 1) {
-            // @ts-expect-error
-            systems = systems[0];
-        } else {
-            systems = set(systems as any) as any;
-        }
+    add_systems<M extends (System<any, any> | ReturnType<typeof set> | SystemConfigs)[]>(...systems: M) {
+        systems = set(...systems as any) as any;
 
         // @ts-expect-error
         this.#graph.process_configs(systems.into_configs(), false)
@@ -381,8 +373,9 @@ export class SystemSetNode {
     }
 
     is_system_type(): boolean {
-        return is_some(this.inner.is_system_type());
+        console.log('inner', this.inner);
 
+        return is_some(this.inner.system_type());
     }
 
     is_anonymous(): boolean {
@@ -574,7 +567,7 @@ export class ScheduleGraph {
                 }
                 const set_config = new SystemSetConfig(set);
                 set_config.conditions.push(...collective_conditions);
-                this.#configure_set_inner(set_config);
+                this.configure_set_inner(set_config);
             }
         }
     }
@@ -590,6 +583,7 @@ export class ScheduleGraph {
 
             const ignored_deferred = _chained === Chain.YesIgnoreDeferred;
             const chained = _chained === Chain.Yes || _chained === Chain.YesIgnoreDeferred;
+
             /**
              * Densely chained if
              * chained and all configs in the chain are densely chained, or
@@ -631,6 +625,8 @@ export class ScheduleGraph {
                         const previous_node = previous_nodes[i]
                         for (let j = 0; j < current_nodes.length; j++) {
                             const current_node = current_nodes[j]
+                            console.log(`adding edge between ${previous_node} and ${current_node}`);
+
                             this.#dependency.graph().add_edge(previous_node, current_node);
                             if (ignored_deferred) {
                                 this.#no_sync_edges.push(
@@ -669,19 +665,23 @@ export class ScheduleGraph {
     }
 
     add_system_inner(config: SystemConfig): Result<NodeId, ScheduleBuildError> {
+        console.log(`add_system_inner ${config.node.name()}`, config.conditions);
+
+
         const id = new NodeId.System(this.#systems.length);
 
         const err = this.update_graphs(id, config.graph_info);
         if (err) return err;
 
         this.#uninit.push([id, 0]);
-        this.#systems.push(new SystemNode(config.node));
-        this.#system_conditions.push(config.conditions);
-
+        this.#systems[id.index] = new SystemNode(config.node);
+        this.#system_conditions[id.index] = config.conditions;
         return id;
     }
 
-    #configure_set_inner(set: SystemSetConfig): Result<NodeId, ScheduleBuildError> {
+    configure_set_inner(set: SystemSetConfig): Result<NodeId, ScheduleBuildError> {
+        console.log('CONFIGURE_SET_INNER');
+
         const { node, graph_info, conditions } = set;
 
         const id = this.#system_set_ids.get(set.node) ?? this.#add_set(set.node);
@@ -698,6 +698,8 @@ export class ScheduleGraph {
 
     #add_set(set: InternedSystemSet) {
         const id = new NodeId.Set(this.#system_sets.length);
+        console.log('adding set', set);
+
         this.#system_sets.push(new SystemSetNode(set));
         this.#system_set_conditions.push([]);
         this.#system_set_ids.set(set, id);
@@ -705,11 +707,15 @@ export class ScheduleGraph {
     }
 
     #check_hierarchy_sets(id: NodeId, graph_info: GraphInfo): Result<undefined, ScheduleBuildError> {
+        const hier = graph_info.hierarchy
         // @ts-expect-error
-        for (const set of graph_info.hierarchy) {
+        for (let i = 0; i < hier.length; i++) {
+            // @ts-expect-error
+            const set = hier[i];
             const err = this.#check_hierarchy_set(id, set);
             if (err) return err;
         }
+
         return
     }
 
@@ -718,11 +724,12 @@ export class ScheduleGraph {
      * Add all the sets from the `GraphInfo`'s dependencies to the graph.
      */
     check_edges(id: NodeId, graph_info: GraphInfo) {
-        for (const { set } of graph_info.dependencies) {
+        const deps = graph_info.dependencies;
+        for (let i = 0; i < deps.length; i++) {
+            const { set } = deps[i];
             const set_id = this.#system_set_ids.get(set);
-
             if (set_id) {
-                if (id === set_id) {
+                if (id.eq(set_id)) {
                     return ScheduleBuildError.DependencyLoop(this.get_node_name(id))
                 }
             } else {
@@ -751,12 +758,16 @@ export class ScheduleGraph {
 
         this.__changed = true;
 
+        console.log('ScheduleGraph update_graphs()', graph_info.dependencies, graph_info.hierarchy);
+
+
 
         const { hierarchy: sets, dependencies, ambiguous_with } = graph_info;
         // @ts-expect-error
         for (let i = 0; i < sets.length; i++) {
             // @ts-expect-error
             const set = this.#system_set_ids.get(sets[i])!;
+            // console.log(`adding edge to hierarchy: from set ${set} to id ${id}`);
             this.#hierarchy.graph().add_edge(set, id);
             this.#dependency.graph().add_node(set);
         }
@@ -780,6 +791,7 @@ export class ScheduleGraph {
                 tup = [set, id];
             }
             const [lhs, rhs] = tup
+            console.log(`ScheduleGraph update_graphs() adding edge to dependency graph: from ${lhs} to ${rhs}`);
 
             this.#dependency.graph().add_edge(lhs, rhs);
             this.#hierarchy.graph().add_node(set);
@@ -794,6 +806,8 @@ export class ScheduleGraph {
             for (let i = 0; i < ambiguous_with.length; i++) {
                 const _set = ambiguous_with[i];
                 const set = this.system_set_ids.get(_set)!;
+                console.log(`ScheduleGraph.update_graphs() adding edge to ambiguous_with graph: from id ${id} to set ${set}`);
+
                 this.ambiguous_with.add_edge(id, set);
             }
         }
@@ -801,19 +815,25 @@ export class ScheduleGraph {
     }
 
     initialize(world: World) {
-        for (const [id, i] of drain(this.#uninit)) {
+        const uninit = this.#uninit;
+        for (let index = 0; index < uninit.length; index++) {
+            const [id, i] = uninit[index];
             if (id instanceof NodeId.System) {
                 this.#systems[id.index].get()!.initialize(world);
-                for (const condition of this.#system_conditions[id.index]) {
-                    condition.initialize(world);
+                const conditions = this.#system_conditions[id.index];
+                console.log('ScheduleGraph initialize() conditions', conditions);
+
+                for (let j = 0; j < conditions.length; j++) {
+                    conditions[j].initialize(world);
                 }
             } else {
-                for (const condition of iter(this.#system_set_conditions[id.index]).skip(i)) {
-                    condition.initialize(world)
+                const set_conditions = this.#system_set_conditions[id.index];
+                for (let j = i; j < set_conditions.length; j++) {
+                    set_conditions[j].initialize(world)
                 }
             }
-
         }
+        this.#uninit.length = 0;
     }
 
     build_schedule(components: Components, schedule_label: ScheduleLabel, ignored_ambiguities: Heap<ComponentId>) {
@@ -907,6 +927,8 @@ export class ScheduleGraph {
 
                 if (add_sync_on_edge) {
                     const sync_point = this.get_sync_point(distances.get(target.index)!);
+                    console.log(`ScheduleGraph auto_insert_apply_deferred() sync_point_graph: adding edge from ${node} to ${sync_point}`);
+                    console.log(`ScheduleGraph auto_insert_apply_deferred() sync_point_graph: adding edge from ${sync_point} to ${target}`);
                     sync_point_graph.add_edge(node, sync_point);
                     sync_point_graph.add_edge(sync_point, target);
 
@@ -923,6 +945,7 @@ export class ScheduleGraph {
      */
     add_auto_sync() {
         const id = new NodeId.System(this.#systems.length);
+
         this.#systems.push(new SystemNode(ScheduleSystem.Infallible(
             IntoSystemTrait.into_system(ApplyDeferred)
         )))
@@ -1018,6 +1041,8 @@ export class ScheduleGraph {
             dependency_flattened.remove_node(set);
 
             for (const [a, b] of temp) {
+                console.log(`ScheduleGraph get_dependency_flattened adding edge from ${a} to ${b}`);
+
                 dependency_flattened.add_edge(a, b);
             }
             temp.length = 0;
@@ -1028,28 +1053,28 @@ export class ScheduleGraph {
 
     get_ambiguous_with_flattened(set_systems: Map<NodeId, NodeId[]>): UnGraph {
         const ambiguous_with_flattened = UnGraph();
-        for (const [lhs, rhs] of this.#ambiguous_with.all_edges()) {
-            const l = lhs instanceof NodeId.System, r = rhs instanceof NodeId.System;
+        // for (const [lhs, rhs] of this.#ambiguous_with.all_edges()) {
+        //     const l = lhs instanceof NodeId.System, r = rhs instanceof NodeId.System;
 
-            if (l && r) {
-                ambiguous_with_flattened.add_edge(lhs, rhs);
-            } else if (!l && r) {
-                for (const lhs_ of set_systems.get(lhs) ?? []) {
-                    ambiguous_with_flattened.add_edge(lhs_, rhs);
+        //     if (l && r) {
+        //         ambiguous_with_flattened.add_edge(lhs, rhs);
+        //     } else if (!l && r) {
+        //         for (const lhs_ of set_systems.get(lhs) ?? []) {
+        //             ambiguous_with_flattened.add_edge(lhs_, rhs);
 
-                }
-            } else if (l && !r) {
-                for (const rhs_ of set_systems.get(rhs) ?? []) {
-                    ambiguous_with_flattened.add_edge(lhs, rhs_)
-                }
-            } else {
-                for (const lhs_ of set_systems.get(lhs) ?? []) {
-                    for (const rhs_ of set_systems.get(rhs) ?? []) {
-                        ambiguous_with_flattened.add_edge(lhs_, rhs_)
-                    }
-                }
-            }
-        }
+        //         }
+        //     } else if (l && !r) {
+        //         for (const rhs_ of set_systems.get(rhs) ?? []) {
+        //             ambiguous_with_flattened.add_edge(lhs, rhs_)
+        //         }
+        //     } else {
+        //         for (const lhs_ of set_systems.get(lhs) ?? []) {
+        //             for (const rhs_ of set_systems.get(rhs) ?? []) {
+        //                 ambiguous_with_flattened.add_edge(lhs_, rhs_)
+        //             }
+        //         }
+        //     }
+        // }
         return ambiguous_with_flattened;
     }
 
@@ -1213,8 +1238,9 @@ export class ScheduleGraph {
         schedule.copy_from(err_or_sched);
 
         // move systems into new schedule
-        for (let i = 0; i < schedule.__system_ids.length; i++) {
-            const id = schedule.__system_ids[i];
+        const system_ids = schedule.__system_ids;
+        for (let i = 0; i < system_ids.length; i++) {
+            const id = system_ids[i];
             const system = this.#systems[id.index].inner!;
             this.#systems[id.index].inner = null;
             const conditions = this.#system_conditions[id.index];
@@ -1249,7 +1275,7 @@ export class ScheduleGraph {
     }
 
     topsort_graph(graph: DiGraph, report: ReportCycles): Result<NodeId[], ScheduleBuildError> {
-        const top_sorted_nodes = [];
+        const top_sorted_nodes: NodeId[] = [];
         const sccs_with_cycles = [];
 
         for (const scc of graph.iter_sccs()) {
@@ -1257,12 +1283,12 @@ export class ScheduleGraph {
             if (scc.length > 1) {
                 sccs_with_cycles.push(scc)
             }
-
         }
 
         if (sccs_with_cycles.length === 0) {
-            top_sorted_nodes.reverse();
-            return top_sorted_nodes as any
+            // TODO: may need to reverse
+            // return top_sorted_nodes.reverse()
+            return top_sorted_nodes;
         } else {
             const cycles = [];
             for (const scc of sccs_with_cycles) {
@@ -1299,14 +1325,20 @@ export class ScheduleGraph {
         // }
     }
 
-    get_node_kind(id: NodeId): any { }
+    get_node_kind(id: NodeId): 'set' | 'system' {
+        return id.is_system() ? 'system' : 'set';
+    }
 
     get_node_name(id: NodeId): string {
         return this.get_node_name_inner(id)
     }
 
     get_node_name_inner(id: NodeId): string {
-        return ''
+        if (id.is_system()) {
+            return this.#systems[id.index].inner!.name();
+        } else {
+            return this.#system_sets[id.index].name()
+        }
     }
 
     get_hierarchy_conflicts_error_message(

@@ -12,11 +12,11 @@ export class ScheduleSystem extends System<any, any> {
         super()
         this.fallible = fallible
         this.#system = system;
+        console.log(`ScheduleSystem ctor fallible: ${fallible}, ${system}`);
     }
 
 
     static Infallible(system: System<any, void>) {
-        // console.log('creating Infallible ScheduleSystem ', system);
         return new ScheduleSystem(system, false)
 
     }
@@ -24,8 +24,16 @@ export class ScheduleSystem extends System<any, any> {
         return new ScheduleSystem(system, true);
     }
 
+    system_type_id(): `${string}-${string}-${string}-${string}` {
+        return this.#system.type_id();
+    }
+
+    system_type() {
+        return this.system_type_id();
+    }
+
     is_system_type(): boolean {
-        return !this.fallible
+        return true
     }
 
     name() {

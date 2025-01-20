@@ -5,18 +5,18 @@ import { define_resource } from "../../src/define";
 import { $Main } from "../../src/ecs-app/main_schedule";
 
 const sA = define_system({
-    system: () => console.log('system_a running!')
+    system: () => console.log('system_a running!'), params: () => []
 }).set_name('system_a')
 
-const sB = define_system({ system: () => console.log('system_b running!') })
+const sB = define_system({ system: () => console.log('system_b running!'), params: () => [] })
     .set_name('system_b');
 
 
-const sC = define_system({ system: () => console.log('system_c running!') })
+const sC = define_system({ system: () => console.log('system_c running!'), params: () => [] })
     .set_name('system_c');
 
 
-const sD = define_system({ system: () => console.log('system_d running!') })
+const sD = define_system({ system: () => console.log('system_d running!'), params: () => [] })
     .set_name('system_d');
 
 

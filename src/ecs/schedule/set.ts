@@ -1,8 +1,8 @@
-import { Option } from "joshkaposh-option";
+import { is_some, Option } from "joshkaposh-option";
 import { ProcessNodeConfig, ScheduleGraph } from "./schedule";
 import { NodeConfig } from "./config";
 import { NodeId } from "./graph";
-import { TypeId } from "..";
+import { TypeId } from "../../define";
 
 // export interface SystemSet extends ProcessNodeConfig {
 //     system_type(): Option<UUID>;
@@ -26,9 +26,6 @@ export class SystemSet implements ProcessNodeConfig {
         return false;
     }
 }
-
-
-
 
 /// A [`SystemSet`] grouping instances of the same function.
 ///

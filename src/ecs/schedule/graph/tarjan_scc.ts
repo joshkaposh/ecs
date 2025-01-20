@@ -4,6 +4,7 @@ import { is_none, is_some, Option } from "joshkaposh-option";
 import { done, item, iter, Iterator } from "joshkaposh-iterator";
 import { truncate } from "../../../array-helpers";
 import { u32 } from "../../../Intrinsics";
+import { assert } from "joshkaposh-iterator/src/util";
 
 type NodeData<N extends Iterator<NodeId>> = {
     root_index: Option<number> // NonZeroUsize;
@@ -67,6 +68,9 @@ class TarjanScc<AllNodes extends Iterator<NodeId>, Neighbors extends Iterator<No
         this.#visitation_stack = visitation_stack;
         this.#start = start;
         this.#index_adjustment = index_adjustment;
+
+        // console.log('TarjanScc ctor nodes', nodes);
+
     }
 
     next_scc(): Option<NodeId[]> {
@@ -111,7 +115,7 @@ class TarjanScc<AllNodes extends Iterator<NodeId>, Neighbors extends Iterator<No
 
     visit_once(v: NodeId, v_is_local_root: boolean) {
         const node_v = this.#nodes[this.#graph.to_index(v)];
-
+        // console.log('TarjanScc visit_once()', v, v_is_local_root, node_v);
         if (is_none(node_v.root_index)) {
             const v_index = this.#index;
             node_v.root_index = v_index;
@@ -120,7 +124,12 @@ class TarjanScc<AllNodes extends Iterator<NodeId>, Neighbors extends Iterator<No
 
         let w;
         while (!(w = this.#nodes[this.#graph.to_index(v)].neighbors.next()).done) {
-            if (is_none(this.#nodes[this.#graph.to_index(w.value)].root_index)) {
+            const n = this.#nodes[this.#graph.to_index(w.value)];
+            // console.log('TarjanScc visit_once()', w.value);
+
+            // console.log('TarjanScc visit_once()', w.value, this.#graph.to_index(w.value));
+            // assert(is_some(n), `Expected ${n} to exist.`);
+            if (is_none(n.root_index)) {
                 this.#visitation_stack.push([v, v_is_local_root]);
                 this.#visitation_stack.push([w.value, true]);
                 return

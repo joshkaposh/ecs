@@ -9,8 +9,12 @@ import { swap_remove } from "joshkaposh-graph/src/array-helpers";
 export class Graph<const DIRECTED extends boolean, S extends (value: any) => number | string = (value: any) => number | string> {
     #DIRECTED: DIRECTED;
     #nodes: IndexMap<NodeId, CompactNodeIdAndDirection[], S>;
-    #edges: Set<CompactNodeIdPair>
-    constructor(DIRECTED: DIRECTED = true as DIRECTED, nodes: IndexMap<NodeId, CompactNodeIdAndDirection[], S> = IndexMap.with_capacity_and_hasher(0, (n => n.to_primitive()) as S), edges: Set<CompactNodeIdPair> = new Set()) {
+    #edges: Set<CompactNodeIdPairPrimitive>
+    constructor(
+        DIRECTED: DIRECTED = true as DIRECTED,
+        nodes: IndexMap<NodeId, CompactNodeIdAndDirection[], S> = IndexMap.with_hasher((n => n.to_primitive()) as S),
+        edges: Set<CompactNodeIdPairPrimitive> = new Set()
+    ) {
         this.#nodes = nodes
         this.#edges = edges;
         this.#DIRECTED = DIRECTED;
@@ -29,7 +33,7 @@ export class Graph<const DIRECTED extends boolean, S extends (value: any) => num
     }
 
     edge_key(a: NodeId, b: NodeId) {
-        const [a_, b_] = this.#DIRECTED ?? a < b ? [a, b] : [b, a];
+        const [a_, b_] = this.#DIRECTED || a < b ? [a, b] : [b, a];
         return CompactNodeIdPair.store(a_, b_);
     }
 
@@ -57,7 +61,7 @@ export class Graph<const DIRECTED extends boolean, S extends (value: any) => num
                 this.edge_key(succ, n);
 
             this.remove_single_edge(succ, n, dir.opposite());
-            this.#edges.delete(edge);
+            this.#edges.delete(edge.to_primitive());
         }
     }
 
@@ -66,9 +70,10 @@ export class Graph<const DIRECTED extends boolean, S extends (value: any) => num
     }
 
     add_edge(a: NodeId, b: NodeId) {
-        const key = this.edge_key(a, b)
-        const is_new_edge = !this.#edges.has(key)
-        this.#edges.add(key);
+        const key = this.edge_key(a, b);
+        const key_primitive = key.to_primitive();
+        const is_new_edge = !this.#edges.has(key_primitive)
+        this.#edges.add(key_primitive);
 
         if (is_new_edge) {
             // insert into adjacency list if new edge
@@ -118,14 +123,14 @@ export class Graph<const DIRECTED extends boolean, S extends (value: any) => num
         const exist1 = this.remove_single_edge(a, b, Outgoing);
         const exist2 = a.index !== b.index ? this.remove_single_edge(b, a, Incoming) : exist1;
         const weight = this.edge_key(a, b);
-        this.#edges.delete(weight)
+        this.#edges.delete(weight.to_primitive())
 
         assert(exist1 === exist2);
         return exist1;
     }
 
     contains_edge(a: NodeId, b: NodeId) {
-        return this.#edges.has(this.edge_key(a, b))
+        return this.#edges.has(this.edge_key(a, b).to_primitive())
     }
 
     nodes() {
@@ -138,8 +143,8 @@ export class Graph<const DIRECTED extends boolean, S extends (value: any) => num
         return it
             .map(c => c.load())
             .filter_map(([n, dir]) => {
-                const bool = !this.#DIRECTED || dir.value === Outgoing.value
-                return bool ? n : undefined;
+                return !this.#DIRECTED || dir.value === Outgoing.value ?
+                    n : undefined;
             })
     }
 
@@ -156,7 +161,7 @@ export class Graph<const DIRECTED extends boolean, S extends (value: any) => num
         return this.neighbors(a)
             .map(b => {
                 const key = this.edge_key(a, b);
-                assert(this.#edges.has(key), `Failed to map ${key} to Graph edge as it does not exist`)
+                assert(this.#edges.has(key.to_primitive()), `Failed to map ${key} to Graph edge as it does not exist`)
                 return [a, b];
             })
     }
@@ -166,16 +171,25 @@ export class Graph<const DIRECTED extends boolean, S extends (value: any) => num
             .map(b => {
                 const [a1, b1] = dir.value === Incoming.value ? [b, a] : [a, b]
                 const key = this.edge_key(a1, b1);
-                assert(this.#edges.has(key), `Failed to map ${key} to Graph edge as it does not exist`)
+                assert(this.#edges.has(key.to_primitive()), `Failed to map ${key} to Graph edge as it does not exist`)
                 return [a, b] as const;
             })
     }
 
     all_edges() {
-        return iter(this.#edges).map(e => e.load())
+        return iter(this.#edges).map(e => CompactNodeIdPair.from_primitive(e))
+        // return iter(this.#edges).map(e => e.load())
     }
 
     to_index(ix: NodeId) {
+
+        const index = this.#nodes.keys().enumerate().find_map(([i, id]) => {
+            if (ix.eq(id)) {
+                return i
+            }
+            return
+        })
+
         return this.#nodes.get_index_of(ix)!;
     }
 
@@ -240,9 +254,9 @@ class CompactNodeIdAndDirection {
         const node = is_system ? new NodeId.System(index) : new NodeId.Set(index)
         return [node, direction];
     }
-
 }
 
+type CompactNodeIdPairPrimitive = `${number}:${boolean}, ${number}:${boolean}`;
 class CompactNodeIdPair {
     constructor(
         public index_a: number,
@@ -265,6 +279,22 @@ class CompactNodeIdPair {
         const a = is_system_a ? new NodeId.System(index_a) : new NodeId.Set(index_a)
         const b = is_system_b ? new NodeId.System(index_b) : new NodeId.Set(index_b);
         return [a, b]
+    }
+
+    to_primitive(): CompactNodeIdPairPrimitive {
+        return `${this.index_a}:${this.is_system_a}, ${this.index_b}:${this.is_system_b}`
+    }
+
+    static from_primitive(p: CompactNodeIdPairPrimitive) {
+        const [lhs, rhs] = p.split(', ');
+        const [ia, isa] = lhs.split(':')
+        const [ib, isb] = rhs.split(':')
+
+        return new CompactNodeIdPair(Number(ia), Number(ib), Boolean(isa), Boolean(isb))
+    }
+
+    [Symbol.toPrimitive]() {
+        return this.to_primitive()
     }
 
 }

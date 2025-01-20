@@ -155,7 +155,7 @@ export function check_graph(graph: DiGraph, topological_order: NodeId[]): CheckG
     }
 
     for (let i = 0; i < n - 1; i++) {
-        for (const ix of range(index(i, i + 1, n), index(i, n - 1, n))) {
+        for (let ix = index(i, i + 1, n); ix < index(i, n - 1, n); ix++) {
             const [a, b] = row_col(ix, n)
             const pair = [topological_order[a], topological_order[b]] as [NodeId, NodeId]
             if (reachable.contains(ix)) {
@@ -163,7 +163,9 @@ export function check_graph(graph: DiGraph, topological_order: NodeId[]): CheckG
             } else {
                 disconnected.push(pair);
             }
+
         }
+
     }
 
     return {
@@ -182,11 +184,12 @@ export function simple_cycles_in_component(graph: DiGraph, scc: NodeId[]) {
 
     while (is_some(scc = sccs.pop()!)) {
         const subgraph = DiGraph();
-        for (const node of scc) {
-            subgraph.add_node(node);
+        for (let i = 0; i < scc.length; i++) {
+            subgraph.add_node(scc[i])
         }
 
-        for (const node of scc) {
+        for (let i = 0; i < scc.length; i++) {
+            const node = scc[i];
             for (const succ of graph.neighbors(node)) {
                 if (subgraph.contains_node(succ)) {
                     subgraph.add_edge(node, succ)

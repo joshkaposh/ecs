@@ -22,7 +22,7 @@ export abstract class System<In, Out> extends IntoSystemConfigs<unit> {
     /**
      * A system is fallible if it returns a value
      */
-    static readonly fallible: boolean;
+    abstract readonly fallible: boolean;
 
     abstract is_send(): boolean;
     abstract is_exclusive(): boolean;
@@ -63,7 +63,7 @@ export abstract class System<In, Out> extends IntoSystemConfigs<unit> {
 
     default_system_sets(): any[] {
         return [
-            new ScheduleSystem(this, System.fallible)
+            new ScheduleSystem(this, this.fallible)
         ];
 
     }
@@ -93,7 +93,9 @@ export abstract class System<In, Out> extends IntoSystemConfigs<unit> {
     //* IntoSystemConfigs impl
 
     into_configs(): SystemConfigs {
-        return System.fallible ?
+        console.log('System into_configs() ', this.fallible);
+
+        return this.fallible ?
             NodeConfigs.new_system(ScheduleSystem.Fallible(this)) :
             NodeConfigs.new_system(ScheduleSystem.Infallible(this as System<In, void>))
     }
@@ -104,7 +106,31 @@ export abstract class System<In, Out> extends IntoSystemConfigs<unit> {
         return new SystemTypeSet(this.constructor as unknown as TypeId) as Set;
     }
 
+    [Symbol.toPrimitive]() {
+        return `System {
+            name: ${this.name()},
+            is_exclusive: ${this.is_exclusive()},
+            is_send: ${this.is_send()}
+        }`
+    }
+
+    [Symbol.toStringTag]() {
+        return `System {
+            name: ${this.name()},
+            is_exclusive: ${this.is_exclusive()},
+            is_send: ${this.is_send()}
+        }`
+    }
+
 };
+
+export function check_system_change_tick(last_run: Tick, this_run: Tick, system_name: string) {
+    if (last_run.check_tick(this_run)) {
+        const age = this_run.relative_to(last_run).get();
+        console.warn(`System ${system_name} has not run for ${age} ticks. Changed older than ${Tick.MAX.get() - 1} will not be detected.`)
+    }
+}
+
 export type RunSystemOnce = {
     run_system_once<Out, Marker, T extends IntoSystemTrait<unit, Out, Marker>>(system: T): void;
     run_system_once_with<Out, Marker, T extends IntoSystemTrait<any, Out, Marker>>(system: T): void;

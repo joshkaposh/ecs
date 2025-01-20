@@ -10,9 +10,10 @@ import { SystemState } from './function-system';
 import { Option } from 'joshkaposh-option';
 import { ParamBuilder, SystemParam } from './system-param';
 import { recursively_flatten_nested_arrays, unit } from '../../util';
-import { NodeConfigs } from '../schedule/config';
+import { Configs, NodeConfigs } from '../schedule/config';
 import { Chain } from '../schedule';
 import { SystemSet } from '../schedule/set';
+import { ScheduleSystem } from './schedule_system';
 export * from './system-param';
 export * from './input';
 export * from './system';
@@ -58,7 +59,7 @@ export function define_params<P extends readonly any[]>(...params: P) {
 
         param_init_state(world: World, system_meta: SystemMeta) {
             const c = this.#param;
-            console.log('Param init_state', c);
+            // console.log('Param init_state', c);
             if (is_component(c)) {
                 const id = world.register_component(c)
                 const set = system_meta.__component_access_set;
@@ -68,7 +69,7 @@ export function define_params<P extends readonly any[]>(...params: P) {
         }
 
         param_get_param(state: any, system_meta: SystemMeta, world: World, change_tick: Tick) {
-            console.log('SystemParam param_get_param()', state, this.#param);
+            // console.log('SystemParam param_get_param()', state, this.#param);
             return this.#param;
         }
 
@@ -97,7 +98,11 @@ type SysBase<P extends readonly any[], F extends (...args: P) => any> = {
     params: (builder: ParamBuilder<P>) => P;
 }
 
-export type SystemDefinition<P extends readonly any[], F extends (...args: P) => any> = P extends readonly [] ? Omit<SysBase<P, F>, 'params'> : SysBase<P, F>;
+// export type SystemDefinition<P extends readonly any[], F extends (...args: P) => any> = P extends readonly [] ? Omit<SysBase<P, F>, 'params'> : SysBase<P, F>;
+export type SystemDefinition<P extends readonly any[], F extends (...args: P) => any> = SysBase<P, F> & (ReturnType<F> extends boolean ? {
+    condition: true
+} : {});
+
 
 export type SystemImpl<In, Out> = System<In, Out> & {
     set_name(new_name: string): SystemImpl<In, Out>;
@@ -108,9 +113,10 @@ export function define_system<const P extends readonly any[], const F extends (.
 ): SystemImpl<Parameters<F>, ReturnType<F>> {
 
     const fallible = 'condition' in config;
-    const params = 'params' in config ? config.params! : () => [];
-
+    const params = config.params;
     const system = config.system;
+
+    console.log('define_system: fallible', fallible)
 
     class SystemImpl<const P extends Parameters<F>> extends System<any, any> {
         #fn: F;
@@ -125,8 +131,6 @@ export function define_system<const P extends readonly any[], const F extends (.
         constructor(fn: F) {
             super()
             this.#fn = fn;
-            // this.#params_initial = params;
-            // this.#params = define_params(...params);
             this.#system_meta = SystemMeta.new(fn)
             this.#name = fn.name;
         }
@@ -163,7 +167,7 @@ export function define_system<const P extends readonly any[], const F extends (.
                 this.#params = p;
                 this.#state = SystemState.new(world, p)
             }
-            console.log('System initialize', this.#state, this.#params);
+            // console.log('System initialize', this.#state, this.#params);
 
             this.#system_meta.last_run = world.change_tick().relative_to(Tick.MAX);
         }
@@ -207,7 +211,7 @@ export function define_system<const P extends readonly any[], const F extends (.
 
         // @ts-expect-error
         run(input: SystemIn<System<any, any>>, world: World) {
-            console.log('SystemImpl run');
+            // console.log('SystemImpl run');
             return this.run_unsafe(input, world);
         }
 
@@ -218,7 +222,7 @@ export function define_system<const P extends readonly any[], const F extends (.
                 throw new Error(`System's state was not found. Did you forget to initialize this system before running it?`)
             }
             const param_state = this.#state.get(world);
-            console.log('SystemImpl run_unsafe', input, param_state);
+            // console.log('SystemImpl run_unsafe', input, param_state);
             return this.#fn(...param_state)
         }
 
@@ -240,19 +244,29 @@ export function define_system<const P extends readonly any[], const F extends (.
     return new SystemImpl(system);
 }
 
-export function set<const S extends readonly System<any, any>[]>(system_sets: S) {
+export function set<const S extends readonly System<any, any>[]>(...system_sets: S) {
     class SystemSetImpl {
         #sets: SystemSet[];
+        #configs: Configs<ScheduleSystem>
         constructor(sets: SystemSet[]) {
             this.#sets = sets;
-        }
-
-        into_configs() {
-            return new NodeConfigs.Configs(
+            this.#configs = new NodeConfigs.Configs(
+                // @ts-expect-error
                 sets.map(s => s.into_configs()),
                 [],
                 Chain.No
             )
+        }
+
+        readonly fallible = false;
+
+        into_configs() {
+            return this.#configs
+        }
+
+        chain() {
+            this.into_configs().chain();
+            return this;
         }
     }
 

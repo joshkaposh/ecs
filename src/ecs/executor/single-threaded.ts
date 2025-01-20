@@ -50,13 +50,39 @@ export class SingleThreadedExecutor implements SystemExecutor {
     }
 
     run(schedule: SystemSchedule, world: World, _skip_systems: Option<FixedBitSet>): void {
+        const completed_systems = this.#completed_systems;
+
         if (_skip_systems) {
-            this.#completed_systems.or(_skip_systems);
+            completed_systems.or(_skip_systems);
         }
 
-        for (let system_index = 0; system_index < schedule.__systems.length; system_index++) {
-            let should_run = !this.#completed_systems.contains(system_index);
-            const system = schedule.__systems[system_index];
+        const systems = schedule.__systems;
+        const sets_with_conditions_of_systems = schedule.__sets_with_conditions_of_systems;
+        for (let system_index = 0; system_index < systems.length; system_index++) {
+            let should_run = !completed_systems.contains(system_index);
+            const ones = sets_with_conditions_of_systems[system_index].ones();
+            for (const set_idx of ones) {
+                if (this.#evaluated_sets.contains(set_idx)) {
+                    continue;
+                }
+
+                const set_conditions_met = evaluate_and_fold_conditions(schedule.__set_conditions[set_idx], world);
+
+                if (!set_conditions_met) {
+                    completed_systems.union_with(schedule.__systems_in_sets_with_conditions[set_idx]);
+                }
+
+                // @ts-expect-error
+                should_run &= set_conditions_met;
+                this.#evaluated_sets.insert(set_idx);
+            }
+
+            const system_conditions_met = evaluate_and_fold_conditions(schedule.__system_conditions[system_index], world);
+            // @ts-expect-error
+            should_run &= system_conditions_met;
+
+            const system = systems[system_index];
+
             if (should_run) {
                 const valid_params = system.validate_param(world);
                 // @ts-expect-error
@@ -64,7 +90,7 @@ export class SingleThreadedExecutor implements SystemExecutor {
             }
 
             // system has either been skipped or will run
-            this.#completed_systems.insert(system_index);
+            completed_systems.insert(system_index);
             if (!should_run) {
                 continue
             }
@@ -73,13 +99,18 @@ export class SingleThreadedExecutor implements SystemExecutor {
                 this.apply_deferred(schedule, world)
             }
 
-            // const res = result(() => {
-            if (system.is_exclusive()) {
-                system.run(undefined, world)
-            } else {
-                system.run_unsafe(undefined, world);
+            try {
+                if (system.is_exclusive()) {
+                    system.run(undefined, world)
+                } else {
+
+                    system.update_archetype_component_access(world);
+
+                    system.run_unsafe(undefined, world);
+                }
+            } catch (error) {
+                throw new Error(`Encountered an error in system: ${system}`, { cause: error && typeof error === 'object' && 'cause' in error ? error.cause : undefined })
             }
-            // })
             // if (res instanceof Error) {
             // throw res;
             // throw new Error(`Encontered an error in system ${system.name()}`)

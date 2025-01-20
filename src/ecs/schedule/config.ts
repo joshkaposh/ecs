@@ -4,7 +4,8 @@ import { Ambiguity, DependencyKind, GraphInfo } from './graph'
 import { assert } from "joshkaposh-iterator/src/util";
 import { is_none } from "joshkaposh-option";
 import { IntoSystemSet, SystemSet } from "./set";
-import { iter } from "joshkaposh-iterator";
+
+type InternedSystemSet = SystemSet;
 
 function new_condition<M>(condition: Condition<M>): any {
     const condition_system = IntoSystemTrait.into_system(condition as any);
@@ -44,7 +45,7 @@ export abstract class IntoSystemConfigs<Marker> {
         return this.into_configs().after_ignore_deferred(set);
     }
 
-    distributive_run_if<M>(condition: Condition<M>) {
+    distributive_run_if<M>(condition: Condition<M>): SystemConfigs {
         return this.into_configs().distributive_run_if(condition);
     }
 
@@ -118,171 +119,173 @@ export abstract class IntoSystemSetConfigs<M> {
 
 };
 
-const NodeConfigsImpl = {
-    in_set_inner<T extends ProcessNodeConfig>(this: NodeConfigs<T>, set: SystemSet) {
-        if (this instanceof NodeConfig) {
-            // @ts-expect-error
-            this.graph_info.hierarchy.push(set);
-        } else {
-            for (const cfg of this) {
-                // @ts-expect-error
-                cfg.in_set_inner(set);
-            }
-        }
-    },
+// const NodeConfigsImpl = {
+//     in_set_inner<T extends ProcessNodeConfig>(this: NodeConfigs<T>, set: SystemSet) {
+//         if (this instanceof NodeConfig) {
+//             // @ts-expect-error
+//             this.graph_info.hierarchy.push(set);
+//         } else {
+//             for (const cfg of this) {
+//                 // @ts-expect-error
+//                 cfg.in_set_inner(set);
+//             }
+//         }
+//     },
 
-    before_inner<T extends ProcessNodeConfig>(this: NodeConfigs<T>, set: SystemSet) {
-        if (this instanceof NodeConfig) {
-            this.graph_info.dependencies.push(new Dependency(DependencyKind.Before, set))
-        } else {
-            for (const cfg of this) {
-                // @ts-expect-error
-                cfg.before_inner(set);
-            }
-        }
-    },
+//     before_inner<T extends ProcessNodeConfig>(this: NodeConfigs<T>, set: SystemSet) {
+//         if (this instanceof NodeConfig) {
+//             this.graph_info.dependencies.push({ kind: DependencyKind.Before, set })
+//         } else {
+//             for (const cfg of this) {
+//                 // @ts-expect-error
+//                 cfg.before_inner(set);
+//             }
+//         }
+//     },
 
-    after_inner<T extends ProcessNodeConfig>(this: NodeConfigs<T>, set: SystemSet) {
-        if (this instanceof NodeConfig) {
-            this.graph_info.dependencies.push(new Dependency(DependencyKind.After, set))
-        } else {
-            for (const cfg of this) {
-                // @ts-expect-error
-                cfg.after_inner(set);
-            }
-        }
-    },
+//     after_inner<T extends ProcessNodeConfig>(this: NodeConfigs<T>, set: SystemSet) {
+//         if (this instanceof NodeConfig) {
+//             this.graph_info.dependencies.push({ kind: DependencyKind.After, set })
+//         } else {
+//             for (const cfg of this) {
+//                 // @ts-expect-error
+//                 cfg.after_inner(set);
+//             }
+//         }
+//     },
 
-    before_ignore_deferred_inner<T extends ProcessNodeConfig>(this: NodeConfigs<T>, set: SystemSet) {
-        if (this instanceof NodeConfig) {
-            this.graph_info.dependencies.push(new Dependency(DependencyKind.BeforeNoSync, set))
-        } else {
-            for (const cfg of this) {
-                // @ts-expect-error
-                cfg.before_ignore_deferred_inner(set);
-            }
-        }
-    },
+//     before_ignore_deferred_inner<T extends ProcessNodeConfig>(this: NodeConfigs<T>, set: SystemSet) {
+//         if (this instanceof NodeConfig) {
+//             this.graph_info.dependencies.push({ kind: DependencyKind.BeforeNoSync, set })
+//         } else {
+//             for (const cfg of this) {
+//                 // @ts-expect-error
+//                 cfg.before_ignore_deferred_inner(set);
+//             }
+//         }
+//     },
 
-    after_ignore_deferred_inner<T extends ProcessNodeConfig>(this: NodeConfigs<T>, set: SystemSet) {
-        if (this instanceof NodeConfig) {
-            this.graph_info.dependencies.push(new Dependency(DependencyKind.AfterNoSync, set))
-        } else {
-            for (const cfg of this) {
-                // @ts-expect-error
-                cfg.after_ignore_deferred_inner(set);
-            }
-        }
-    },
+//     after_ignore_deferred_inner<T extends ProcessNodeConfig>(this: NodeConfigs<T>, set: SystemSet) {
+//         if (this instanceof NodeConfig) {
+//             this.graph_info.dependencies.push({ kind: DependencyKind.AfterNoSync, set })
+//         } else {
+//             for (const cfg of this) {
+//                 // @ts-expect-error
+//                 cfg.after_ignore_deferred_inner(set);
+//             }
+//         }
+//     },
 
-    ambiguous_with_inner<T extends ProcessNodeConfig>(this: NodeConfigs<T>, set: SystemSet) {
-        if (this instanceof NodeConfig) {
-            ambiguous_with(this.graph_info, set);
-        } else {
-            for (const cfg of this) {
-                // @ts-expect-error
-                cfg.ambiguous_with_inner(set);
-            }
-        }
-    },
+//     ambiguous_with_inner<T extends ProcessNodeConfig>(this: NodeConfigs<T>, set: SystemSet) {
+//         if (this instanceof NodeConfig) {
+//             ambiguous_with(this.graph_info, set);
+//         } else {
+//             for (const cfg of this) {
+//                 // @ts-expect-error
+//                 cfg.ambiguous_with_inner(set);
+//             }
+//         }
+//     },
 
-    ambiguous_with_all_inner<T extends ProcessNodeConfig>(this: NodeConfigs<T>) {
-        if (this instanceof NodeConfig) {
-            this.graph_info.ambiguous_with = Ambiguity.IgnoreAll;
-        } else {
-            for (const cfg of this) {
-                // @ts-expect-error
-                cfg.ambiguous_with_all_inner();
-            }
-        }
-    },
+//     ambiguous_with_all_inner<T extends ProcessNodeConfig>(this: NodeConfigs<T>) {
+//         if (this instanceof NodeConfig) {
+//             this.graph_info.ambiguous_with = Ambiguity.IgnoreAll;
+//         } else {
+//             for (const cfg of this) {
+//                 // @ts-expect-error
+//                 cfg.ambiguous_with_all_inner();
+//             }
+//         }
+//     },
 
-    run_if_dyn<T extends ProcessNodeConfig>(this: NodeConfigs<T>, condition: Condition<any>) {
-        if (this instanceof NodeConfig) {
-            this.conditions.push(condition)
-        } else {
-            this.collective_conditions.push(condition)
-        }
-    },
+//     run_if_dyn<T extends ProcessNodeConfig>(this: NodeConfigs<T>, condition: Condition<any>) {
+//         if (this instanceof NodeConfig) {
+//             this.conditions.push(condition)
+//         } else {
+//             this.collective_conditions.push(condition)
+//         }
+//     },
 
-    chain_inner<T extends ProcessNodeConfig>(this: NodeConfigs<T>) {
-        if (this instanceof Configs) {
-            this.chained = Chain.Yes
-        }
-        return this;
-    },
+//     chain_inner<T extends ProcessNodeConfig>(this: NodeConfigs<T>) {
+//         if (this instanceof Configs) {
+//             this.chained = Chain.Yes
+//         }
+//         return this;
+//     },
 
-    chain_ignore_deferred_inner<T extends ProcessNodeConfig>(this: NodeConfigs<T>) {
-        if (this instanceof Configs) {
-            this.chained = Chain.YesIgnoreDeferred;
-        }
-        return this;
-    },
+//     chain_ignore_deferred_inner<T extends ProcessNodeConfig>(this: NodeConfigs<T>) {
+//         if (this instanceof Configs) {
+//             this.chained = Chain.YesIgnoreDeferred;
+//         }
+//         return this;
+//     },
 
-    // * IntoSystemConfigs impl
-    // into_configs() {
-    //     return this;
-    // },
+//     // * IntoSystemConfigs impl
+//     // into_configs() {
+//     //     return this;
+//     // },
 
-    // in_set<T extends ProcessNodeConfig>(config: NodeConfigs<T>, set: SystemSet) {
-    //     assert(is_none(set.system_type()), 'Adding arbitrary systems to a system type set is not allowed')
-    //     this.in_set_inner(config, set);
-    //     return this;
-    // },
+//     // in_set<T extends ProcessNodeConfig>(config: NodeConfigs<T>, set: SystemSet) {
+//     //     assert(is_none(set.system_type()), 'Adding arbitrary systems to a system type set is not allowed')
+//     //     this.in_set_inner(config, set);
+//     //     return this;
+//     // },
 
-    // before<T extends ProcessNodeConfig, M extends SystemSet>(config: NodeConfigs<T>, set: IntoSystemSet<M>) {
-    //     // @ts-expect-error
-    //     set = set.into_system_set();
-    //     this.before_inner(config, set as unknown as SystemSet)
-    //     return this;
-    // },
+//     // before<T extends ProcessNodeConfig, M extends SystemSet>(config: NodeConfigs<T>, set: IntoSystemSet<M>) {
+//     //     // @ts-expect-error
+//     //     set = set.into_system_set();
+//     //     this.before_inner(config, set as unknown as SystemSet)
+//     //     return this;
+//     // },
 
-    // after<T extends ProcessNodeConfig, M extends SystemSet>(config: NodeConfigs<T>, set: IntoSystemSet<M>) {
-    //     // @ts-expect-error
-    //     set = set.into_system_set();
-    //     this.after_inner(config, set as unknown as SystemSet)
-    //     return this;
-    // },
+//     // after<T extends ProcessNodeConfig, M extends SystemSet>(config: NodeConfigs<T>, set: IntoSystemSet<M>) {
+//     //     // @ts-expect-error
+//     //     set = set.into_system_set();
+//     //     this.after_inner(config, set as unknown as SystemSet)
+//     //     return this;
+//     // },
 
-    // before_ignore_deferred<T extends ProcessNodeConfig, M extends SystemSet>(config: NodeConfigs<T>, set: IntoSystemSet<M>) {
-    //     // @ts-expect-error
-    //     set = set.into_system_set();
-    //     this.before_ignore_deferred_inner(config, set as unknown as SystemSet)
-    //     return this;
-    // },
+//     // before_ignore_deferred<T extends ProcessNodeConfig, M extends SystemSet>(config: NodeConfigs<T>, set: IntoSystemSet<M>) {
+//     //     // @ts-expect-error
+//     //     set = set.into_system_set();
+//     //     this.before_ignore_deferred_inner(config, set as unknown as SystemSet)
+//     //     return this;
+//     // },
 
-    // after_ignore_deferred<T extends ProcessNodeConfig, M extends SystemSet>(config: NodeConfigs<T>, set: IntoSystemSet<M>) {
-    //     // @ts-expect-error
-    //     set = set.into_system_set();
-    //     this.after_ignore_deferred_inner(config, set as unknown as SystemSet)
-    //     return this;
-    // },
+//     // after_ignore_deferred<T extends ProcessNodeConfig, M extends SystemSet>(config: NodeConfigs<T>, set: IntoSystemSet<M>) {
+//     //     // @ts-expect-error
+//     //     set = set.into_system_set();
+//     //     this.after_ignore_deferred_inner(config, set as unknown as SystemSet)
+//     //     return this;
+//     // },
 
-    // run_if<T extends ProcessNodeConfig, M>(config: NodeConfigs<T>, condition: Condition<M>) {
-    //     this.run_if_dyn(config, new_condition(condition));
-    //     return this
-    // },
+//     // run_if<T extends ProcessNodeConfig, M>(config: NodeConfigs<T>, condition: Condition<M>) {
+//     //     this.run_if_dyn(config, new_condition(condition));
+//     //     return this
+//     // },
 
-    // ambiguous_with<T extends ProcessNodeConfig, M extends SystemSet>(config: NodeConfigs<T>, set: IntoSystemSet<M>) {
-    //     this.ambiguous_with_inner(config, set as unknown as SystemSet)
-    //     return this
-    // },
+//     // ambiguous_with<T extends ProcessNodeConfig, M extends SystemSet>(config: NodeConfigs<T>, set: IntoSystemSet<M>) {
+//     //     this.ambiguous_with_inner(config, set as unknown as SystemSet)
+//     //     return this
+//     // },
 
 
-    // ambiguous_with_all<T extends ProcessNodeConfig>(config: NodeConfigs<T>) {
-    //     this.ambiguous_with_all_inner(config)
-    //     return this
-    // },
+//     // ambiguous_with_all<T extends ProcessNodeConfig>(config: NodeConfigs<T>) {
+//     //     this.ambiguous_with_all_inner(config)
+//     //     return this
+//     // },
 
-    // chain<T extends ProcessNodeConfig>(config: NodeConfigs<T>) {
-    //     return this.chain_inner(config);
-    // },
+//     // chain<T extends ProcessNodeConfig>(config: NodeConfigs<T>) {
+//     //     return this.chain_inner(config);
+//     // },
 
-    // chain_ignore_deferred<T extends ProcessNodeConfig>(config: NodeConfigs<T>) {
-    //     return this.chain_ignore_deferred_inner(config);
-    // }
+//     // chain_ignore_deferred<T extends ProcessNodeConfig>(config: NodeConfigs<T>) {
+//     //     return this.chain_ignore_deferred_inner(config);
+//     // }
 
-}
+// }
+
+export type SystemConfig = NodeConfig<ScheduleSystem>;
 
 export class NodeConfig<T extends ProcessNodeConfig> extends IntoSystemConfigs<T> {
     constructor(
@@ -293,90 +296,33 @@ export class NodeConfig<T extends ProcessNodeConfig> extends IntoSystemConfigs<T
         super()
     }
 
-    in_set_inner!: (this: NodeConfig<T>, set: SystemSet) => void;
-    before_inner!: (this: NodeConfig<T>, set: SystemSet) => void;
-    after_inner!: (this: NodeConfig<T>, set: SystemSet) => void;
-    before_ignore_deferred_inner!: (this: NodeConfig<T>, set: SystemSet) => void;
-    after_ignore_deferred_inner!: (this: NodeConfig<T>, set: SystemSet) => void;
-    distributive_run_if_inner!: <M>(this: NodeConfig<T>, condition: Condition<M>) => void;
-
-    ambiguous_with_inner!: (this: NodeConfig<T>, set: SystemSet) => void
-    ambiguous_with_all_inner!: (this: NodeConfig<T>) => void
-
-    run_if_dyn!: (this: NodeConfig<T>, condition: Condition<any>) => void
-
-    chain_inner!: () => NodeConfig<T>;
-    chain_ignore_deferred_inner!: () => NodeConfig<T>;
-
-
     process_config(schedule_graph: ScheduleGraph) {
         return this.node.process_config(schedule_graph, this as unknown as NodeConfig<ProcessNodeConfig>)
     }
 
-    // * NodeConfigs impl
-    // new_system(system: ScheduleSystem) {
-    //     const sets = system.default_system_sets();
-    //     return new NodeConfig(
-    //         system,
-    //         {
-    //             hierarchy: sets as unknown as SystemSet,
-    //             dependencies: [],
-    //             ambiguous_with: Ambiguity.default()
-    //         },
-    //         []
-    //     )
-    // }
-
-    // in_set_inner(set: SystemSet) {
-    //     // @ts-expect-error
-    //     this.graph_info.hierarchy.push(set);
-    // }
-
-    // before_inner(set: SystemSet) {
-    //     this.graph_info.dependencies.push(new Dependency(DependencyKind.Before, set))
-    // }
-
-    // after_inner(set: SystemSet) {
-    //     this.graph_info.dependencies.push(new Dependency(DependencyKind.After, set))
-    // }
-
-    // before_ignore_deferred_inner(set: SystemSet) {
-    //     this.graph_info.dependencies.push(new Dependency(DependencyKind.BeforeNoSync, set))
-    // }
-
-    // after_ignore_deferred_inner(set: SystemSet) {
-    //     this.graph_info.dependencies.push(new Dependency(DependencyKind.AfterNoSync, set))
-    // }
-
-    // ambiguous_with_inner(set: SystemSet) {
-    //     ambiguous_with(this.graph_info, set);
-    // }
-
-    // ambiguous_with_all_inner() {
-    //     this.graph_info.ambiguous_with = Ambiguity.IgnoreAll;
-    // }
-
-    // run_if_dyn(condition: Condition<any>) {
-    //     this.conditions.push(condition)
-    // }
-
-    // chain_inner() {
-    //     return this;
-    // }
-
-    // chain_ignore_deferred_inner() {
-    //     return this;
-    // }
-
     // * IntoSystemConfigs impl    
     into_configs(): SystemConfigs {
+        // return this.node;
         return this as unknown as SystemConfigs
     }
 
-    in_set(set: SystemSet): SystemConfigs {
+    in_set_inner(set: InternedSystemSet) {
+        console.log('NodeConfig in_set_inner() adding set to hierarchy', set);
+
+        // @ts-expect-error
+        this.graph_info.hierarchy.push(set)
+    }
+
+    in_set(set: InternedSystemSet): SystemConfigs {
         assert(is_none(set.system_type()));
         this.in_set_inner(set);
         return this as unknown as SystemConfigs;
+    }
+
+    before_inner(set: InternedSystemSet) {
+        console.log('before_inner', set);
+
+        this.graph_info.dependencies.push({ kind: DependencyKind.Before, set })
     }
 
     before<M extends SystemSet>(set: IntoSystemSet<M>): SystemConfigs {
@@ -384,6 +330,10 @@ export class NodeConfig<T extends ProcessNodeConfig> extends IntoSystemConfigs<T
         set = set.into_system_set();
         this.before_inner(set as unknown as SystemSet);
         return this as unknown as SystemConfigs;
+    }
+
+    after_inner(set: InternedSystemSet) {
+        this.graph_info.dependencies.push({ kind: DependencyKind.After, set })
     }
 
     after<M extends SystemSet>(set: IntoSystemSet<M>): SystemConfigs {
@@ -399,9 +349,22 @@ export class NodeConfig<T extends ProcessNodeConfig> extends IntoSystemConfigs<T
         this.before_ignore_deferred_inner(set as unknown as SystemSet);
         return this as unknown as SystemConfigs;
     }
+
+    distributive_run_if_inner<M>(condition: Condition<M>) {
+        this.conditions.push(new_condition(condition));
+    }
+
+    run_if_dyn<M>(condition: Condition<M>) {
+        this.conditions.push(condition);
+    }
+
+    run_if<M>(condition: Condition<M>): SystemConfigs {
+        this.run_if_dyn(new_condition(condition));
+        return this as unknown as SystemConfigs;
+    }
 }
 
-export type SystemConfig = NodeConfig<ScheduleSystem>;
+export type SystemConfigs = NodeConfigs<ScheduleSystem>;
 
 export class Configs<T extends ProcessNodeConfig> extends IntoSystemConfigs<any> {
     constructor(
@@ -412,43 +375,30 @@ export class Configs<T extends ProcessNodeConfig> extends IntoSystemConfigs<any>
         super()
     }
 
-
-    in_set_inner!: (this: Configs<T>, set: SystemSet) => void;
-    before_inner!: (this: Configs<T>, set: SystemSet) => void;
-    after_inner!: (this: Configs<T>, set: SystemSet) => void;
-    before_ignore_deferred_inner!: (this: Configs<T>, set: SystemSet) => void;
-    after_ignore_deferred_inner!: (this: Configs<T>, set: SystemSet) => void;
-    distributive_run_if_inner!: <M>(this: Configs<T>, condition: Condition<M>) => void;
-
-    ambiguous_with_inner!: (this: Configs<T>, set: SystemSet) => void
-    ambiguous_with_all_inner!: (this: Configs<T>) => void
-
-    run_if_dyn!: (this: Configs<T>, condition: Condition<any>) => void
-
-    chain_inner!: () => Configs<T>;
-    chain_ignore_deferred_inner!: () => Configs<T>;
-
-    static new_system(system: ScheduleSystem) {
-        const sets = system.default_system_sets() as unknown as SystemSet
-        return new NodeConfig(
-            system,
-            {
-                hierarchy: sets,
-                dependencies: [],
-                ambiguous_with: Ambiguity.default()
-            },
-            []
-        )
-    }
-
     into_configs(): SystemConfigs {
         return this as unknown as SystemConfigs
     }
 
-    in_set(set: SystemSet): SystemConfigs {
+    in_set_inner(set: InternedSystemSet) {
+        const configs = this.configs;
+        for (let i = 0; i < configs.length; i++) {
+            const config = configs[i];
+            config.in_set_inner(set);
+        }
+    }
+
+    in_set(set: InternedSystemSet): SystemConfigs {
         assert(!set.system_type());
         this.in_set_inner(set);
         return this as unknown as SystemConfigs;
+    }
+
+    before_inner(set: InternedSystemSet) {
+        const configs = this.configs
+        for (let i = 0; i < configs.length; i++) {
+            const config = configs[i];
+            config.before_inner(set);
+        }
     }
 
     before<M extends SystemSet>(set: IntoSystemSet<M>): SystemConfigs {
@@ -479,14 +429,26 @@ export class Configs<T extends ProcessNodeConfig> extends IntoSystemConfigs<any>
         return this as unknown as SystemConfigs
     }
 
-    distributive_run_if<M>(condition: Condition<M>): Configs<T> {
-        this.distributive_run_if_inner(condition);
-        return this
+    // distributive_run_if_inner<M>(condition: Condition<M>) {
+    //     const configs = this.configs;
+    //     for (let i = 0; i < configs.length; i++) {
+    //         configs[i].distributive_run_if_inner(condition)
+    //     }
+    // }
+
+    // distributive_run_if<M>(condition: Condition<M>): Configs<T> {
+    //     this.distributive_run_if_inner(condition);
+    //     return this
+    // }
+
+    run_if_dyn<M>(condition: Condition<M>) {
+        this.collective_conditions.push(condition);
     }
 
     run_if<M>(condition: Condition<M>): SystemConfigs {
-        this.run_if_dyn(condition);
-        return this as unknown as SystemConfigs
+        this.run_if_dyn(new_condition(condition));
+        return this as unknown as SystemConfigs;
+        // return this.into_configs().run_if(condition);
     }
 
     ambiguous_with<M extends SystemSet>(set: IntoSystemSet<M>): SystemConfigs {
@@ -496,8 +458,18 @@ export class Configs<T extends ProcessNodeConfig> extends IntoSystemConfigs<any>
         return this as unknown as SystemConfigs
     }
 
-    chain() {
-        return this.chain_inner() as unknown as SystemConfigs
+    chain_inner(): SystemConfigs {
+        this.chained = Chain.Yes;
+        return this as unknown as SystemConfigs;
+    }
+
+    chain(): SystemConfigs {
+        return this.chain_inner()
+    }
+
+    chain_ignore_deferred_inner() {
+        this.chained = Chain.YesIgnoreDeferred;
+        return this;
     }
 
     chain_ignore_deferred(): SystemConfigs {
@@ -506,6 +478,7 @@ export class Configs<T extends ProcessNodeConfig> extends IntoSystemConfigs<any>
 }
 
 export type NodeConfigs<T extends ProcessNodeConfig> = Configs<T> | NodeConfig<T>
+
 export const NodeConfigs = {
     Configs,
     NodeConfig,
@@ -521,77 +494,13 @@ export const NodeConfigs = {
             []
         )
     },
-
-    //* IntoSystemSetConfigs
-
-    // into_configs() {
-    //     return this;
-    // },
-
-    // in_set<T extends ProcessNodeConfig>(config: NodeConfigs<T>, set: SystemSet) {
-    //     assert(is_none(set.system_type()), 'Adding arbitrary systems to a system type set is not allowed')
-    //     this.in_set_inner(config, set);
-    //     return this;
-    // },
-
-    // before<T extends ProcessNodeConfig, M extends SystemSet>(config: NodeConfigs<T>, set: IntoSystemSet<M>) {
-    //     // @ts-expect-error
-    //     set = set.into_system_set();
-    //     this.before_inner(config, set as unknown as SystemSet)
-    //     return this;
-    // },
-
-    // after<M extends SystemSet>(this: NodeConfigs<ProcessNodeConfig>, set: IntoSystemSet<M>) {
-    //     // @ts-expect-error
-    //     set = set.into_system_set();
-    //     this.after_inner(set as unknown as SystemSet)
-    //     return this;
-    // },
-
-    // before_ignore_deferred<T extends ProcessNodeConfig, M extends SystemSet>(config: NodeConfigs<T>, set: IntoSystemSet<M>) {
-    //     // @ts-expect-error
-    //     set = set.into_system_set();
-    //     this.before_ignore_deferred_inner(config, set as unknown as SystemSet)
-    //     return this;
-    // },
-
-    // after_ignore_deferred<T extends ProcessNodeConfig, M extends SystemSet>(config: NodeConfigs<T>, set: IntoSystemSet<M>) {
-    //     // @ts-expect-error
-    //     set = set.into_system_set();
-    //     this.after_ignore_deferred_inner(config, set as unknown as SystemSet)
-    //     return this;
-    // },
-
-    // run_if<T extends ProcessNodeConfig, M>(config: NodeConfigs<T>, condition: Condition<M>) {
-    //     this.run_if_dyn(config, new_condition(condition));
-    //     return this
-    // },
-
-    // ambiguous_with<T extends ProcessNodeConfig, M extends SystemSet>(config: NodeConfigs<T>, set: IntoSystemSet<M>) {
-    //     this.ambiguous_with_inner(config, set as unknown as SystemSet)
-    //     return this
-    // },
-
-
-    // ambiguous_with_all<T extends ProcessNodeConfig>(config: NodeConfigs<T>) {
-    //     this.ambiguous_with_all_inner(config)
-    //     return this
-    // },
-
-    // chain<T extends ProcessNodeConfig>(config: NodeConfigs<T>) {
-    //     return this.chain_inner(config);
-    // },
-
-    // chain_ignore_deferred<T extends ProcessNodeConfig>(config: NodeConfigs<T>) {
-    //     return this.chain_ignore_deferred_inner(config);
-    // }
 }
-Object.entries(NodeConfigsImpl).forEach(([key, value]) => {
-    Object.defineProperty(NodeConfig.prototype, key, { value })
-    Object.defineProperty(Configs.prototype, key, { value })
-})
 
-export type SystemConfigs = NodeConfigs<ScheduleSystem>;
+// Object.entries(NodeConfigsImpl).forEach(([key, value]) => {
+//     Object.defineProperty(NodeConfig.prototype, key, { value })
+//     Object.defineProperty(Configs.prototype, key, { value })
+// })
+
 
 export class SystemSetConfig extends NodeConfig<SystemSet> {
     constructor(set: SystemSet) {
