@@ -1,9 +1,11 @@
-import { TODO } from "joshkaposh-iterator/src/util";
-import { ComponentId, Tick } from "..";
+import { Prettify, TODO } from "joshkaposh-iterator/src/util";
+import { Bundle, Component, ComponentId, ComponentMetadata, DynamicBundle, Entity, Resource, Tick } from "..";
 import { Archetype } from "../archetype";
 import { FilteredAccess, FilteredAccessSet, Query, QueryData, QueryFilter, QueryState } from "../query";
 import { World } from "../world";
 import { SystemMeta } from './function-system';
+import { Commands } from "../world/world";
+import { Class } from "../../util";
 
 export interface SystemParam<State, Item> {
     param_init_state(world: World, system_meta: SystemMeta): State;
@@ -85,7 +87,17 @@ export class ParamSet<T extends SystemParam<any, any>> implements SystemParam<an
 
 }
 
-export class ParamBuilder<P extends readonly any[]> {
+export class Local<T> {
+    constructor(public value: T) { }
+}
+
+// type BuilderHelper<T extends any[], U> = T extends [] ? [U] : [...T, U]
+
+type ExcludeMetadata<T extends readonly any[]> = {
+    [K in keyof T]: T[K] extends new (...args: any[]) => infer C ? C : never
+}
+
+export class ParamBuilder<P extends any[] = []> {
     #w: World;
     #params: P
     constructor(world: World) {
@@ -93,30 +105,39 @@ export class ParamBuilder<P extends readonly any[]> {
         this.#params = [] as unknown as P;
     }
 
-    res<T>(resource: T) {
+    local<T>(value: T) {
+        this.#params.push(new Local(value))
+        return this as unknown as ParamBuilder<[...P, T]>;
+    }
+
+    commands() {
+        this.#params.push(new Commands(this.#w));
+        return this
+    }
+
+    res<T extends Resource>(resource: T) {
         const res = this.#w.resource(resource);
-        // @ts-expect-error
         this.#params.push(res);
-        return this;
+        return this as unknown as ParamBuilder<[...P, InstanceType<T>]>;
     }
 
-    query<T extends readonly any[]>(query: T) {
+    res_mut<T extends Resource>(resource: T) {
+        const res = this.#w.resource_mut(resource);
+        this.#params.push(res);
+        return this as unknown as ParamBuilder<[...P, InstanceType<T>]>;
+    }
+
+    query<const D extends readonly any[]>(query: D) {
         const q = this.#w.query(query)
-        // @ts-expect-error
         this.#params.push(q);
-        return this;
+        return this as unknown as ParamBuilder<[...P, Query<ExcludeMetadata<D>, []>]>;
     }
 
-    query_filtered<D extends readonly any[], F extends readonly any[]>(data: D, filter: F) {
+    query_filtered<const D extends readonly any[], const F extends readonly any[]>(data: D, filter: F) {
         const q = this.#w.query_filtered(data, filter);
-        // @ts-expect-error
         this.#params.push(q);
-        return this;
+        return this as unknown as ParamBuilder<[...P, Query<ExcludeMetadata<D>, F>]>;
     }
-
-    // commands() {
-    //     TODO('ParamBuilder.commands()')
-    // }
 
     params() {
         return this.#params;

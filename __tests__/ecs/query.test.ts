@@ -185,6 +185,10 @@ test('query', () => {
 
     assert(qab.iter().count() === 3);
     assert(qa.iter().count() === 4);
+
+    for (const [a, b] of qab) {
+
+    }
 })
 
 test('query_with', () => {

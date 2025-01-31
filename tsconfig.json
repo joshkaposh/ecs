@@ -7,6 +7,8 @@
             "ESNext",
             "DOM"
         ],
+        "alwaysStrict": true,
+        "pretty": true,
         "moduleResolution": "Node",
         "strict": true,
         "resolveJsonModule": true,

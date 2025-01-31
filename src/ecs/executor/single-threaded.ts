@@ -1,10 +1,10 @@
 import { iter } from "joshkaposh-iterator";
-import { Option, result } from "joshkaposh-option";
-import { ExecutorKind, SystemExecutor, SystemSchedule, is_apply_deferred } from ".";
+import type { Option } from "joshkaposh-option";
+import { ExecutorKind, type SystemExecutor, SystemSchedule, is_apply_deferred } from ".";
 import { FixedBitSet } from "fixed-bit-set";
-import { World } from "../world";
+import { type World } from "../world";
 import { unit } from "../../util";
-import { BoxedCondition } from "../system";
+import { Condition } from "../schedule";
 
 export class SingleThreadedExecutor implements SystemExecutor {
     /// System sets whose conditions have been evaluated.
@@ -56,13 +56,17 @@ export class SingleThreadedExecutor implements SystemExecutor {
             completed_systems.or(_skip_systems);
         }
 
+
         const systems = schedule.__systems;
         const sets_with_conditions_of_systems = schedule.__sets_with_conditions_of_systems;
+        const evaluated_sets = this.#evaluated_sets;
+        // console.log('SingleThreadedExecutor.run() systems', systems, schedule.__system_ids);
+
         for (let system_index = 0; system_index < systems.length; system_index++) {
             let should_run = !completed_systems.contains(system_index);
             const ones = sets_with_conditions_of_systems[system_index].ones();
             for (const set_idx of ones) {
-                if (this.#evaluated_sets.contains(set_idx)) {
+                if (evaluated_sets.contains(set_idx)) {
                     continue;
                 }
 
@@ -74,7 +78,7 @@ export class SingleThreadedExecutor implements SystemExecutor {
 
                 // @ts-expect-error
                 should_run &= set_conditions_met;
-                this.#evaluated_sets.insert(set_idx);
+                evaluated_sets.insert(set_idx);
             }
 
             const system_conditions_met = evaluate_and_fold_conditions(schedule.__system_conditions[system_index], world);
@@ -99,31 +103,27 @@ export class SingleThreadedExecutor implements SystemExecutor {
                 this.apply_deferred(schedule, world)
             }
 
-            try {
-                if (system.is_exclusive()) {
-                    system.run(undefined, world)
-                } else {
+            // try {
+            if (system.is_exclusive()) {
+                // console.log('Executor calling system.run()');
 
-                    system.update_archetype_component_access(world);
-
-                    system.run_unsafe(undefined, world);
-                }
-            } catch (error) {
-                throw new Error(`Encountered an error in system: ${system}`, { cause: error && typeof error === 'object' && 'cause' in error ? error.cause : undefined })
+                system.run(undefined, world)
+            } else {
+                // console.log('Executor calling system.run_unsafe()');
+                system.update_archetype_component_access(world);
+                system.run_unsafe(undefined, world);
             }
-            // if (res instanceof Error) {
-            // throw res;
-            // throw new Error(`Encontered an error in system ${system.name()}`)
+            // } catch (error) {
+            // throw new Error(`Encountered an error in system: ${system}`, { cause: error && typeof error === 'object' && 'cause' in error ? error.cause : undefined })
             // }
-
             this.#unapplied_systems.insert(system_index);
         }
         if (this.#apply_final_deferred) {
             this.apply_deferred(schedule, world)
         }
 
-        this.#evaluated_sets.clear();
-        this.#completed_systems.clear();
+        evaluated_sets.clear();
+        completed_systems.clear();
     }
 
     apply_deferred(schedule: SystemSchedule, world: World) {
@@ -141,7 +141,7 @@ export class SingleThreadedExecutor implements SystemExecutor {
 
 }
 
-function evaluate_and_fold_conditions(conditions: BoxedCondition[], world: World): boolean {
+function evaluate_and_fold_conditions(conditions: Condition<any>[], world: World): boolean {
     return iter(conditions)
         .map((condition: any) => condition.run(unit, world))
         .fold(true, (acc, res) => acc && res)

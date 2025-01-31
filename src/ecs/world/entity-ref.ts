@@ -2,49 +2,36 @@ import { iter, Iterator } from "joshkaposh-iterator";
 import { type Option, is_some, ErrorExt } from "joshkaposh-option";
 import { StorageType, Storages } from "../storage";
 import { type Component } from "../component";
-import { ON_REMOVE, ON_REPLACE, World } from ".";
+import { ON_REMOVE, ON_REPLACE, World } from "./world";
 import { Entities, Entity, EntityLocation } from "../entity";
 import { BundleId, BundleInfo, BundleInserter, Bundles, InsertMode, type Bundle, type DynamicBundle } from "../bundle";
 import { Archetype, ArchetypeId, Archetypes, ComponentId, Components, ComponentTicks, RemapToInstance } from "..";
-import { UnsafeEntityCell } from "./unsafe-world-cell";
+import { unsafe_entity_cell_components, unsafe_entity_cell_get, unsafe_entity_cell_get_change_ticks, unsafe_entity_cell_get_components, unsafe_entity_cell_get_ref, unsafe_entity_cell_archetype, UnsafeEntityCell, unsafe_entity_cell_get_by_id, unsafe_entity_cell_contains_type_id, unsafe_entity_cell_get_change_ticks_by_id, unsafe_entity_cell_get_mut, unsafe_entity_cell_get_mut_by_id, unsafe_entity_cell_contains_id } from "./unsafe-world-cell";
 import { RemovedComponentEvents } from "../removal-detection";
 import { Enum } from "../../util";
 import { Ref } from "../change_detection";
 
 export class EntityRef {
-    #cell: UnsafeEntityCell;
+    #world: World;
+    #entity: Entity;
+    #location: EntityLocation;
 
     constructor(cell: UnsafeEntityCell) {
-        this.#cell = cell;
+        this.#entity = cell.id();
+        this.#location = cell.location();
+        this.#world = cell.world();
     }
-
-    static from(value: EntityWorldMut | EntityMut): EntityRef {
-        if (value instanceof EntityWorldMut) {
-            // @ts-expect-error
-            return new EntityRef(value.__as_unsafe_entity_cell());
-        } else {
-            return value.as_readonly();
-        }
-    }
-
-    // static try_from(value: FilteredEntityRef | FilteredEntityMut): Result<EntityRef, TryFromFilteredError> {
-    //     if (!value.access().has_read_all()) {
-    //         return TryFromFilteredError.MissingReadAllAccess as any;
-    //     }
-
-    //     return new EntityRef(value.__unsafe_entity_cell());
-    // }
 
     id(): Entity {
-        return this.#cell.id();
+        return this.#entity
     }
 
     location(): EntityLocation {
-        return this.#cell.location();
+        return this.#location;
     }
 
     archetype(): Archetype {
-        return this.#cell.archetype();
+        return unsafe_entity_cell_archetype(this.#world, this.#location);
     }
 
     contains(type: Component): boolean {
@@ -52,32 +39,32 @@ export class EntityRef {
     }
 
     contains_id(component_id: ComponentId) {
-        return this.#cell.contains_id(component_id);
+        return unsafe_entity_cell_contains_id(this.#world, this.#location, component_id);
     }
 
 
     contains_type_id(type_id: UUID): boolean {
-        return this.#cell.contains_type_id(type_id);
+        return unsafe_entity_cell_contains_type_id(this.#world, this.#location, type_id);
     }
 
     get<T extends Component>(component: T): Option<InstanceType<T>> {
-        return this.#cell.get(component);
+        return unsafe_entity_cell_get(this.#world, this.#entity, this.#location, component)
     }
 
     get_ref<T extends Component>(component: T) {
-        return this.#cell.get_ref(component);
+        return unsafe_entity_cell_get_ref(this.#world, this.#entity, this.#location, component);
     }
 
-    get_change_ticks(type: Component): Option<ComponentTicks> {
-        return this.#cell.get_change_ticks(type);
+    get_change_ticks(component: Component): Option<ComponentTicks> {
+        return unsafe_entity_cell_get_change_ticks(this.#world, this.#entity, this.#location, component)
     }
 
     get_change_ticks_by_id(component_id: ComponentId): Option<ComponentTicks> {
-        return this.#cell.get_change_ticks_by_id(component_id);
+        return unsafe_entity_cell_get_change_ticks_by_id(this.#world, this.#entity, this.#location, component_id);
     }
 
     get_by_id<T extends Component>(component_id: ComponentId): Option<InstanceType<T>> {
-        return this.#cell.get_by_id(component_id)
+        return unsafe_entity_cell_get_by_id(this.#world, this.#entity, this.#location, component_id)
     }
 
     /**
@@ -85,9 +72,7 @@ export class EntityRef {
      * Throws an error if the entity does not have the components required by the query
      */
     components<Q extends readonly any[]>(query: Q): RemapToInstance<Q> {
-        const components = this.#cell.get_components(query);
-        if (!components) throw new Error('Query Mismatch Error')
-        return components;
+        return unsafe_entity_cell_components(this.#world, this.#entity, this.#location, query);
     }
 
     /**
@@ -95,15 +80,20 @@ export class EntityRef {
      * Returns None if the entity does not have the components required by the query.
      */
     get_components<Q extends readonly any[]>(query: Q): Option<RemapToInstance<Q>> {
-        return this.#cell.get_components(query)
+        return unsafe_entity_cell_get_components(this.#world, this.#entity, this.#location, query);
     }
 }
 
-export class EntityMut {
-    #c: UnsafeEntityCell;
 
-    constructor(cell: UnsafeEntityCell) {
-        this.#c = cell;
+export class EntityMut {
+    #world: World;
+    #entity: Entity;
+    #location: EntityLocation;
+
+    constructor(world: World, entity: Entity, location: EntityLocation) {
+        this.#world = world;
+        this.#entity = entity;
+        this.#location = location;
     }
 
     static from(value: EntityWorldMut) {
@@ -112,31 +102,31 @@ export class EntityMut {
     }
 
     as_readonly(): EntityRef {
-        return new EntityRef(this.#c);
+        return new EntityRef(new UnsafeEntityCell(this.#world, this.#entity, this.#location));
     }
 
     id(): Entity {
-        return this.#c.id();
+        return this.#entity;
     }
 
     location(): EntityLocation {
-        return this.#c.location();
+        return this.#location;
     }
 
     archetype(): Archetype {
-        return this.#c.archetype();
+        return unsafe_entity_cell_archetype(this.#world, this.#location);
     }
 
     contains(type: Component): boolean {
-        return this.contains_type_id(type.type_id);
+        return unsafe_entity_cell_contains_type_id(this.#world, this.#location, type.type_id);
     }
 
     contains_id(component_id: ComponentId): boolean {
-        return this.#c.contains_id(component_id);
+        return unsafe_entity_cell_contains_id(this.#world, this.#location, component_id);
     }
 
-    get<T extends Component>(type: T): Option<InstanceType<T>> {
-        return this.as_readonly().get(type);
+    get<T extends Component>(component: T): Option<InstanceType<T>> {
+        return unsafe_entity_cell_get(this.#world, this.#entity, this.#location, component);
     }
 
     components<Q extends readonly any[]>(query: Q): RemapToInstance<Q> {
@@ -146,39 +136,35 @@ export class EntityMut {
     }
 
     get_components<const Q extends readonly any[]>(query: Q) {
-        return this.#c.get_components(query);
+        return unsafe_entity_cell_get_components(this.#world, this.#entity, this.#location, query);
     }
 
     get_ref<T extends Component>(component: T): Option<Ref<InstanceType<T>>> {
-        return this.as_readonly().get_ref(component);
+        return unsafe_entity_cell_get_ref(this.#world, this.#entity, this.#location, component);
     }
 
-    get_mut<T extends Component>(type: T): Option<InstanceType<T>> {
-        return this.#c.get_mut(type);
+    get_mut<T extends Component>(component: T): Option<InstanceType<T>> {
+        return unsafe_entity_cell_get_mut(this.#world, this.#entity, this.#location, component);
     }
 
     get_change_ticks(component: Component): Option<ComponentTicks> {
-        return this.as_readonly().get_change_ticks(component);
+        return unsafe_entity_cell_get_change_ticks(this.#world, this.#entity, this.#location, component);
     }
 
     get_change_ticks_by_id(component_id: ComponentId) {
-        return this.as_readonly().get_change_ticks_by_id(component_id);
+        return unsafe_entity_cell_get_change_ticks_by_id(this.#world, this.#entity, this.#location, component_id);
     }
 
     contains_type_id(type_id: UUID): boolean {
-        return this.#c.contains_type_id(type_id)
+        return unsafe_entity_cell_contains_type_id(this.#world, this.#location, type_id);
     }
 
     get_by_id<T extends Component>(component_id: ComponentId): Option<InstanceType<T>> {
-        return this.as_readonly().get_by_id(component_id)
+        return unsafe_entity_cell_get_by_id(this.#world, this.#entity, this.#location, component_id);
     }
 
     get_mut_by_id<T extends Component>(component_id: ComponentId): Option<InstanceType<T>> {
-        return this.#c.get_mut_by_id(component_id)
-    }
-
-    unsafe_entity_cell(): UnsafeEntityCell {
-        return this.#c;
+        return unsafe_entity_cell_get_mut_by_id(this.#world, this.#entity, this.#location, component_id);
     }
 }
 
@@ -293,59 +279,60 @@ export class EntityWorldMut {
         return this.#world.archetypes().get(this.#location.archetype_id)!;
     }
 
-    contains(type: Component): boolean {
-        return this.contains_type_id(type.type_id);
+    contains(component: Component): boolean {
+        return unsafe_entity_cell_contains_type_id(this.#world, this.#location, component.type_id);
+
     }
 
     contains_id(component_id: ComponentId) {
-        return this.__as_unsafe_entity_cell()
-            .contains_id(component_id)
+        return unsafe_entity_cell_contains_id(this.#world, this.#location, component_id)
     }
 
     contains_type_id(type_id: UUID) {
-        return this.__as_unsafe_entity_cell()
-            .contains_type_id(type_id);
+        return unsafe_entity_cell_contains_type_id(this.#world, this.#location, type_id);
     }
 
     get<T extends Component>(component: T): Option<InstanceType<T>> {
-        return EntityRef.from(this).get(component)
+        return unsafe_entity_cell_get(this.#world, this.#entity, this.#location, component)
     }
 
     components<Q extends readonly any[]>(query: Q) {
-        return EntityRef.from(this).components(query)
+        return unsafe_entity_cell_get_components(this.#world, this.#entity, this.#location, query);
     }
 
     get_components<Q extends readonly any[]>(query: Q) {
-        return EntityRef.from(this).get_components(query)
+        return unsafe_entity_cell_get_components(this.#world, this.#entity, this.#location, query);
     }
 
     get_ref<T extends Component>(component: T) {
-        return EntityRef.from(this).get_ref(component);
+        return unsafe_entity_cell_get_ref(this.#world, this.#entity, this.#location, component);
     }
 
     get_mut<T extends Component>(component: T) {
-        return this.__as_unsafe_entity_cell().get_mut(component);
+        return unsafe_entity_cell_get_mut(this.#world, this.#entity, this.#location, component);
     }
 
     get_change_ticks(component: Component) {
-        return EntityRef.from(this).get_change_ticks(component)
+        return unsafe_entity_cell_get_change_ticks(this.#world, this.#entity, this.#location, component);
     }
 
     get_change_ticks_by_id(component_id: ComponentId) {
-        return EntityRef.from(this).get_change_ticks_by_id(component_id)
+        return unsafe_entity_cell_get_change_ticks_by_id(this.#world, this.#entity, this.#location, component_id);
     }
 
     get_by_id(component_id: ComponentId): Option<object> {
-        return EntityRef.from(this).get_by_id(component_id);
+        return unsafe_entity_cell_get_by_id(this.#world, this.#entity, this.#location, component_id);
     }
 
     get_mut_by_id(component_id: ComponentId) {
-        return this.__as_unsafe_entity_cell().get_mut_by_id(component_id);
+        return unsafe_entity_cell_get_mut_by_id(this.#world, this.#entity, this.#location, component_id);
     }
 
-    /// Adds a [`Bundle`] of components to the entity.
-    ///
-    /// This will overwrite any previous value(s) of the same component type.
+    /**
+     * Adds a [`Bundle`] of components to the entity.
+     * 
+     * This will overwrite any previous value(s) of the same component type.
+     */
     insert(bundle: InstanceType<Component>[] | (Bundle & DynamicBundle)) {
         return this.insert_with_caller(
             bundle,
@@ -731,167 +718,18 @@ export class EntityWorldMut {
     }
 }
 
-// export class FilteredEntityRef {
-//     #entity: UnsafeEntityCell;
-//     #access: Access<ComponentId>;
-
-//     constructor(entity: UnsafeEntityCell, access: Access<ComponentId>) {
-//         this.#entity = entity;
-//         this.#access = access;
-//     }
-
-//     id(): Entity {
-//         return this.#entity.id();
-//     }
-
-//     location() {
-//         return this.#entity.location();
-//     }
-
-//     archetype(): Archetype {
-//         return this.#entity.archetype();
-//     }
-
-//     components(): Iterator<ComponentId> {
-//         return this.#access.reads_and_writes();
-//     }
-
-//     access(): Access<ComponentId> {
-//         return this.#access
-//     }
-
-//     contains(type: Component): boolean {
-//         return this.contains_type_id(type.type_id);
-//     }
-
-//     contains_id(component_id: ComponentId): boolean {
-//         return this.#entity.contains_id(component_id);
-//     }
-
-//     contains_type_id(type_id: UUID) {
-//         return this.#entity.contains_type_id(type_id);
-//     }
-
-//     get<T extends Component>(type: T): Option<InstanceType<T>> {
-//         const id = this.#entity.world().components().get_id(type);
-//         if (!is_some(id)) {
-//             return;
-//         }
-//         return this.#access.has_read(id) ? this.#entity.get_by_id(id) as InstanceType<T> : null
-
-//     }
-
-//     get_by_id(component_id: ComponentId) {
-//         return this.#access.has_read(component_id) ?
-//             this.#entity.get_by_id(component_id) :
-//             null
-
-//     }
-
-//     __unsafe_entity_cell() {
-//         return this.#entity;
-//     }
-// }
-
-// export class FilteredEntityMut {
-//     #entity: UnsafeEntityCell;
-//     #access: Access<ComponentId>;
-
-//     constructor(entity: UnsafeEntityCell, access: Access<ComponentId>) {
-//         this.#entity = entity;
-//         this.#access = access;
-//     }
-
-//     static from(entity: EntityWorldMut | EntityMut): FilteredEntityMut {
-//         const access = Access.default();
-//         access.read_all();
-//         access.write_all();
-//         if (entity instanceof EntityWorldMut) {
-//             return new FilteredEntityMut(entity.__as_unsafe_entity_cell(), access);
-//         }
-//         if (entity instanceof EntityMut) {
-//             return new FilteredEntityMut(entity.unsafe_entity_cell(), access)
-//         }
-
-//         throw new Error('`FilteredEntityMut.from()`` must be called with an instance of `EntityWorldMut` or `EntityMut`.')
-//     }
-
-//     as_readonly() {
-//         return new FilteredEntityRef(this.#entity.clone(), this.#access.clone());
-//     }
-
-//     id(): Entity {
-//         return this.#entity.id();
-//     }
-
-//     location(): EntityLocation {
-//         return this.#entity.location();
-//     }
-
-//     archetype(): Archetype {
-//         return this.#entity.archetype()
-//     }
-
-//     components(): Iterator<ComponentId> {
-//         return this.#access.__component_read_and_writes.ones()
-//     }
-
-//     access(): Access<ComponentId> {
-//         return this.#access
-//     }
-
-//     contains(type: Component): boolean {
-//         return this.contains_type_id(type.type_id);
-//     }
-
-//     contains_id(component_id: ComponentId): boolean {
-//         return this.#entity.contains_id(component_id);
-//     }
-
-//     contains_type_id(type_id: UUID): boolean {
-//         return this.#entity.contains_type_id(type_id);
-//     }
-
-//     get<T extends Component>(type: T): Option<InstanceType<T>> {
-//         return this.as_readonly().get(type);
-//     }
-
-//     get_mut<T extends Component>(type: T): Option<InstanceType<T>> {
-//         const id = this.#entity.world().components().get_id(type);
-//         if (!is_some(id)) {
-//             return null;
-//         }
-//         return this.#access.has_write(id) ? this.#entity.get_mut(type) : null;
-//     }
-
-//     get_by_id(component_id: ComponentId): Option<object> {
-//         return this.as_readonly().get_by_id(component_id)
-//     }
-
-//     get_mut_by_id(component_id: ComponentId): Option<object> {
-//         return this.#access.has_write(component_id) ?
-//             this.#entity.get_by_id(component_id)! :
-//             null
-//     }
-
-//     __unsafe_entity_cell(): UnsafeEntityCell {
-//         return this.#entity;
-//     }
-
-// }
-
 function trigger_on_replace_and_on_remove_hooks_and_observers(world: World, archetype: Archetype, entity: Entity, bundle_info: BundleInfo) {
-    // if (archetype.has_replace_observer()) {
-    //     world.trigger_observers(ON_REPLACE, entity, bundle_info.iter_components());
-    // }
+    if (archetype.has_replace_observer()) {
+        world.trigger_observers(ON_REPLACE, entity, bundle_info.iter_components());
+    }
 
-    // world.trigger_on_replace(archetype, entity, bundle_info.iter_components())
+    world.trigger_on_replace(archetype, entity, bundle_info.iter_components())
 
-    //    if (archetype.has_remove_observer()) {
-    //     world.trigger_observers(ON_REMOVE, entity, bundle_info.iter_components());
-    // }
+    if (archetype.has_remove_observer()) {
+        world.trigger_observers(ON_REMOVE, entity, bundle_info.iter_components());
+    }
 
-    // world.trigger_on_remove(archetype, entity, bundle_info.iter_components())
+    world.trigger_on_remove(archetype, entity, bundle_info.iter_components())
 
 
 }
@@ -910,21 +748,21 @@ function insert_dynamic_bundle(
     bundle_inserter: BundleInserter,
     entity: Entity,
     location: EntityLocation,
-    components: Iterator<object>,
+    components: Iterator<InstanceType<Component>>,
     storage_types: Iterator<StorageType>
 ) {
-    class DynamicInsertBundle implements DynamicBundle {
+    // class DynamicInsertBundle implements DynamicBundle {
 
-        #components: Iterator<[StorageType, object]>;
+    //     #components: Iterator<[StorageType, object]>;
 
-        constructor(components: Iterator<[StorageType, object]>) {
-            this.#components = components;
-        }
+    //     constructor(components: Iterator<[StorageType, object]>) {
+    //         this.#components = components;
+    //     }
 
-        get_components(func: (storage_type: StorageType, ptr: {}) => void): void {
-            this.#components.for_each(([t, ptr]) => func(t, ptr))
-        }
-    }
+    //     get_components(func: (storage_type: StorageType, ptr: {}) => void): void {
+    //         this.#components.for_each(([t, ptr]) => func(t, ptr))
+    //     }
+    // }
 
     const it = storage_types.zip(components);
     const bundle: DynamicBundle = {
@@ -933,7 +771,6 @@ function insert_dynamic_bundle(
         },
     }
 
-    // const bundle = new DynamicInsertBundle(storage_types.zip(components));
     return bundle_inserter.insert(
         entity,
         location,
@@ -941,74 +778,6 @@ function insert_dynamic_bundle(
         InsertMode.Replace
     );
 }
-
-// function remove_bundle_from_archetype(
-//     archetypes: Archetypes,
-//     storages: Storages,
-//     components: Components,
-//     archetype_id: ArchetypeId,
-//     bundle_info: BundleInfo,
-//     intersection: boolean
-// ): Option<ArchetypeId> {
-//     let remove_bundle_result;
-//     const edges = archetypes.get(archetype_id)!.edges();
-//     if (intersection) {
-//         remove_bundle_result = edges.get_archetype_after_bundle_remove(bundle_info.id())
-//     } else {
-//         remove_bundle_result = edges.get_archetype_after_bundle_take(bundle_info.id());
-//     }
-
-//     let result
-//     if (is_some(remove_bundle_result)) {
-//         result = remove_bundle_result;
-//     } else {
-//         let next_table_components, next_sparse_set_components, next_table_id;
-
-//         const current_archetype = archetypes.get(archetype_id)!;
-//         const removed_table_components = [];
-//         const removed_sparse_set_components = [];
-//         for (const component_id of bundle_info.components()) {
-//             if (current_archetype.contains(component_id)) {
-//                 const component_info = components.get_info(component_id)!;
-//                 if (component_info.storage_type() === StorageType.Table) {
-//                     removed_table_components.push(component_id)
-//                 } else {
-//                     removed_sparse_set_components.push(component_id);
-//                 }
-//             } else if (!intersection) {
-//                 current_archetype.edges().cache_archetype_after_bundle_take(bundle_info.id(), null)
-//             }
-//         }
-
-//         removed_table_components.sort();
-//         removed_sparse_set_components.sort();
-//         next_table_components = current_archetype.table_components().collect();
-//         next_sparse_set_components = current_archetype.sparse_set_components().collect();
-//         sorted_remove(next_table_components, removed_table_components);
-//         sorted_remove(next_sparse_set_components, removed_sparse_set_components);
-
-//         next_table_id = removed_table_components.length === 0 ?
-//             current_archetype.table_id() :
-//             storages.tables.__get_id_or_insert(next_table_components, components);
-
-//         const new_archetype_id = archetypes.get_id_or_insert(
-//             next_table_id,
-//             next_table_components,
-//             next_sparse_set_components
-//         );
-//         return new_archetype_id;
-//     }
-
-//     const current_archetype = archetypes.get(archetype_id)!;
-
-//     if (intersection) {
-//         current_archetype.edges().__insert_remove_bundle(bundle_info.id(), result);
-//     } else {
-//         current_archetype.edges().__insert_take_bundle(bundle_info.id(), result);
-//     }
-
-//     return result;
-// }
 
 function take_component(
     storages: Storages,
@@ -1033,21 +802,3 @@ function take_component(
             .__remove_and_forget(entity)
     }
 }
-
-// function sorted_remove(source: number[], remove: number[]) {
-//     let remove_index = 0;
-//     // TODO: function retain(array: T[], fn: (value: T) => boolean)
-//     // @ts-expect-error
-//     retain(source, value => {
-//         while (remove_index < remove.length && value > remove[remove_index]) {
-//             remove_index += 1;
-//         }
-
-//         if (remove_index < source.length) {
-//             // TODO: *value '!'= remove[remove_index]
-//             return value += !remove[remove_index];
-//         } else {
-//             return true
-//         }
-//     })
-// }

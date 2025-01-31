@@ -1,8 +1,9 @@
 import { v4 } from "uuid";
-import { is_some } from "joshkaposh-option";
 import { StorageType } from "./ecs/storage";
 import { Component, ComponentMetadata, Resource, ResourceMetadata } from "./ecs/component";
 import { World } from "./ecs/world/world";
+import { Prettify, TODO } from "joshkaposh-iterator/src/util";
+
 
 export type Class<Static = {}, Inst = {}> = (new (...args: any[]) => Inst) & Static;
 export type TypeId = { readonly type_id: UUID }
@@ -13,11 +14,11 @@ export function define_type<T extends Record<PropertyKey, any>>(type: T & {
     type.type_id = v4() as UUID;
 }
 
-export function define_component<T extends Component>(ty: (new (...args: any[]) => any) & Partial<ComponentMetadata>, storage_type: StorageType = StorageType.Table): asserts ty is T {
-    define_type(ty)
+export function define_component<T>(ty: T, storage_type: StorageType = StorageType.Table): T & Prettify<ComponentMetadata> {
+    define_type(ty as any)
     // @ts-expect-error
     ty.storage_type = storage_type;
-    assert_component(ty);
+    return ty as T & ComponentMetadata;
 }
 
 export function define_marker(): Component {
@@ -26,14 +27,10 @@ export function define_marker(): Component {
     return marker as Component
 }
 
-function assert_component<T extends Component>(ty: Partial<ComponentMetadata>): ty is T {
-    return is_some(ty.type_id);
-}
-
 export function define_resource<R extends Class>(ty: R & Partial<ComponentMetadata> & Partial<ResourceMetadata<R>> & {}): Resource<R> {
     define_component(ty, StorageType.SparseSet);
     ty.from_world ??= (_world: World) => {
-        return new ty();
+        return new ty() as InstanceType<R>;
     }
 
     return ty as any
@@ -41,4 +38,5 @@ export function define_resource<R extends Class>(ty: R & Partial<ComponentMetada
 
 export function define_event() { }
 
-// export { define_system } from './system'
+export { define_system } from './ecs/system';
+export { set } from "./ecs/schedule/set";

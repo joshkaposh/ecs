@@ -1,80 +1,63 @@
 import { test, assert, expect } from "vitest";
-import { define_system, Resource, World } from "../../src/ecs";
-import { define_resource } from "../../src/define";
+import { ComponentMetadata, define_system, ParamBuilder, Resource, StorageType, World } from "../../src/ecs";
+import { define_component, define_resource } from "../../src/define";
+import { Prettify } from "joshkaposh-iterator/src/util";
 
-class _Counter { constructor(public count = 0) { } }
-const Counter = _Counter as Resource
-define_resource(Counter);
+const Counter = define_resource(class Counter { constructor(public count = 0) { } });
+const CompA = define_component(class CompA { });
+const CompB = define_component(class CompB { });
+const CompC = define_component(class CompC { });
 
-const count_up = define_system({
-    system: function count_up(counter: InstanceType<typeof Counter>) {
-        // console.log('count_up', counter);
 
-        counter.count += 1;
-    },
-    params: (b) => b.res(Counter).params()
+
+const testWorld = new World();
+testWorld.init_resource(Counter);
+const builder = new ParamBuilder(testWorld);
+
+const b = builder.local(5).local('').res(Counter).query([CompA, CompB, CompC]);
+const [n, str, res, q] = b.params();
+
+// function define_system2<P>(params: (builder: ParamBuilder) => P, system: (...args: P extends any[] ? P : P extends ParamBuilder<infer Args> ? Args : never) => any) {
+// };
+
+// define_system2(b => b.local(5).local(''), (...args) => {
+//     const [a, b] = args;
+// })
+
+test('run_system_once', () => {
+    const Test = define_resource(class Test { constructor(public value: number) { } });
+
+    const w = new World();
+
+    const system = define_system(
+        (b) => b.local(Test),
+        (t) => {
+            console.log('testme running', t);
+        },
+    );
+
+    w.init_resource(Test);
+    w.run_system_once(system);
 })
 
-test('system', () => { })
+test('run_system_once_with', () => {
 
-// test('run_system_once_with', () => {
+    // const Test = define_resource(class Test { constructor(public value: number = 0) { } });
+    // type Test = InstanceType<typeof Test>;
+    // const w = new World();
+    // w.init_resource(Test);
 
-//     const Test = define_resource(class Test { constructor(public value: number = 0) { } });
-//     type Test = InstanceType<typeof Test>;
-//     const w = new World();
-//     w.init_resource(Test);
+    // const system = define_system(
+    //     function system(input: number) {
+    //         console.log('system running!', input);
 
-//     const system_test = define_system({
-//         system: (t: Test) => {
-//             console.log('system_test running!', t.value);
+    //         return input + 1;
+    //     },
+    //     (b) => b.local(1).params()
+    // );
 
-//         },
-//         params: (b) => b.res(Test).params()
-//     })
+    // let n = w.run_system_once_with(system, 1);
 
-//     const system = define_system({
-//         system: function system(input: number) {
-//             console.log('system running!', input);
+    // assert(n === 2);
 
-//             return input + 1;
-//         },
-//         params: () => [1]
-//     });
-
-//     let n = w.run_system_once_with(system, 1);
-//     console.log('n result', n);
-
-//     assert(n === 2);
-
-//     w.run_system_once(system_test)
-// })
-
-// test('run_two_systems', () => {
-//     const world = new World();
-//     world.init_resource(Counter);
-//     expect(world.resource(Counter)).toEqual(new Counter(0));
-//     // * OLD
-//     // world.resource_mut(Counter).count = 69;
-//     // assert(world.resource(Counter).count === 69)
-//     // world.run_system_once_with(count_up, Counter)
-//     // * NEW
-//     world.run_system_once_with(count_up, Counter);
-//     // expect(world.resource(Counter)).toEqual(new Counter(1));
-// })
-
-// test('run_system_once', () => {
-//     class Test { constructor(public value: number) { } }
-//     define_resource(Test);
-
-//     const w = new World();
-
-//     const system = define_system({
-//         system: function testme(t: Test) {
-//             console.log('testme running', t);
-//         },
-//         params: [Test],
-//     });
-
-//     w.init_resource(Test as Resource);
-//     w.run_system_once(system);
-// })
+})

@@ -60,6 +60,32 @@ class TryRunScheduleError extends ErrorExt {
 
 }
 
+
+export class Commands {
+    #world: World;
+    constructor(world: World) {
+        this.#world = world;
+    }
+
+    spawn(bundle: InstanceType<Component>[] | (Bundle & DynamicBundle)) {
+        this.#world.spawn(bundle);
+        return this;
+    }
+
+
+    spawn_batch(bundle: (InstanceType<Component>[] | (Bundle & DynamicBundle))[]) {
+        {
+            using _ = this.#world.spawn_batch(bundle)
+        }
+        return this;
+    }
+
+    despawn(entity: Entity) {
+        this.#world.despawn(entity);
+        return this;
+    }
+}
+
 export class World {
     #id: WorldId;
     #entities: Entities;
@@ -636,10 +662,7 @@ export class World {
     }
 
     run_system_once_with<In extends SystemInput, Out, Marker, T extends System<In, Out>>(system: T, input: any): Result<Out, RunSystemError> {
-        // TODO make function arguments  dynamic
-        // TODO instead of statically user defined
-        // * See ``
-        system = IntoSystemTrait.into_system(system as unknown as IntoSystemTrait<In, Out, Marker>) as T;
+        system = system.into_system();
         system.initialize(this);
         if (system.validate_param(this)) {
             return system.run(input, this)

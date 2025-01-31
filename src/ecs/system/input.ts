@@ -7,7 +7,7 @@ export type SystemInput = {
      * wraps a SystemInout::Inner into a SystemInput::Param
      */
     wrap(): SystemInput;
-}
+} | unit;
 
 const SystemInputUnit = {
     Param: unit,
@@ -18,7 +18,7 @@ const SystemInputUnit = {
     }
 }
 
-export class In<T> implements SystemInput {
+export class In<T> {
     Param!: In<T>;
     Inner!: T;
     Input: T;
@@ -37,7 +37,7 @@ export class In<T> implements SystemInput {
 
 }
 
-export class InRef<T> implements SystemInput {
+export class InRef<T> {
     Param!: InRef<T>;
     Inner!: T;
     input: T;
@@ -50,7 +50,7 @@ export class InRef<T> implements SystemInput {
     }
 }
 
-export class InMut<T> implements SystemInput {
+export class InMut<T> {
     Param!: InMut<T>;
     Inner!: T;
     input: T;

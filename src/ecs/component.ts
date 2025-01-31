@@ -5,12 +5,11 @@ import { World } from "./world";
 import { u32 } from "../Intrinsics";
 import { MAX_CHANGE_AGE } from "./change_detection";
 import { Class, TypeId } from "../define";
+import { Prettify } from "joshkaposh-iterator/src/util";
 
-export type ComponentMetadata = TypeId & { readonly storage_type: StorageType };
 export type ComponentId = number;
-export type ComponentType<T extends new (...args: any[]) => any> = T extends Component ? T : never;
-export type Component<T = any> = (new (...args: any[]) => T) & ComponentMetadata;
-export type UninitComonent<T = any> = (new (...args: any[]) => T)
+export type ComponentMetadata = TypeId & { readonly storage_type: StorageType };
+export type Component<T extends Class = Class> = T & Prettify<ComponentMetadata>;
 
 export type ResourceId = number;
 export type ResourceMetadata<R extends new (...args: any[]) => any> = { from_world(world: World): InstanceType<R> };

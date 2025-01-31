@@ -12,7 +12,11 @@ export class Graph<const DIRECTED extends boolean, S extends (value: any) => num
     #edges: Set<CompactNodeIdPairPrimitive>
     constructor(
         DIRECTED: DIRECTED = true as DIRECTED,
-        nodes: IndexMap<NodeId, CompactNodeIdAndDirection[], S> = IndexMap.with_hasher((n => n.to_primitive()) as S),
+        nodes: IndexMap<NodeId, CompactNodeIdAndDirection[], S> = IndexMap.with_hasher(((n: NodeId) => {
+            const p = n.to_primitive();
+            console.log("Hashing value", n, p)
+            return p;
+        }) as S),
         edges: Set<CompactNodeIdPairPrimitive> = new Set()
     ) {
         this.#nodes = nodes
@@ -182,15 +186,19 @@ export class Graph<const DIRECTED extends boolean, S extends (value: any) => num
     }
 
     to_index(ix: NodeId) {
+        const i = this.#nodes.get_index_of(ix)!;
+        return i;
+    }
 
-        const index = this.#nodes.keys().enumerate().find_map(([i, id]) => {
+    to_index2(ix: NodeId) {
+        // console.log('Graph to_index()', ix, this.#nodes.get_index_of(ix), this.#nodes.contains_key(ix));
+        return this.#nodes.keys().enumerate().find_map(([i, id]) => {
             if (ix.eq(id)) {
+                assert(ix.to_primitive() === id.to_primitive())
                 return i
             }
             return
-        })
-
-        return this.#nodes.get_index_of(ix)!;
+        })!
     }
 
     iter_sccs() {
@@ -295,6 +303,10 @@ class CompactNodeIdPair {
 
     [Symbol.toPrimitive]() {
         return this.to_primitive()
+    }
+
+    [Symbol.iterator]() {
+        return this.load()[Symbol.iterator]();
     }
 
 }

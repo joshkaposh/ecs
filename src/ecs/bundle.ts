@@ -1,4 +1,6 @@
 import { Option, is_some } from 'joshkaposh-option'
+import { iter, Iterator } from 'joshkaposh-iterator';
+import { Ord } from 'joshkaposh-index-map/src/util';
 import { Archetype, ArchetypeId, Archetypes, BundleComponentStatus, ComponentStatus, SpawnBundleStatus } from "./archetype";
 import { Component, ComponentId, Components, Tick } from "./component";
 import { Entity, EntityLocation } from "./entity";
@@ -6,11 +8,11 @@ import { StorageType, Storages } from "./storage";
 import { SparseSets } from "./storage/sparse-set";
 import { Table, TableRow } from "./storage/table";
 import { entry, is_class_ctor, recursively_flatten_nested_arrays } from "../util";
-import { ArchetypeAfterBundleInsert, ON_ADD, TypeId, World } from '.';
-import { iter, Iterator } from 'joshkaposh-iterator';
-import { TODO } from 'joshkaposh-iterator/src/util';
+import { ArchetypeAfterBundleInsert, TypeId } from '.';
+import { ON_ADD, World } from './world/world';
 import { retain } from '../array-helpers';
-import { Ord } from 'joshkaposh-index-map/src/util';
+
+import { TODO } from 'joshkaposh-iterator/src/util';
 
 export type BundleId = number;
 
@@ -60,7 +62,7 @@ function ComponentDynamicBundle(type: Component | InstanceType<Component>): Dyna
     }
 }
 
-export function BundleFromComponent(component: Component): Bundle & DynamicBundle {
+function BundleFromComponent(component: Component): Bundle & DynamicBundle {
     return {
         ...ComponentBundle(component),
         ...ComponentDynamicBundle(component)
@@ -195,7 +197,6 @@ export class BundleInfo {
                     if (drop_fn) {
                         drop_fn(component_ptr);
                     }
-
                 }
             } else if (storage_type === StorageType.SparseSet) {
                 const sparse_set = sparse_sets.get(component_id)!;

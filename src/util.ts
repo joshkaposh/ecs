@@ -1,4 +1,4 @@
-import { Primitive } from "joshkaposh-iterator";
+import { iter, Primitive } from "joshkaposh-iterator";
 import { is_none, None, Option } from "joshkaposh-option";
 
 export type Some<T> = T extends None ? never : T;
@@ -52,6 +52,84 @@ export function recursively_flatten_nested_arrays<T1, T2>(arrays: readonly T1[] 
 
 export function debug_assert(is_true: boolean, msg?: string) {
     console.assert(is_true, msg)
+}
+
+export function insert_set<T>(set: Set<T>, value: T): boolean {
+    const has = set.has(value);
+    const is_new_value = !has;
+    if (is_new_value) {
+        set.add(value);
+    }
+    return is_new_value;
+}
+
+function string_index_of_chars(string: string, ...chars_to_search: string[]): number {
+    for (let i = 0; i < string.length; i++) {
+        if (chars_to_search.includes(string[i])) {
+            return i;
+        }
+    }
+    return -1;
+}
+
+export function ShortName(full_name: string) {
+    let index = 0;
+    const end_of_string = full_name.length;
+    let name = '';
+    while (index < end_of_string) {
+        const rest_of_string = full_name.slice(index, end_of_string);
+        const special_char_index = string_index_of_chars(rest_of_string,
+            ' ',
+            '<',
+            '>',
+            '(',
+            ')',
+            '[',
+            ']',
+            ',',
+            ';'
+        )
+        if (special_char_index !== -1) {
+            const segment_to_collapse = rest_of_string.slice(0, special_char_index);
+            const res = collapse_type_name(segment_to_collapse);
+            if (typeof res !== 'string') {
+                throw new Error('collapse_type_name() did not return a string');
+            }
+            name += res;
+
+            const special_char = rest_of_string[special_char_index];
+            name += special_char;
+
+            if (special_char === '>'
+                || special_char === ')'
+                || special_char === ']'
+            ) {
+                name += '::';
+                index += special_char_index + 3;
+            } else {
+                index += special_char_index + 1;
+            }
+        } else {
+            name += collapse_type_name(rest_of_string);
+            index = end_of_string;
+        }
+    }
+    return name;
+}
+
+function collapse_type_name(string: string) {
+    const segments = iter(string).rsplit('.');
+    const last = segments.next().value as string;
+    const _second_last = segments.next();
+    const second_last = !_second_last.done ? _second_last.value : last;
+
+    if (second_last.startsWith(second_last[0].toUpperCase())) {
+        const index = string.length - last.length - second_last.length - 2;
+        return string.slice(index);
+    } else {
+        return last;
+    }
+
 }
 
 export type DeepReadonly<T> = Readonly<{

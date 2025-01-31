@@ -64,7 +64,7 @@ export function resource_removed<T extends Resource>(res: Option<Res<T>>, existe
 }
 
 export function on_event<T extends Event>(reader: EventReader<T>): boolean {
-    return reader.read().length > 0;
+    return reader.read().len() > 0;
 }
 
 export function any_with_component<T extends Component>(query: Query<QueryData, With<T>>) {
@@ -92,14 +92,14 @@ export function condition_changed<Marker, CIn extends SystemInput, C extends Con
 }
 
 
-export function condition_changed<Marker, CIn extends SystemInput, C extends Condition<Marker, CIn>>(to: boolean, condition: C): Condition<unit, CIn> {
-    // @ts-expect-error
-    return IntoSystemTrait.into_system(condition.pipe((current: In<boolean>, prev: Local<boolean>) => {
-        const now_true = prev !== current.value && current.value === to;
-        prev = current.value;
-        return now_true;
-    })) as any
-}
+// export function condition_changed<Marker, CIn extends SystemInput, C extends Condition<Marker, CIn>>(to: boolean, condition: C): Condition<unit, CIn> {
+//     // @ts-expect-error
+//     return IntoSystemTrait.into_system(condition.pipe((current: In<boolean>, prev: Local<boolean>) => {
+//         const now_true = prev !== current.value && current.value === to;
+//         prev = current.value;
+//         return now_true;
+//     })) as any
+// }
 
 export class NotMarker<S extends System<any, Not>> {
 

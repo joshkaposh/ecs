@@ -1,8 +1,8 @@
 import { assert } from 'joshkaposh-iterator/src/util';
-import { SystemSet } from '../set';
+import { InternedSystemSet, SystemSet } from '../set';
 import { FixedBitSet } from 'fixed-bit-set';
 import { NodeId } from './node';
-import { DiGraph, Direction } from './graphmap';
+import { DiGraph, Direction, Incoming } from './graphmap';
 import { iter, Iterator, range } from 'joshkaposh-iterator';
 import { is_some } from 'joshkaposh-option';
 import { extend } from 'joshkaposh-index-map/src/util';
@@ -42,7 +42,7 @@ export const Ambiguity = {
 } as const
 
 export type GraphInfo = {
-    hierarchy: SystemSet;
+    hierarchy: InternedSystemSet[];
     dependencies: Dependency[];
     ambiguous_with: Ambiguity
 }
@@ -51,8 +51,6 @@ export type GraphInfo = {
  * Converts a 2d row-majoy pair of indices into a 1d array index
  */
 export function index(row: number, col: number, num_cols: number) {
-    // console.log('indexing', row, col, num_cols);
-
     assert(col < num_cols);
     return (row * num_cols) + col;
 }
@@ -74,22 +72,23 @@ export type CheckGraphResults = {
     transitive_closure: DiGraph;
 }
 
-export function default_check_graph_results(): CheckGraphResults {
-    return {
-        reachable: FixedBitSet.default(),
-        connected: new Set(),
-        disconnected: [],
-        transitive_edges: [],
-        transitive_reduction: DiGraph(),
-        transitive_closure: DiGraph(),
-    }
-}
-
 export function check_graph(graph: DiGraph, topological_order: NodeId[]): CheckGraphResults {
     const n = graph.node_count();
     if (n === 0) {
-        return default_check_graph_results()
+        return {
+            reachable: FixedBitSet.default(),
+            connected: new Set(),
+            disconnected: [],
+            transitive_edges: [],
+            transitive_reduction: DiGraph(),
+            transitive_closure: DiGraph(),
+        }
     }
+
+    // console.log('check_graph() received topological order', topological_order);
+
+
+    // build a copy of the graph where the nodes and edges appear in topsorted order
     const map = new Map<string, number>();
     const topsorted = DiGraph();
 
@@ -99,7 +98,7 @@ export function check_graph(graph: DiGraph, topological_order: NodeId[]): CheckG
         topsorted.add_node(node);
 
         // insert nodes as successors to their predecessors
-        for (const pred of graph.neighbors_directed(node, Direction.Incoming())) {
+        for (const pred of graph.neighbors_directed(node, Incoming)) {
             topsorted.add_edge(pred, node);
         }
     }
@@ -138,7 +137,7 @@ export function check_graph(graph: DiGraph, topological_order: NodeId[]): CheckG
 
                 for (const c of successors) {
                     const index_c = map.get(c.to_primitive())!;
-                    // assert(index_b < index_c)
+                    assert(index_b < index_c)
                     if (!visited.contains(index_c)) {
                         visited.insert(index_c);
                         transitive_closure.add_edge(a, c);
@@ -154,8 +153,9 @@ export function check_graph(graph: DiGraph, topological_order: NodeId[]): CheckG
         visited.clear();
     }
 
+    // partition pairs of nodes into "connected by path" and "not connected by path"
     for (let i = 0; i < n - 1; i++) {
-        for (let ix = index(i, i + 1, n); ix < index(i, n - 1, n); ix++) {
+        for (let ix = index(i, i + 1, n); ix <= index(i, n - 1, n); ix++) {
             const [a, b] = row_col(ix, n)
             const pair = [topological_order[a], topological_order[b]] as [NodeId, NodeId]
             if (reachable.contains(ix)) {

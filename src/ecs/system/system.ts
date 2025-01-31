@@ -1,22 +1,21 @@
 import { NodeId } from "../schedule/graph";
 import { World } from "../world";
 import { Access } from "../query";
-import { ArchetypeComponentId, ComponentId, FunctionSystem, IntoSystemTrait, ScheduleSystem, SystemInput, SystemParamFunction, Tick, TypeId } from "..";
+import { ArchetypeComponentId, ComponentId, Condition, FunctionSystem, IntoSystemTrait, ScheduleGraph, SystemInput, SystemParamFunction, Tick, TypeId } from "..";
 import { unit } from "../../util";
 import { ErrorExt } from "joshkaposh-option";
-import { SystemTypeSet } from "../schedule/set";
+import { InternedSystemSet, SystemTypeSet } from "../schedule/set";
 import { v4 } from "uuid";
-import { IntoSystemConfigs, NodeConfigs, SystemConfigs } from "../schedule/config";
+import { IntoSystemConfigs, NodeConfig, NodeConfigs, SystemConfigs } from "../schedule/config";
 import { TODO } from "joshkaposh-iterator/src/util";
+import { ProcessNodeConfig } from "../schedule/schedule";
 
 // export type SystemFn<In extends any[] = any[], Out extends boolean | void = boolean | void> = (...args: In) => Out;
 // export type ConditionFn<In extends any[] = any[]> = (...args: In) => boolean;
-export type Condition<M> = any;
-export type BoxedCondition<In extends any[] = any[]> = Condition<In>;
 
 export type SystemIn<T> = any;
 
-export abstract class System<In, Out> extends IntoSystemConfigs<unit> {
+export abstract class System<In, Out> implements IntoSystemConfigs<unit> {
     static readonly type_id: UUID;
 
     /**
@@ -48,8 +47,17 @@ export abstract class System<In, Out> extends IntoSystemConfigs<unit> {
     abstract get_last_run(): Tick;
     abstract set_last_run(last_run: Tick): void;
 
+    process_config(schedule_graph: ScheduleGraph, config: NodeConfig<ProcessNodeConfig>) {
+        console.log('System.process_config()', config);
+        return schedule_graph.add_system_inner(config) as NodeId;
+    }
+
+    chain() {
+        return this.into_configs();
+    }
+
+
     run(input: SystemIn<System<In, Out>>, world: World) {
-        console.log('RUNNING SYSTEM');
         this.update_archetype_component_access(world);
         const ret = this.run_unsafe(input, world);
         this.apply_deferred(world);
@@ -61,10 +69,8 @@ export abstract class System<In, Out> extends IntoSystemConfigs<unit> {
         return this.validate_param_unsafe(world);
     }
 
-    default_system_sets(): any[] {
-        return [
-            new ScheduleSystem(this, this.fallible)
-        ];
+    default_system_sets(): InternedSystemSet[] {
+        return [];
 
     }
 
@@ -93,17 +99,32 @@ export abstract class System<In, Out> extends IntoSystemConfigs<unit> {
     //* IntoSystemConfigs impl
 
     into_configs(): SystemConfigs {
-        console.log('System into_configs() ', this.fallible);
-
         return this.fallible ?
-            NodeConfigs.new_system(ScheduleSystem.Fallible(this)) :
-            NodeConfigs.new_system(ScheduleSystem.Infallible(this as System<In, void>))
+            NodeConfigs.new_system((this)) :
+            NodeConfigs.new_system(this as System<In, void>)
+    }
+
+    run_if(condition: Condition<any>) {
+        // @ts-expect-error
+        return this.into_configs().run_if(condition)
+    }
+
+    before(other: System<any, any>) {
+        // @ts-expect-error
+        return this.into_configs().before(other as any);
+    }
+
+    after(other: any) {
+        // @ts-expect-error
+        return this.into_configs().after(other);
     }
 
     //* IntoSystemSet impl
     into_system_set<T extends FunctionSystem<any, SystemParamFunction<any>>>() {
         type Set = SystemTypeSet<T>;
-        return new SystemTypeSet(this.constructor as unknown as TypeId) as Set;
+        // console.log('System.into_system_set()', this);
+
+        return new SystemTypeSet(this as unknown as TypeId) as Set;
     }
 
     [Symbol.toPrimitive]() {
@@ -213,8 +234,8 @@ export class ApplyDeferred extends System<unit, unit> {
 
     check_change_tick(_change_tick: Tick): void { }
 
-    default_system_sets(): any[] {
-        return [new SystemTypeSet(this)];
+    default_system_sets(): InternedSystemSet[] {
+        return [];
     }
 
     get_last_run(): Tick {

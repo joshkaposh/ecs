@@ -1,56 +1,60 @@
 import { unit } from "../../util";
 import { IntoSystemTrait, System, SystemInput } from "../system";
+import { CombinatorSystem, Combine } from "../system/combinator";
 
-export abstract class Condition<Marker, In extends SystemInput = unit> extends IntoSystemTrait<In, boolean, Marker> {
+export type Condition<Marker, In extends SystemInput = unit> = {
+    and<M, C extends Condition<M, In>>(other: C): And<System<In, boolean>, System<In, boolean>>;
+    nand<M, C extends Condition<M, In>>(other: C): Nand<System<In, boolean>, System<In, boolean>>
 
-    and<M, C extends Condition<M, In>>(and: C) {
-        const a = IntoSystemTrait.into_system(this as any);
-        const b = IntoSystemTrait.into_system(and as any);
-        const name = `${a.name()} && ${b.name()}`;
-        return new CombinatorSystem(a, b, name);
-    }
+    or<M, C extends Condition<M, any>>(other: C): Or<System<In, boolean>, System<In, boolean>>;
+    nor<M, C extends Condition<M, any>>(other: C): Nor<System<In, boolean>, System<In, boolean>>;
 
-    nand<M, C extends Condition<M, In>>(nand: C) {
-        const a = IntoSystemTrait.into_system(this as any);
-        const b = IntoSystemTrait.into_system(nand as any);
-        const name = `${a.name()} && ${b.name()}`;
-        return new CombinatorSystem(a, b, name);
-    }
+    xor<M, C extends Condition<M, any>>(other: C): Xor<System<In, boolean>, System<In, boolean>>;
+    xnor<M, C extends Condition<M, any>>(other: C): Xnor<System<In, boolean>, System<In, boolean>>;
+}
 
-    nor<M, C extends Condition<M, In>>(nor: C) {
-        const a = IntoSystemTrait.into_system(this as any);
-        const b = IntoSystemTrait.into_system(nor as any);
-        const name = `${a.name()} && ${b.name()}`;
-        return new CombinatorSystem(a, b, name);
-    }
-    or<M, C extends Condition<M, In>>(or: C) {
-        const a = IntoSystemTrait.into_system(this as any);
-        const b = IntoSystemTrait.into_system(or as any);
-        const name = `${a.name()} && ${b.name()}`;
-        return new CombinatorSystem(a, b, name);
-
-    }
-    or_else<M, C extends Condition<M, In>>(or_else: C) {
-        const a = IntoSystemTrait.into_system(this as any);
-        const b = IntoSystemTrait.into_system(or_else as any);
-        const name = `${a.name()} && ${b.name()}`;
-        return new CombinatorSystem(a, b, name);
-
-    }
-
-    xnor<M, C extends Condition<M, In>>(nxor: C) {
-        const a = IntoSystemTrait.into_system(this as any);
-        const b = IntoSystemTrait.into_system(nxor as any);
-        const name = `${a.name()} && ${b.name()}`;
-        return new CombinatorSystem(a, b, name);
-
-    }
-    xor<M, C extends Condition<M, In>>(xor: C) {
-        const a = IntoSystemTrait.into_system(this as any);
-        const b = IntoSystemTrait.into_system(xor as any);
-        const name = `${a.name()} && ${b.name()}`;
-        return new CombinatorSystem(a, b, name);
+export class AndMarker implements Combine<System<any, any>, System<any, any>> {
+    combine(input: SystemInput, a: (input: any) => any, b: (input: any) => any) {
+        return a(input) && b(input);
     }
 }
+
+export class NandMarker implements Combine<System<any, any>, System<any, any>> {
+    combine(input: SystemInput, a: (input: any) => any, b: (input: any) => any) {
+        return !a(input) && b(input);
+    }
+}
+
+export class NorMarker implements Combine<System<any, any>, System<any, any>> {
+    combine(input: SystemInput, a: (input: any) => any, b: (input: any) => any) {
+        return !a(input) || b(input);
+    }
+}
+
+
+export class OrMarker implements Combine<System<any, any>, System<any, any>> {
+    combine(input: SystemInput, a: (input: any) => any, b: (input: any) => any) {
+        return a(input) || b(input);
+    }
+}
+
+export class XnorMarker implements Combine<System<any, any>, System<any, any>> {
+    combine(input: SystemInput, a: (input: any) => any, b: (input: any) => any) {
+        return !(a(input) ^ b(input));
+    }
+}
+
+export class XorMarker implements Combine<System<any, any>, System<any, any>> {
+    combine(input: SystemInput, a: (input: any) => any, b: (input: any) => any) {
+        return a(input) ^ b(input);
+    }
+}
+
+export type And<A extends System<any, any>, B extends System<any, any>> = CombinatorSystem<AndMarker, A, B>
+export type Nand<A extends System<any, any>, B extends System<any, any>> = CombinatorSystem<NandMarker, A, B>
+export type Nor<A extends System<any, any>, B extends System<any, any>> = CombinatorSystem<NorMarker, A, B>
+export type Or<A extends System<any, any>, B extends System<any, any>> = CombinatorSystem<OrMarker, A, B>
+export type Xnor<A extends System<any, any>, B extends System<any, any>> = CombinatorSystem<XnorMarker, A, B>
+export type Xor<A extends System<any, any>, B extends System<any, any>> = CombinatorSystem<XorMarker, A, B>
 
 export * from './common-conditions';

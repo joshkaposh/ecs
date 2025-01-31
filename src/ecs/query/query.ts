@@ -4,13 +4,12 @@ import { Maybe, QueryData, Read, Write } from "./fetch";
 import { QueryFilter } from "./filter";
 import { Iterator } from "joshkaposh-iterator";
 import { Option } from "joshkaposh-option";
-import { Archetype, Entity, EntityRef, init_query_param, SystemMeta, SystemParam, Tick } from "..";
+import { Archetype, ComponentMetadata, Entity, EntityRef, init_query_param, SystemMeta, SystemParam, Tick } from "..";
 
 type Inst<T> = T extends new (...args: any) => infer I ? I : never;
 
 export type RemapToInstance<T extends readonly any[]> = {
     [K in keyof T]:
-    // T[K] extends Array<any> ? RemapToInstance<T[K]> :
     T[K] extends typeof Entity ? Entity :
     T[K] extends typeof EntityRef ? EntityRef :
 
@@ -103,7 +102,7 @@ export class Query<const D extends readonly any[], const F extends readonly any[
     }
 
     iter(): Iterator<RemapToInstance<D>> {
-        return this.#state.iter(this.#world);
+        return this.#state.iter(this.#world) as unknown as Iterator<RemapToInstance<D>>;
     }
 
     [Symbol.iterator]() {
