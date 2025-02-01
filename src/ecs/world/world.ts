@@ -14,12 +14,12 @@ import { EntityRef, EntityWorldMut } from './entity-ref'
 import { SpawnBatchIter } from "./spawn-batch";
 import { UnsafeEntityCell } from "./unsafe-world-cell";
 import { CommandQueue } from "./command_queue";
-import { IntoSystemTrait, RunSystemError, System, SystemInput } from "../system";
+import { RunSystemError, System, SystemInput } from "../system";
 import { Instance, unit } from "../../util";
 import { u32 } from "../../Intrinsics";
-import { CHECK_TICK_THRESHOLD, TicksMut } from "../change_detection";
+import { CHECK_TICK_THRESHOLD, Mut, TicksMut } from "../change_detection";
 import { Schedule, ScheduleLabel, Schedules } from "../schedule";
-import { Class, define_component, TypeId } from "../../define";
+import { define_component, TypeId } from "../../define";
 
 export type WorldId = number;
 
@@ -51,10 +51,10 @@ export class OnRemove {
     static readonly storage_type = 1;
 }
 
-define_component(OnAdd);
-define_component(OnInsert);
-define_component(OnReplace);
-define_component(OnRemove);
+// define_component(OnAdd);
+// define_component(OnInsert);
+// define_component(OnReplace);
+// define_component(OnRemove);
 
 class TryRunScheduleError extends ErrorExt {
 
@@ -402,7 +402,7 @@ export class World {
         }
 
         const res = this.#storages.resources.get(component_id)?.remove();
-        return res ? res[0] : undefined;
+        return res ? res[0] as InstanceType<R> : undefined;
     }
 
     contains_resource(resource: Resource): boolean {
@@ -429,7 +429,7 @@ export class World {
         const r = this.#storages.resources.get(component_id)
         if (!r || !r.is_present()) {
             const v = resource.from_world(this);
-            this.insert_resource_by_id(component_id, v);
+            this.insert_resource_by_id(component_id, v as TypeId);
         }
         return component_id;
     }
@@ -456,7 +456,7 @@ export class World {
             return
         }
 
-        return this.#storages.resources.get(id)?.get()
+        return this.#storages.resources.get(id)?.get() as Option<InstanceType<R>>
     }
 
     get_resource_mut<R extends Resource>(resource: R): Option<Instance<R>> {
@@ -465,20 +465,27 @@ export class World {
             return
         }
 
-        return this.#storages.resources.get(id)?.get_mut(this.last_change_tick(), this.change_tick());
+        return this.#storages.resources.get(id)?.get_mut(this.last_change_tick(), this.change_tick()) as Option<InstanceType<R>>;
 
     }
 
     get_resource_by_id<R extends Resource>(component_id: ComponentId): Option<InstanceType<R>> {
-        return this.#storages.resources.get(component_id)?.get()
+        return this.#storages.resources.get(component_id)?.get() as Option<InstanceType<R>>
     }
 
-    get_resource_mut_by_id<R extends Resource>(component_id: ComponentId): Option<[InstanceType<R>, TicksMut]> {
-        return this.#storages.resources.get(component_id)?.get_mut(this.last_change_tick(), this.change_tick())
+    get_resource_mut_by_id<R extends Resource>(component_id: ComponentId): Option<Mut<Instance<R>>> {
+        const tuple = this.#storages.resources.get(component_id)?.get_with_ticks();
+        if (tuple) {
+            const [ptr, _ticks] = tuple;
+            const ticks = TicksMut.from_tick_cells(_ticks, this.last_change_tick(), this.change_tick());
+
+            return new Mut(ptr as Instance<R>, ticks);
+        }
+        return;
     }
 
     get_resource_with_ticks<R extends Resource>(component_id: ComponentId): Option<[InstanceType<R>, ComponentTicks]> {
-        return this.#storages.resources.get(component_id)?.get_with_ticks();
+        return this.#storages.resources.get(component_id)?.get_with_ticks() as Option<[InstanceType<R>, ComponentTicks]>;
     }
 
     get_resource_or_insert_with<R extends Resource>(resource: R, func: () => R): R {
@@ -502,25 +509,28 @@ export class World {
         const component_id = this.register_resource(resource);
         if (!this.#storages.resources.get(component_id)) {
             const ptr = resource.from_world(this);
-            this.insert_resource_by_id(component_id, ptr)
+            this.insert_resource_by_id(component_id, ptr as TypeId)
         }
 
         const data = this.#storages.resources.get(component_id)!;
-        return data.get_mut(last_change_tick, change_tick)
+        return data.get_mut(last_change_tick, change_tick) as InstanceType<R>
     }
 
     insert_or_spawn_batch(iterable: Iterable<[Entity, Bundle]> & ArrayLike<[Entity, Bundle]>) {
 
     }
 
+    // @ts-expect-error
     send_event<E extends Event>(type: Events<E>, event: InstanceType<E>): Option<EventId> {
         return this.send_event_batch(type, once(event))?.next().value
     }
 
     send_event_default<E extends Event>(type: Events<E>, event: E): Option<EventId> {
+        // @ts-expect-error
         return this.send_event(type as any, new event())
     }
 
+    // @ts-expect-error
     send_event_batch<E extends Event>(type: Events<E>, events: Iterable<InstanceType<E>>): SendBatchIds<E> {
         const events_resource = this.get_resource(type as any)
         return TODO('World::send_event_batch()', events, events_resource);

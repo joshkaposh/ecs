@@ -1,5 +1,5 @@
 import { Option } from "joshkaposh-option";
-import { Component, Event, EventRegistry, Events, Resource, Schedule, ScheduleBuildSettings, ScheduleLabel, Schedules, SystemInput, World } from "../ecs";
+import { Component, ECS_EVENTS_TYPE, Event, EventRegistry, Events, Resource, Schedule, ScheduleBuildSettings, ScheduleLabel, Schedules, SystemInput, World } from "../ecs";
 import { App, AppLabel } from "./app";
 import { Plugin, Plugins, PluginsState } from "./plugin";
 import { IntoSystemConfigs, IntoSystemSetConfigs } from "../ecs/schedule/config";
@@ -138,7 +138,7 @@ export class SubApp {
 
     add_systems(schedule: ScheduleLabel, ...systems: IntoSystemConfigs<any>[]) {
         const schedules = this.#world.resource(Schedules);
-        schedules.add_systems(schedule, ...systems as any)
+        schedules.add_systems(schedule, ...systems as any[])
         return this;
     }
 
@@ -205,11 +205,10 @@ export class SubApp {
 
 
     add_event(type: Event) {
-        if (!EventRegistry.get_event(type as any)) {
-            console.log('registering event type', type);
-
-            EventRegistry.register_event(type, this.#world)
+        if (!this.#world.contains_resource(type[ECS_EVENTS_TYPE])) {
+            Eve
         }
+
         return this;
     }
 

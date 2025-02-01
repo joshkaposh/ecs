@@ -1,6 +1,6 @@
-import type { Class } from "../../util";
+import type { Resource } from "..";
 
-export type Event = Class
+export type Event<T = any> = Resource<T>
 // @ts-ignore
 export type EventId<T = any> = number;
 

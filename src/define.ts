@@ -2,7 +2,8 @@ import { v4 } from "uuid";
 import { StorageType } from "./ecs/storage";
 import { Component, ComponentMetadata, Resource, ResourceMetadata } from "./ecs/component";
 import { World } from "./ecs/world/world";
-import { Prettify, TODO } from "joshkaposh-iterator/src/util";
+import { Prettify } from "joshkaposh-iterator/src/util";
+import { Event, Events } from "./ecs";
 
 
 export type Class<Static = {}, Inst = {}> = (new (...args: any[]) => Inst) & Static;
@@ -36,7 +37,14 @@ export function define_resource<R extends Class>(ty: R & Partial<ComponentMetada
     return ty as any
 }
 
-export function define_event() { }
+export const ECS_EVENTS_TYPE = Symbol('ECS_EVENTS_TYPE')
+
+export function define_event<E extends Class>(type: E) {
+    define_resource(type);
+    // @ts-expect-error
+    type[ECS_EVENTS_TYPE] = new Events(type);
+    return type as Event<E>;
+}
 
 export { define_system } from './ecs/system';
 export { set } from "./ecs/schedule/set";

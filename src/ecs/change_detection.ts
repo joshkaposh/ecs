@@ -61,11 +61,13 @@ export abstract class DetectChanges<T extends any> {
     }
 
     is_added() {
-        return this.ticks.added.is_newer_than(this.ticks.last_run, this.ticks.this_run)
+        const ticks = this.ticks;
+        return ticks.added.is_newer_than(ticks.last_run, ticks.this_run)
     }
 
     is_changed() {
-        return this.ticks.changed.is_newer_than(this.ticks.last_run, this.ticks.this_run)
+        const ticks = this.ticks;
+        return ticks.changed.is_newer_than(ticks.last_run, ticks.this_run)
     }
 
     last_changed() {
@@ -201,6 +203,11 @@ export class Mut<T> extends DetectChangesMut<T> {
     }
     static new<T>(value: T, added: Tick, last_changed: Tick, last_run: Tick, this_run: Tick): Mut<T> {
         return new Mut(value, new TicksMut(added, last_changed, last_run, this_run))
+    }
+
+    has_changed_since(tick: Tick) {
+        const ticks = this.ticks;
+        return ticks.changed.is_newer_than(tick, ticks.this_run)
     }
 }
 
