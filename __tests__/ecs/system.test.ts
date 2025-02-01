@@ -1,14 +1,10 @@
 import { test, assert, expect } from "vitest";
-import { ComponentMetadata, define_system, ParamBuilder, Resource, StorageType, World } from "../../src/ecs";
-import { define_component, define_resource } from "../../src/define";
-import { Prettify } from "joshkaposh-iterator/src/util";
+import { define_component, define_resource, ComponentMetadata, define_system, ParamBuilder, Resource, StorageType, World } from "../../packages/ecs";
 
 const Counter = define_resource(class Counter { constructor(public count = 0) { } });
 const CompA = define_component(class CompA { });
 const CompB = define_component(class CompB { });
 const CompC = define_component(class CompC { });
-
-
 
 const testWorld = new World();
 testWorld.init_resource(Counter);

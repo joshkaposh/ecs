@@ -1,20 +1,13 @@
 import { test, assert } from 'vitest'
-import { range } from 'joshkaposh-iterator'
 import { is_some, } from 'joshkaposh-option';
-import { Archetype, Archetypes, Component, Components, StorageType, Storages, Entity } from '../../src/ecs'
-import { define_component } from '../../src/define';
+import { define_component, Archetype, Archetypes, Component, Components, StorageType, Storages, Entity, define_marker } from '../../packages/ecs';
 
-class A { constructor(public value = 'A') { } }
-define_component(A);
-class B { constructor(public value = 'B') { } }
-define_component(B);
-class C { constructor(public value = 'C') { } }
-define_component(C);
+const A = define_component(class A { constructor(public value = 'A') { } });
+const B = define_component(class B { constructor(public value = 'B') { } });
+const C = define_component(class C { constructor(public value = 'C') { } });
 
-class MarkerA { }
-define_component(MarkerA, StorageType.SparseSet);
-class MarkerB { }
-define_component(MarkerB, StorageType.SparseSet);
+const MarkerA = define_marker()
+const MarkerB = define_marker()
 
 test('archetype', () => {
     const archetypes = new Archetypes();
@@ -25,12 +18,12 @@ test('archetype', () => {
     const components = new Components();
     const storages = new Storages();
 
-    const a_id = components.init_component(A as Component, storages)
-    const b_id = components.init_component(B as Component, storages)
-    const c_id = components.init_component(C as Component, storages);
+    const a_id = components.init_component(A, storages)
+    const b_id = components.init_component(B, storages)
+    const c_id = components.init_component(C, storages);
 
-    const ma_id = components.init_component(MarkerA as Component, storages)
-    const mb_id = components.init_component(MarkerB as Component, storages)
+    const ma_id = components.init_component(MarkerA, storages)
+    const mb_id = components.init_component(MarkerB, storages)
 
     assert(a_id === 0)
     assert(mb_id === 4)

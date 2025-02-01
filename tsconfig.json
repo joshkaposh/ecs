@@ -21,6 +21,28 @@
         "skipLibCheck": true
     },
     "include": [
-        "src"
+        "src",
+        "packages/ecs/src/commands",
+        "packages/ecs/src/event",
+        "packages/ecs/src/identifier",
+        "packages/ecs/src/query",
+        "packages/ecs/src/schedule",
+        "packages/ecs/src/storage",
+        "packages/ecs/src/system",
+        "packages/ecs/src/world",
+        "packages/ecs/src/bundle.ts",
+        "packages/ecs/src/component.ts",
+        "packages/ecs/src/entity.ts",
+        "packages/ecs/src/index.ts",
+        "packages/ecs/src/define.ts",
+        "packages/ecs/src/bit.ts",
+        "packages/intrinsics/src/math-helpers.ts",
+        "packages/intrinsics/src/index.ts",
+        "packages/ecs/src/util.ts",
+        "packages/ecs/src/array-helpers.ts",
+        "packages/ecs/src/default.ts",
+        "packages/ecs-app/main_schedule.ts",
+        "packages/ecs-app/plugin.ts",
+        "packages/ecs-app/sub_app.ts"
     ]
 }

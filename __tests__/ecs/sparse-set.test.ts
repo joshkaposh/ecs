@@ -1,6 +1,5 @@
 import { assert, expect, test } from "vitest";
-import { SparseSet, SparseSets } from "../../src/ecs/storage/sparse-set";
-import { Entity } from "../../src/ecs";
+import { SparseSet, SparseSets } from "../../packages/ecs/src/storage/sparse-set";
 // import { is_none } from "joshkaposh-option";
 // import { StorageType } from "../src/ecs/storage";
 
@@ -13,6 +12,8 @@ class Foo { constructor(public value: number) { } }
 
 
 test('sparse_set', () => {
+    // const set = new SparseSet();
+
     // const e0 = Entity.from_raw(0);
     // const e1 = Entity.from_raw(1);
     // const e2 = Entity.from_raw(2);

@@ -1,5 +1,5 @@
 import { assert, test } from "vitest";
-import { is_class } from "../../src/util";
+import { is_class } from "../../packages/ecs/src/util";
 
 class TestClass { }
 

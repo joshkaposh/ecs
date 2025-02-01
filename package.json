@@ -27,5 +27,10 @@
     "joshkaposh-iterator": "^1.1.13",
     "joshkaposh-option": "^1.0.2",
     "uuid": "^9.0.1"
-  }
+  },
+  "workspaces": [
+    "packages/ecs",
+    "packages/intrinsics",
+    "packages/ecs-app"
+  ]
 }

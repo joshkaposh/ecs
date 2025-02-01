@@ -2,7 +2,7 @@
 //     constructor() { }
 // }
 
-import { Entity, EventReader } from "../ecs";
+import { Entity, EventReader } from "../../packages/ecs/src";
 import { ResMut } from "../ecs/change_detection";
 import { ButtonInput, ButtonState } from "./button_input";
 

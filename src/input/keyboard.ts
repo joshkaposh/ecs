@@ -1,4 +1,4 @@
-import { EventReader } from "../ecs";
+import { EventReader } from "../../packages/ecs/src";
 import { ResMut } from "../ecs/change_detection";
 import { ButtonInput, ButtonState } from "./button_input";
 

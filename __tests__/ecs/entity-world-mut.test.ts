@@ -1,20 +1,16 @@
 import { expect, test, assert } from "vitest";
-import { Component, World } from "../../src/ecs";
 import { is_some } from "joshkaposh-option";
-import { define_component } from "../../src/define";
+import { World, define_component } from "../../packages/ecs";
 
-class AComp { constructor(public value = 'a') { } }
-define_component(AComp)
-class BComp { constructor(public value = 'b') { } }
-define_component(BComp)
-class CComp { constructor(public value = 'c') { } }
-define_component(CComp)
+const AComp = define_component(class AComp { constructor(public value = 'a') { } })
+const BComp = define_component(class BComp { constructor(public value = 'b') { } })
+const CComp = define_component(class CComp { constructor(public value = 'c') { } })
 
 test('entity_world_mut', () => {
     const w = new World();
 
-    w.register_component(AComp as Component)
-    w.register_component(BComp as Component)
+    w.register_component(AComp)
+    w.register_component(BComp)
 
     w.spawn([new AComp()]);
     w.spawn([new AComp(), new BComp()]);
@@ -25,17 +21,17 @@ test('entity_world_mut', () => {
         .insert([new BComp('inserted_b')]);
 
 
-    expect(ent.get(AComp as Component)).toEqual(new AComp('inserted_a'))
-    expect(ent.get(BComp as Component)).toEqual(new BComp('inserted_b'))
+    expect(ent.get(AComp)).toEqual(new AComp('inserted_a'))
+    expect(ent.get(BComp)).toEqual(new BComp('inserted_b'))
 
     ent.remove([BComp]);
-    expect(ent.get(AComp as Component)).toEqual(new AComp('inserted_a'))
-    assert(!ent.get(BComp as Component));
+    expect(ent.get(AComp)).toEqual(new AComp('inserted_a'))
+    assert(!ent.get(BComp));
 
     ent.remove([AComp])
 
-    assert(!ent.get(AComp as Component));
-    assert(!ent.get(BComp as Component));
+    assert(!ent.get(AComp));
+    assert(!ent.get(BComp));
 
     assert(is_some(w.get_entity(ent.id())));
     assert(!ent.is_despawned())

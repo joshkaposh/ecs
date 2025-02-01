@@ -1,30 +1,10 @@
 import { assert, expect, test } from 'vitest'
-import { With, Without, World, StorageType, Maybe, Added, Write, Read, ReadRef, EntityRef, Changed, QueryBuilder, Entity } from '../../src/ecs'
-import { define_component, define_marker, TypeId } from '../../src/define';
-class A {
-    static type_id: TypeId['type_id'];
-    static storage_type: StorageType;
+import { With, Without, World, Maybe, Added, Write, EntityRef, Changed, QueryBuilder, Entity, define_component, define_marker } from '../../packages/ecs'
 
-    constructor(public value = 'hello world!') { }
-}
-class B {
-    static type_id: TypeId['type_id'];
-    static storage_type: StorageType;
-    constructor(public value = 'getting groovy!') { }
-}
-class C {
-    static type_id: TypeId['type_id'];
-    static storage_type: StorageType;
-}
-class D {
-    static type_id: TypeId['type_id'];
-    static storage_type: StorageType;
-}
-
-define_component(A)
-define_component(B)
-define_component(C)
-define_component(D)
+const A = define_component(class B { constructor(public value = 'hello world!') { } })
+const B = define_component(class B { constructor(public value = 'getting groovy!') { } })
+const C = define_component(class B { constructor(public value = 'c!') { } })
+const D = define_component(class B { constructor(public value = 'd!') { } })
 
 function assert_throws(fn) {
     assert((() => {

@@ -1,8 +1,7 @@
 import { test, assert } from 'vitest'
 import { iter, range } from 'joshkaposh-iterator';
-import { Entity, Components, Storages, Tick, Component, } from '../../src/ecs'
-import { Table, TableBuilder, TableId, TableRow, Tables } from '../../src/ecs/storage/table';
-import { define_component } from '../../src/define';
+import { Entity, Components, Storages, Tick, Component, define_component } from '../../packages/ecs'
+import { Table, TableBuilder, TableId, TableRow, Tables } from '../../packages/ecs/src/storage/table';
 
 class W {
     constructor(public table_row: TableRow) { }
@@ -18,17 +17,15 @@ test('only_one_empty_table', () => {
     assert(table_id === TableId.empty)
 })
 
-class TestA { constructor(public value = 'test_a') { } }
-class TestB { constructor(public value = 'test_b') { } }
-define_component(TestA)
-define_component(TestB)
+const TestA = define_component(class TestA { constructor(public value = 'test_a') { } })
+const TestB = define_component(class TestB { constructor(public value = 'test_b') { } })
 
 test('move_to_superset', () => {
     const components = new Components();
     const storages = new Storages();
 
-    const aid = components.init_component(TestA as Component, storages);
-    const bid = components.init_component(TestB as Component, storages);
+    const aid = components.init_component(TestA, storages);
+    const bid = components.init_component(TestB, storages);
 
     const table_a_ids = [aid];
     const table_ab_ids = [aid, bid];

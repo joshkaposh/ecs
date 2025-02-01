@@ -1,5 +1,5 @@
 import { assert, expect, test } from 'vitest'
-import { Events, EventCursor } from '../../src/ecs';
+import { Events, EventCursor } from '../../packages/ecs';
 
 class TestEvent {
     constructor(public i: number) { }

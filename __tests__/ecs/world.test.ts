@@ -1,17 +1,30 @@
 import { assert, test } from 'vitest'
-import { World, StorageType, Component, Resource, System, Condition, define_system, Schedule, Query, With, Write, define_condition } from '../../src/ecs'
-import { define_component, define_marker, define_resource, set } from '../../src/define';
+import {
+    World,
+    StorageType,
+    Component,
+    Resource,
+    System,
+    Condition,
+    define_system,
+    Schedule,
+    Query,
+    With,
+    Write,
+    define_condition,
+    define_component,
+    define_marker,
+    define_resource,
+    set,
+    Res
+} from '../../packages/ecs';
 
-import { ParamBuilder } from '../../src/ecs';
-import { Commands } from '../../src/ecs/world/world';
-import { Res } from '../../src/ecs/change_detection';
+import { ParamBuilder } from '../../packages/ecs';
+import { Commands } from '../../packages/ecs/src/world/world';
 
-class A { constructor(public value = 'A') { } }
-define_component(A)
-class B { constructor(public value = 'B') { } }
-define_component(B)
-class C { constructor(public value = 'C') { } }
-define_component(C)
+const A = define_component(class A { constructor(public value = 'A') { } })
+const B = define_component(class B { constructor(public value = 'B') { } })
+const C = define_component(class C { constructor(public value = 'C') { } })
 
 
 const Marker = define_marker();
@@ -41,34 +54,34 @@ test('world', () => {
         using _ = w.spawn_batch(batch)
     }
 
-    assert(w.entities().total_count() === 300)
+    assert(w.entities().total_count() === 300);
+
+
+    const q = w.query_filtered([Write(Position), Velocity], [With(Player)])
 })
 
-class Position { constructor(public x: number, public y: number) { } }
-define_component(Position);
-class Velocity { constructor(public x: number, public y: number) { } }
-define_component(Velocity);
+const Position = define_component(class Position { constructor(public x: number, public y: number) { } });
+const Velocity = define_component(class Velocity { constructor(public x: number, public y: number) { } });
 
 const Player = define_marker();
 const Enemy = define_marker();
 
 
 
-const spawn_player = define_system((commands: Commands) => {
+const spawn_player = define_system(builder => builder.commands(), (commands) => {
     console.log('spawning player!');
     commands.spawn([new Position(0, 0), new Velocity(5, 5), new Player()]);
-
-}, builder => builder.commands().params())
+})
 
 function randIntFromRange(min: number, max: number) {
     return Math.floor(Math.random() * (max - min) + min)
 }
 
-const spawn_enemies = define_system((commands: Commands) => {
+const spawn_enemies = define_system(b => b.commands(), (commands) => {
     commands.spawn_batch(Array.from({ length: 50 }, (_, i) => [new Position(randIntFromRange(0, 100), randIntFromRange(0, 100)), new Velocity(5, 5), new Enemy()]))
-}, b => b.commands().params());
+});
 
-const move_player = define_system((query: Query<[Position, Velocity], [With<typeof Player>]>, times_called: InstanceType<Resource<typeof PlayerTimesCalled>>) => {
+const move_player = define_system(builder => builder.query_filtered([Write(Position), Velocity], [With(Player)]).res_mut(PlayerTimesCalled), (query, times_called) => {
 
     times_called.amount++;
 
@@ -76,20 +89,17 @@ const move_player = define_system((query: Query<[Position, Velocity], [With<type
 
     position.x += velocity.x;
     position.y += velocity.y;
-
-
-}, builder => builder.query_filtered([Write(Position), Velocity], [With(Player)]).res_mut(PlayerTimesCalled).params())
+})
 
 
 const randomly_returns_true = define_condition(() => {
     return Math.random() >= 0.5;
 }, () => []);
 
-const log_enemies = define_system((query: any, times_called: any) => {
-    // console.log("Enemies alive: ", query.count());
+const log_enemies = define_system(b => b.query_filtered([Position, Velocity], [With(Enemy)]).res_mut(LogTimesCalled), (query, times_called) => {
     times_called.amount++;
 
-}, b => b.query_filtered([Position, Velocity], [With(Enemy)]).res_mut(LogTimesCalled).params());
+});
 
 
 const PlayerTimesCalled = define_resource(class { constructor(public amount = 0) { } });

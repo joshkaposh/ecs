@@ -1,5 +1,5 @@
 import { assert, test } from "vitest";
-import { define_system, System } from "../../src/ecs";
+import { define_system, System } from "../../packages/ecs";
 
 test('into_system_type_id_consistency', () => {
     function testfn(fn: System<any, any>) {

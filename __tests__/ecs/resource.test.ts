@@ -1,5 +1,5 @@
 import { assert, expect, test } from 'vitest';
-import { define_resource, World } from '../../src/ecs';
+import { define_resource, World } from '../../packages/ecs';
 
 const MyRes = define_resource(class MyRes { constructor(public value = 0) { } })
 
