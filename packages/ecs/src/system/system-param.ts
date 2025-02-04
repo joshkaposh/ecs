@@ -116,12 +116,12 @@ export class ParamBuilder<P extends any[] = []> {
         this.#params = [] as unknown as P;
     }
 
-    local<T>(value: T) {
+    local<T>(value: T): ParamBuilder<[...P, T]> {
         this.#params.push(new Local(value))
         return this as unknown as ParamBuilder<[...P, T]>;
     }
 
-    commands() {
+    commands(): ParamBuilder<[...P, InstanceType<typeof Commands>]> {
         this.#params.push(new Commands(this.#w));
         return this as unknown as ParamBuilder<[...P, InstanceType<typeof Commands>]>;
     }
@@ -139,37 +139,40 @@ export class ParamBuilder<P extends any[] = []> {
     }
 
     // @ts-expect-error
-    query<const D extends readonly any[]>(this: ParamBuilder<[...P, Query<ExcludeMetadata<D>, []>]>, query: D): ParamBuilder<[...P, Query<ExcludeMetadata<D>, []>]> {
+    query<const D extends readonly any[]>(query: D): ParamBuilder<[...P, Query<ExcludeMetadata<D>, []>]> {
         const q = this.#w.query(query)
         this.#params.push(q);
-        return this;
+        // @ts-expect-error
+        return this as unknown as ParamBuilder<[...P, Query<ExcludeMetadata<D>, []>]>;
     }
 
     // @ts-expect-error
-    query_filtered<const D extends readonly any[], const F extends readonly any[]>(this: ParamBuilder<[...P, Query<ExcludeMetadata<D>, F>]>, data: D, filter: F) {
+    query_filtered<const D extends readonly any[], const F extends readonly any[]>(data: D, filter: F): ParamBuilder<[...P, Query<ExcludeMetadata<D>, F>]> {
         const q = this.#w.query_filtered(data, filter);
         this.#params.push(q);
-        return this;
+        // @ts-expect-error
+        return this as unknown as ParamBuilder<[...P, Query<ExcludeMetadata<D>, F>]>;
     }
 
-    events<E extends Event>(this: ParamBuilder<[...P, Events<E>]>, type: E): ParamBuilder<[...P, Events<E>]> {
+    events<E extends Event>(type: E): ParamBuilder<[...P, Events<E>]> {
         const event = this.#get_events(type);
         this.#params.push(event);
-        return this;
+        return this as unknown as ParamBuilder<[...P, Events<E>]>;
     }
 
-    reader<E extends Event>(this: ParamBuilder<[...P, EventReader<E>]>, type: E): ParamBuilder<[...P, EventReader<E>]> {
+    reader<E extends Event>(type: E): ParamBuilder<[...P, EventReader<E>]> {
         const event = this.#get_events(type);
-        const reader = new EventReader(event.get_cursor(), event as any);
+        // @ts-expect-error
+        const reader = new EventReader(event.get_cursor(), event)
         this.#params.push(reader);
-        return this;
+        return this as unknown as ParamBuilder<[...P, EventReader<E>]>;
     }
 
-    writer<E extends Event>(this: ParamBuilder<[...P, EventWriter<E>]>, type: E): ParamBuilder<[...P, EventWriter<E>]> {
+    writer<E extends Event>(type: E): ParamBuilder<[...P, EventWriter<E>]> {
         const event = this.#get_events(type);
         const writer = new EventWriter(event as any);
         this.#params.push(writer);
-        return this;
+        return this as unknown as ParamBuilder<[...P, EventWriter<E>]>;
     }
 
     params() {

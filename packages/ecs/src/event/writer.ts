@@ -3,22 +3,23 @@ import { Events, SendBatchIds } from "./collections";
 import type { Event, EventId } from "./base";
 import { Iterator } from "joshkaposh-iterator";
 
+// TODO: use ResMut<Events<E>>
 export class EventWriter<E extends Event> {
-    #events: ResMut<Events<E>>;
+    #events: Events<E>;
 
-    constructor(events: ResMut<Events<E>>) {
+    constructor(events: Events<E>) {
         this.#events = events;
     }
 
-    send(event: E) {
-        this.#events.value.send(event);
+    send(event: InstanceType<E>) {
+        this.#events.send(event);
     }
 
     send_batch(events: Iterator<InstanceType<E>>): SendBatchIds<E> {
-        return this.#events.value.send_batch(events);
+        return this.#events.send_batch(events);
     }
 
     send_default<T extends E extends { default(): InstanceType<E> } ? T : never>(): EventId<T> {
-        return this.#events.value.send_default();
+        return this.#events.send_default();
     }
 }

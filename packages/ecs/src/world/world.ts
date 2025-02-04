@@ -425,9 +425,6 @@ export class World {
      */
     init_resource(resource: Resource): ComponentId {
         const component_id = this.#components.init_resource(resource);
-        console.log('world.init_resource()', resource);
-
-
         const r = this.#storages.resources.get(component_id)
         if (!r || !r.is_present()) {
             const v = new resource();

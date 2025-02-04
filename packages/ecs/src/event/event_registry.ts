@@ -4,7 +4,6 @@ import { World } from "../world";
 import { Mut } from "../change_detection";
 import { Event } from "./base";
 import { v4 } from "uuid";
-import { ECS_EVENTS_TYPE } from "../define";
 
 type RegisteredEvent = {
     component_id: ComponentId;

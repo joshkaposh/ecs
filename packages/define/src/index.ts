@@ -1,7 +1,7 @@
 import { v4 } from 'uuid';
 import type { Prettify } from 'joshkaposh-iterator/src/util'
 import type { World, Event } from 'ecs';
-import { Events } from 'ecs';
+import { Events } from 'ecs/src/event/collections';
 
 type Class<Static = {}, Inst = {}> = (new (...args: any[]) => Inst) & Static;
 type TypeId = { readonly type_id: UUID }
@@ -44,4 +44,19 @@ export function define_resource<R extends Class>(ty: R & Partial<ComponentMetada
     }
 
     return ty as any
+}
+
+export const ECS_EVENTS_TYPE = 'ECS_EVENTS_TYPE';
+
+export function define_event<E extends Class>(type: E): E {
+    define_resource(type);
+    class EventDefinition extends Events<E> {
+        constructor() {
+            super(type);
+        }
+    }
+    // @ts-expect-error
+    type[ECS_EVENTS_TYPE] = EventDefinition;
+    type.prototype[ECS_EVENTS_TYPE] = EventDefinition;
+    return type as Event<E>;
 }

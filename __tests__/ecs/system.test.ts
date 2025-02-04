@@ -1,25 +1,34 @@
 import { test, assert, expect } from "vitest";
 import { ComponentMetadata, define_system, ParamBuilder, Resource, StorageType, World } from "../../packages/ecs";
-import { define_component, define_resource } from "define";
+import { define_component, define_event, define_resource } from "define";
 
 const Counter = define_resource(class Counter { constructor(public count = 0) { } });
 const CompA = define_component(class CompA { });
 const CompB = define_component(class CompB { });
 const CompC = define_component(class CompC { });
 
-const testWorld = new World();
-testWorld.init_resource(Counter);
-const builder = new ParamBuilder(testWorld);
+const MyEvent = define_event(class MyEvent { constructor(public value = 'event instance!') { } })
 
-const b = builder.local(5).local('').res(Counter).query([CompA, CompB, CompC]);
-const [n, str, res, q] = b.params();
+test('param_builder', () => {
 
-// function define_system2<P>(params: (builder: ParamBuilder) => P, system: (...args: P extends any[] ? P : P extends ParamBuilder<infer Args> ? Args : never) => any) {
-// };
+    const w = new World();
+    w.init_resource(Counter);
+    // @ts-expect-error
+    w.init_resource(MyEvent.ECS_EVENTS_TYPE);
+    const builder1 = new ParamBuilder(w);
+    const b1 = builder1
+        .local(5)
+        .local('')
+        .res(Counter)
+        .query([CompA, CompB, CompC]);
 
-// define_system2(b => b.local(5).local(''), (...args) => {
-//     const [a, b] = args;
-// })
+    const [events] = new ParamBuilder(w).events(MyEvent).params();
+    const [reader] = new ParamBuilder(w).reader(MyEvent).params();
+    const [writer] = new ParamBuilder(w).writer(MyEvent).params();
+
+    writer.send(new MyEvent());
+})
+
 
 test('run_system_once', () => {
     const Test = define_resource(class Test { constructor(public value: number) { } });
