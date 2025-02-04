@@ -1,5 +1,6 @@
 import { assert, expect, test } from 'vitest'
-import { With, Without, World, Maybe, Added, Write, EntityRef, Changed, QueryBuilder, Entity, define_component, define_marker } from '../../packages/ecs'
+import { With, Without, World, Maybe, Added, Write, EntityRef, Changed, QueryBuilder, Entity } from 'ecs'
+import { define_component, define_marker } from 'define';
 
 const A = define_component(class B { constructor(public value = 'hello world!') { } })
 const B = define_component(class B { constructor(public value = 'getting groovy!') { } })

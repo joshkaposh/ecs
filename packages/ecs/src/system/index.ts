@@ -1,10 +1,10 @@
 import { SystemInput } from './input';
 import { Access } from '../query';
-import { Archetype, ArchetypeComponentId } from '../../../../src/ecs/archetype';
+import { Archetype, ArchetypeComponentId } from '../archetype';
 import { System, SystemMeta } from '.'
 import { World } from '../world';
 import { ComponentId, is_component, Tick } from '../component';
-import { define_type } from '../define';
+import { define_type } from 'define';
 import { assert } from 'joshkaposh-iterator/src/util';
 import { SystemState } from './function-system';
 import { Option } from 'joshkaposh-option';
@@ -95,12 +95,6 @@ export type SystemImpl<In, Out> = System<In, Out> & {
 }
 
 export const $is_system = Symbol('SYSTEM');
-
-declare function define_system2<P>(
-    params: (builder: ParamBuilder) => P,
-    system: (...args: P extends any[] ? P : P extends ParamBuilder<infer Args> ? Args : never) => any
-): void;
-
 
 export function define_system<P>(
     params: (builder: ParamBuilder) => P,

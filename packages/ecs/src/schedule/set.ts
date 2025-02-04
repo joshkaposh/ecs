@@ -2,7 +2,7 @@ import { is_some, Option } from "joshkaposh-option";
 import { Chain, ProcessNodeConfig, ScheduleGraph, ScheduleSystem } from "./schedule";
 import { Configs, NodeConfig, SystemSetConfig, SystemSetConfigs } from "./config";
 import { NodeId } from "./graph";
-import { define_type, TypeId } from "../define";
+import { define_type, TypeId } from "define";
 import { $is_system, System } from "../system";
 
 

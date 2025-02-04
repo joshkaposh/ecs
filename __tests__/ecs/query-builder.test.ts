@@ -1,5 +1,6 @@
 import { test } from "vitest";
-import { QueryBuilder, World, define_component } from "ecs";
+import { QueryBuilder, World } from "ecs";
+import { define_component } from 'define'
 
 class A { constructor(public value: number) { } }
 define_component(A)

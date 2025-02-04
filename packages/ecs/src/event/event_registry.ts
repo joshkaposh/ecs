@@ -2,8 +2,9 @@ import { Events } from "./collections";
 import { type ComponentId, Tick } from "../component";
 import { World } from "../world";
 import { Mut } from "../change_detection";
-import { define_resource } from "../define";
 import { Event } from "./base";
+import { v4 } from "uuid";
+import { ECS_EVENTS_TYPE } from "../define";
 
 type RegisteredEvent = {
     component_id: ComponentId;
@@ -17,18 +18,23 @@ type RegisteredEvent = {
     update: <T>(type: Mut<any>) => Mut<T>;
 }
 
-export const EventRegistry = define_resource(class EventRegistry {
+export class EventRegistry {
+    static readonly type_id: UUID;
+    static readonly storage_type: 0;
+    static from_world: (world: World) => EventRegistry;
+
     should_update: ShouldUpdateEvents;
-    #event_updates: RegisteredEvent[];
+    event_updates: RegisteredEvent[];
+
     constructor(should_update: ShouldUpdateEvents = ShouldUpdateEvents.Always) {
         this.should_update = should_update;
-        this.#event_updates = [];
+        this.event_updates = [];
     }
 
-    register_event<T extends Event>(type: T, world: World) {
-        const component_id = world.init_resource(type as any);
-        const registry = world.get_resource_or_init(EventRegistry as any) as EventRegistry;
-        registry.#event_updates.push({
+    static register_event<T extends Event>(type: T, world: World) {
+        const component_id = world.init_resource(type.ECS_EVENTS_TYPE);
+        const registry = world.get_resource_or_init(EventRegistry)
+        registry.event_updates.push({
             component_id,
             previously_updated: false,
             // @ts-expect-error
@@ -37,7 +43,7 @@ export const EventRegistry = define_resource(class EventRegistry {
     }
 
     run_updates(world: World, last_change_tick: Tick) {
-        const event_updates = this.#event_updates;
+        const event_updates = this.event_updates;
         for (let i = 0; i < event_updates.length; i++) {
             const registered_event = event_updates[i];
             const events = world.get_resource_mut_by_id(registered_event.component_id);
@@ -51,14 +57,21 @@ export const EventRegistry = define_resource(class EventRegistry {
         }
     }
 
-    deregister_events(type: Event, world: World) {
+    static deregister_events(type: Event, world: World) {
         const events_type = type;
         const component_id = world.init_resource(events_type as any);
         const registry = world.get_resource_or_init(EventRegistry as any) as EventRegistry;
-        registry.#event_updates = registry.#event_updates.filter(e => e.component_id === component_id);
+        registry.event_updates = registry.event_updates.filter(e => e.component_id === component_id);
         world.remove_resource(events_type);
     }
-})
+}
+// @ts-expect-error
+EventRegistry.type_id = v4() as UUID;
+// @ts-expect-error
+EventRegistry.storage_type = 1;
+EventRegistry.from_world ??= (_world: World) => {
+    return new EventRegistry();
+}
 
 export type ShouldUpdateEvents = 0 | 1 | 2;
 export const ShouldUpdateEvents = {

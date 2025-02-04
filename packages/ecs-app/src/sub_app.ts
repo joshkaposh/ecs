@@ -1,10 +1,11 @@
 import { Option } from "joshkaposh-option";
-import { Component, ECS_EVENTS_TYPE, Event, EventRegistry, Events, Resource, Schedule, ScheduleBuildSettings, ScheduleLabel, Schedules, SystemInput, World } from "ecs";
-import { App, AppLabel } from "./app";
-import { Plugin, Plugins, PluginsState } from "ecs-app/plugin";
-import { IntoSystemConfigs, IntoSystemSetConfigs } from "ecs/src/schedule/config";
 import { iter, Iterator } from "joshkaposh-iterator";
-import { $Main, Main } from "ecs-app/main_schedule";
+import { Component, ECS_EVENTS_TYPE, Event, EventRegistry, Events, Resource, Schedule, ScheduleBuildSettings, ScheduleLabel, Schedules, SystemInput, World } from "ecs";
+// import { ECS_EVENTS_TYPE } from "define";
+import { App, AppLabel } from "./app";
+import { Plugin, Plugins, PluginsState } from "./plugin";
+import { IntoSystemConfigs, IntoSystemSetConfigs } from "ecs/src/schedule/config";
+// import { $Main, Main } from "./main_schedule";
 import { IntoSystemSet } from "ecs/src/schedule/set";
 
 type ExtractFn = (world1: World, world2: World) => void;
@@ -205,8 +206,11 @@ export class SubApp {
 
 
     add_event(type: Event) {
-        if (!this.#world.contains_resource(type[ECS_EVENTS_TYPE])) {
-            Eve
+        console.log('SubApp.add_event()', type, type.ECS_EVENTS_TYPE);
+
+
+        if (!this.#world.contains_resource(type.ECS_EVENTS_TYPE)) {
+            EventRegistry.register_event(type, this.#world)
         }
 
         return this;

@@ -1,5 +1,6 @@
 import { test, assert, expect } from "vitest";
-import { define_component, define_resource, ComponentMetadata, define_system, ParamBuilder, Resource, StorageType, World } from "../../packages/ecs";
+import { ComponentMetadata, define_system, ParamBuilder, Resource, StorageType, World } from "../../packages/ecs";
+import { define_component, define_resource } from "define";
 
 const Counter = define_resource(class Counter { constructor(public count = 0) { } });
 const CompA = define_component(class CompA { });

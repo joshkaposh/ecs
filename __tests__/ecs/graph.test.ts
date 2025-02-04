@@ -1,4 +1,4 @@
-import { DiGraph, NodeId, Outgoing } from '../../packages/ecs/src/schedule/graph';
+import { DiGraph, NodeId, Outgoing } from 'ecs/src/schedule/graph';
 import { expect, test } from 'vitest';
 
 const System = (id: number) => new NodeId.System(id);

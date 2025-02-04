@@ -1,5 +1,6 @@
 import { assert, test } from 'vitest';
-import { Component, StorageType, World, define_component } from '../../packages/ecs'
+import { StorageType, World } from 'ecs'
+import { define_component } from 'define';
 
 const TableStored = define_component(class TableStored { constructor(public value: string) { } })
 const SparseStored = define_component(class SparseStored { constructor(public value: number) { } }

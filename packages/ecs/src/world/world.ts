@@ -19,7 +19,7 @@ import { Instance, unit } from "../util";
 import { u32 } from "../../../intrinsics/src";
 import { CHECK_TICK_THRESHOLD, Mut, TicksMut } from "../change_detection";
 import { Schedule, ScheduleLabel, Schedules } from "../schedule";
-import { define_component, TypeId } from "../define";
+// import { define_component, TypeId } from "define";
 
 export type WorldId = number;
 
@@ -425,11 +425,14 @@ export class World {
      */
     init_resource(resource: Resource): ComponentId {
         const component_id = this.#components.init_resource(resource);
+        console.log('world.init_resource()', resource);
+
 
         const r = this.#storages.resources.get(component_id)
         if (!r || !r.is_present()) {
-            const v = resource.from_world(this);
-            this.insert_resource_by_id(component_id, v as TypeId);
+            const v = new resource();
+            // const v = resource.from_world(this);
+            this.insert_resource_by_id(component_id, v);
         }
         return component_id;
     }

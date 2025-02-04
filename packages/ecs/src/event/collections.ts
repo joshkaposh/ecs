@@ -6,6 +6,7 @@ import type { Option } from "joshkaposh-option";
 import { EventCursor } from "./event_cursor";
 import { Instance } from "../util";
 import { Default } from "../default";
+import { World } from "../world";
 // import { Resource, StorageType, World } from "../../../../src";
 // import { v4 } from "uuid";
 

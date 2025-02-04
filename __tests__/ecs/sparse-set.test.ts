@@ -1,5 +1,5 @@
 import { assert, expect, test } from "vitest";
-import { SparseSet, SparseSets } from "../../packages/ecs/src/storage/sparse-set";
+import { SparseSet, SparseSets } from "ecs/src/storage/sparse-set";
 // import { is_none } from "joshkaposh-option";
 // import { StorageType } from "../src/ecs/storage";
 

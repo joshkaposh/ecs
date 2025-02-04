@@ -1,4 +1,4 @@
-import { Bundle, Component, ComponentId, ComponentMetadata, DynamicBundle, Entity, Resource, Tick } from "..";
+import { Bundle, Component, ComponentId, ComponentMetadata, DynamicBundle, Entity, Event, EventReader, Events, EventWriter, Resource, Tick } from "..";
 import { Archetype } from "../archetype";
 import { FilteredAccess, FilteredAccessSet, Maybe, Query, QueryData, QueryFilter, QueryState, Read, Write } from "../query";
 import { World } from "../world";
@@ -138,20 +138,46 @@ export class ParamBuilder<P extends any[] = []> {
         return this as unknown as ParamBuilder<[...P, InstanceType<T>]>;
     }
 
-    query<const D extends readonly any[]>(query: D) {
+    // @ts-expect-error
+    query<const D extends readonly any[]>(this: ParamBuilder<[...P, Query<ExcludeMetadata<D>, []>]>, query: D): ParamBuilder<[...P, Query<ExcludeMetadata<D>, []>]> {
         const q = this.#w.query(query)
         this.#params.push(q);
-        return this as unknown as ParamBuilder<[...P, Query<ExcludeMetadata<D>, []>]>;
+        return this;
     }
 
-    query_filtered<const D extends readonly any[], const F extends readonly any[]>(data: D, filter: F) {
+    // @ts-expect-error
+    query_filtered<const D extends readonly any[], const F extends readonly any[]>(this: ParamBuilder<[...P, Query<ExcludeMetadata<D>, F>]>, data: D, filter: F) {
         const q = this.#w.query_filtered(data, filter);
         this.#params.push(q);
-        return this as unknown as ParamBuilder<[...P, Query<ExcludeMetadata<D>, F>]>;
+        return this;
+    }
+
+    events<E extends Event>(this: ParamBuilder<[...P, Events<E>]>, type: E): ParamBuilder<[...P, Events<E>]> {
+        const event = this.#get_events(type);
+        this.#params.push(event);
+        return this;
+    }
+
+    reader<E extends Event>(this: ParamBuilder<[...P, EventReader<E>]>, type: E): ParamBuilder<[...P, EventReader<E>]> {
+        const event = this.#get_events(type);
+        const reader = new EventReader(event.get_cursor(), event as any);
+        this.#params.push(reader);
+        return this;
+    }
+
+    writer<E extends Event>(this: ParamBuilder<[...P, EventWriter<E>]>, type: E): ParamBuilder<[...P, EventWriter<E>]> {
+        const event = this.#get_events(type);
+        const writer = new EventWriter(event as any);
+        this.#params.push(writer);
+        return this;
     }
 
     params() {
         return this.#params;
+    }
+
+    #get_events<E extends Event>(type: E): Events<E> {
+        return this.#w.resource(type.ECS_EVENTS_TYPE);
     }
 }
 

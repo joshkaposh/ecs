@@ -213,7 +213,7 @@ export class SparseSet<I extends number, V> {
         // return new SparseSet(new Array(capacity), new Array(capacity), new SparseArray())
     }
 
-    into_immutable() {
+    into_immutable(): SparseSet<I, V> {
         // @ts-expect-error
         return new SparseSet(Object.freeze(this.#indices), Object.freeze(this.#dense), this.#sparse.into_immutable())
     }

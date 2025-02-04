@@ -7,6 +7,8 @@ import { Event, EventCursor, Events } from "ecs/src/event";
 import { IntoSystemConfigs, IntoSystemSetConfigs } from "ecs/src/schedule/config";
 import { SubApp, SubApps } from "./sub_app";
 import { $First, $Main, MainSchedulePlugin } from "./main_schedule";
+import { TODO } from "joshkaposh-iterator/src/util";
+import { is_class_ctor, is_class_instance } from "ecs/src/util";
 
 type States = any;
 
@@ -217,16 +219,22 @@ export class App {
     }
 
     add_event(type: Event) {
+        console.log('App.add_event()', type);
+
         this.main().add_event(type);
         return this;
     }
 
     get_event<E extends Event>(type: E): Option<Events<E>> {
-        return this.world().get_resource(internal_get_event(type)) as Events<E>;
+        return this.world().get_resource(type.ECS_EVENTS_TYPE);
     }
 
-    event<E extends Event>(type: E) {
-        return this.world().resource(internal_get_event(type)) as Events<E>;
+    event<E extends Event>(type: E): Events<E> {
+        const event = this.world().get_resource(type.ECS_EVENTS_TYPE);
+        if (!event) {
+            throw new Error(`Expecting event ${type.name} to exist in World, but it does not. Did you forget to initialize this Resource? Resources are also implicitly added by App.add_event()`)
+        }
+        return event;
     }
 
     insert_resource(resource: Resource) {

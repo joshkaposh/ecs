@@ -1,0 +1,16 @@
+{
+    "extends": "../../tsconfig.json",
+    "compilerOptions": {
+        "paths": {
+            "@packages/ecs": [
+                "../ecs/src"
+            ],
+            "@packages/ecs-app": [
+                "../ecs-app/src"
+            ],
+            "@packages/define": [
+                "../define/src"
+            ]
+        }
+    }
+}

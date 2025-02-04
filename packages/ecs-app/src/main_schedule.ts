@@ -1,8 +1,8 @@
 import { iter } from "joshkaposh-iterator";
+import { v4 } from "uuid";
 import { Schedule, ScheduleLabel } from "ecs/src/schedule";
 import { is_some } from "joshkaposh-option";
-import { Resource, StorageType, World } from "ecs";
-import { define_resource, define_type } from 'ecs/src/define'
+import { StorageType, World } from "ecs";
 import { Plugin } from "./plugin";
 import { App } from "./app";
 import { ExecutorKind } from "ecs/src/executor";
@@ -102,7 +102,13 @@ export class MainScheduleOrder {
         this.startup_labels.splice(index, 0, schedule);
     }
 }
-define_resource(MainScheduleOrder);
+// @ts-expect-error
+MainScheduleOrder.type_id = v4() as UUID;
+// @ts-expect-error
+MainScheduleOrder.storage_type = 1;
+MainScheduleOrder.from_world ??= (_world: World) => {
+    return new MainScheduleOrder();
+}
 
 export class FixedMainScheduleOrder {
     static readonly type_id: UUID;
@@ -156,11 +162,19 @@ export class FixedMainScheduleOrder {
 
 
 }
-define_resource(FixedMainScheduleOrder)
+
+// @ts-expect-error
+FixedMainScheduleOrder.type_id = v4() as UUID;
+// @ts-expect-error
+FixedMainScheduleOrder.storage_type = 1;
+FixedMainScheduleOrder.from_world ??= (_world: World) => {
+    return new FixedMainScheduleOrder()
+}
+// define_resource(FixedMainScheduleOrder)
 
 export class MainSchedulePlugin extends Plugin {
 
-    static readonly type_id: UUID;
+    static readonly type_id = v4() as UUID;
 
     build(app: App): void {
         const main_schedule = new Schedule($Main)
@@ -186,7 +200,8 @@ export class MainSchedulePlugin extends Plugin {
 
     }
 }
-define_type(MainSchedulePlugin);
+
+// define_type(MainSchedulePlugin);
 
 
 export class Main {

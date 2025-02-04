@@ -1,5 +1,5 @@
 import { test, expect, assert } from 'vitest';
-import { World, Schedule, define_system, define_condition, set, Condition, Schedules } from '../../packages/ecs';
+import { World, Schedule, define_system, define_condition, set, Condition, Schedules } from 'ecs';
 
 // function a() {
 //     console.log('first!');

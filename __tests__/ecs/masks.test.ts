@@ -1,6 +1,6 @@
 import { assert, test } from "vitest";
-import { HIGH_MASK, IdKind, IdentifierMask } from '../../packages/ecs/src/identifier';
-import { u32 } from "../../packages/intrinsics";
+import { HIGH_MASK, IdKind, IdentifierMask } from 'ecs/src/identifier';
+import { u32 } from "intrinsics";
 const NON_ZERO_U32_MIN = 1;
 
 test('get_u64_parts', () => {

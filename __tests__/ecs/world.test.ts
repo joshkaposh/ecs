@@ -1,31 +1,21 @@
 import { assert, test } from 'vitest'
 import {
     World,
-    StorageType,
     Component,
-    Resource,
-    System,
-    Condition,
     define_system,
-    Schedule,
-    Query,
     With,
     Write,
     define_condition,
+} from '../../packages/ecs';
+import {
     define_component,
     define_marker,
     define_resource,
-    set,
-    Res
-} from '../../packages/ecs';
-
-import { ParamBuilder } from '../../packages/ecs';
-import { Commands } from '../../packages/ecs/src/world/world';
+} from 'define'
 
 const A = define_component(class A { constructor(public value = 'A') { } })
 const B = define_component(class B { constructor(public value = 'B') { } })
 const C = define_component(class C { constructor(public value = 'C') { } })
-
 
 const Marker = define_marker();
 

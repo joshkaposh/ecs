@@ -18,10 +18,22 @@
         "noUnusedLocals": true,
         "noUnusedParameters": true,
         "noImplicitReturns": true,
-        "skipLibCheck": true
+        "skipLibCheck": true,
+        "paths": {
+            "@packages/ecs": [
+                "./ecs/src"
+            ],
+            "@packages/ecs-app": [
+                "./ecs-app/src"
+            ],
+            "@packages/define": [
+                "./define/src"
+            ]
+        }
     },
     "include": [
         "src",
+        "packages/ecs/src",
         "packages/ecs/src/commands",
         "packages/ecs/src/event",
         "packages/ecs/src/identifier",
@@ -36,13 +48,13 @@
         "packages/ecs/src/index.ts",
         "packages/ecs/src/define.ts",
         "packages/ecs/src/bit.ts",
-        "packages/intrinsics/src/math-helpers.ts",
-        "packages/intrinsics/src/index.ts",
-        "packages/ecs/src/util.ts",
-        "packages/ecs/src/array-helpers.ts",
-        "packages/ecs/src/default.ts",
-        "packages/ecs-app/main_schedule.ts",
-        "packages/ecs-app/plugin.ts",
-        "packages/ecs-app/sub_app.ts"
-    ]
+        "packages/intrinsics/src",
+        //     "packages/intrinsics/src/index.ts",
+        //     "packages/ecs/src/util.ts",
+        //     "packages/ecs/src/array-helpers.ts",
+        //     "packages/ecs/src/default.ts",
+        "packages/ecs-app/src",
+        //     "packages/ecs-app/src/plugin.ts",
+        //     "packages/ecs-app/sub_app.ts"
+    ],
 }

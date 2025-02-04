@@ -1,11 +1,11 @@
-import { ResMut } from "../../../../src/ecs/change_detection";
-import { Event, EventId, Events, SendBatchIds } from "./event";
+import { ResMut } from "../change_detection";
+import { Events, SendBatchIds } from "./collections";
+import type { Event, EventId } from "./base";
+import { Iterator } from "joshkaposh-iterator";
 
 export class EventWriter<E extends Event> {
-    // @ts-expect-error
     #events: ResMut<Events<E>>;
 
-    // @ts-expect-error
     constructor(events: ResMut<Events<E>>) {
         this.#events = events;
     }
@@ -14,11 +14,11 @@ export class EventWriter<E extends Event> {
         this.#events.value.send(event);
     }
 
-    send_batch(events: Iterator<E>): SendBatchIds<E> {
+    send_batch(events: Iterator<InstanceType<E>>): SendBatchIds<E> {
         return this.#events.value.send_batch(events);
     }
 
-    send_default(): E extends { default(): E } ? EventId<E> : never {
+    send_default<T extends E extends { default(): InstanceType<E> } ? T : never>(): EventId<T> {
         return this.#events.value.send_default();
     }
 }

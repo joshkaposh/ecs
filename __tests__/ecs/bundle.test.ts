@@ -1,7 +1,7 @@
 import { assert, expect, test } from 'vitest'
 import { is_none, is_some } from 'joshkaposh-option';
-import { World, define_component } from '../../packages/ecs';
-
+import { World } from 'ecs';
+import { define_component } from 'define';
 const A = define_component(class A { constructor(public value = 'A') { } })
 const B = define_component(class B { constructor(public value = 'B') { } })
 const C = define_component(class C { constructor(public value = 'C') { } })

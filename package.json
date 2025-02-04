@@ -31,6 +31,7 @@
   "workspaces": [
     "packages/ecs",
     "packages/intrinsics",
-    "packages/ecs-app"
+    "packages/ecs-app",
+    "packages/define"
   ]
 }
