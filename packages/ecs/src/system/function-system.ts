@@ -161,11 +161,12 @@ export class SystemState<Param extends SystemParam<any, any>> {
         const meta = SystemMeta.new(param);
         meta.last_run = world.change_tick().relative_to(Tick.MAX);
 
-        const param_state = param.param_init_state(world, meta);
+        // const param_state = param.param_init_state(world, meta);
+        // TODO: re-implement
         return new SystemState(
             meta,
             param,
-            param_state,
+            param as any,
             world.id(),
             ArchetypeGeneration.initial()
         )
@@ -198,7 +199,6 @@ export class SystemState<Param extends SystemParam<any, any>> {
     get(world: World) {
         this.validate_world(world.id());
         this.update_archetypes(world);
-
         return this.get_unchecked_manual(world);
     }
 
@@ -237,9 +237,9 @@ export class SystemState<Param extends SystemParam<any, any>> {
         const old_generation = this.#archetype_generation;
         this.#archetype_generation = archetypes.generation();
 
-        for (const archetype of archetypes.iter_range(old_generation)) {
-            this.#param.param_new_archetype(this.#param_state, archetype, this.#meta)
-        }
+        // for (const archetype of archetypes.iter_range(old_generation)) {
+        //     this.#param.param_new_archetype(this.#param_state, archetype, this.#meta)
+        // }
     }
 
     get_manual(world: World) {
@@ -262,9 +262,10 @@ export class SystemState<Param extends SystemParam<any, any>> {
     }
 
     fetch(world: World, change_tick: Tick) {
-        const param = this.#param.param_get_param(this.#param_state, this.#meta, world, change_tick);
+        // const param = this.#param.param_get_param(this.#param_state, this.#meta, world, change_tick);
         this.#meta.last_run = change_tick;
-        return param;
+        // return param;
+        return this.#param;
     }
 }
 

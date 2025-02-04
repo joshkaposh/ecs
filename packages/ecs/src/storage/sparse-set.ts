@@ -294,6 +294,12 @@ export class SparseSet<I extends number, V> {
         return is_some(dense_index) ? this.#dense[dense_index] : null
     }
 
+    get_mut(index: I): Option<V> {
+        const dense_index = this.#sparse.get(index);
+        return is_some(dense_index) ? this.#dense[dense_index] : null
+    }
+
+
     // returns an iterator of indices in arbitrary order
     indices(): Iterator<I> {
         return iter(this.#indices);

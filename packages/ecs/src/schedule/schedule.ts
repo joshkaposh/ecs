@@ -2,14 +2,14 @@ import { Iterator, drain, iter } from "joshkaposh-iterator";
 import { Heap } from "joshkaposh-heap";
 import { ErrorExt, type Option, type Result, is_some } from 'joshkaposh-option'
 import { v4 } from "uuid";
-import { type System } from "../system/system";
+import { ApplyDeferred, type System } from "../system/system";
 import { World } from "../world";
 import { insert_set, ShortName, writeln } from "../util";
 import { Component, Components, Resource, Tick, type ComponentId } from '../component'
 import { ExecutorKind, is_apply_deferred, SystemExecutor, SystemSchedule } from "../executor";
 import { DiGraph, UnGraph, Outgoing, Incoming, GraphInfo, DependencyKind, check_graph, index, Graph, Ambiguity } from './graph'
 import { Configs, IntoSystemConfigs, IntoSystemSetConfigs, NodeConfig, NodeConfigs, SystemConfig, SystemConfigs, SystemSetConfig } from "./config";
-import { $is_system, IntoSystemTrait } from "../system";
+import { $is_system } from "../system";
 import { FixedBitSet } from "fixed-bit-set";
 import { NodeId } from "./graph/node";
 import { CheckGraphResults, simple_cycles_in_component } from "./graph";
@@ -237,18 +237,6 @@ export class Schedule {
         world.check_change_ticks();
         const err = this.initialize(world)
         if (err) throw new Error(`Error when initializing schedule ${this.#label}: ${err}`)
-
-        // console.log('----- Schedule.run() -----');
-        // console.log('----- Hierarchy topsort -----');
-        // console.log(this.#graph.hierarchy().cached_topsort().map(id => [id, id.is_system() ? this.#executable.__systems[id.index].name() : this.#graph.set_at(id)]));
-        // console.log('----- Dependency topsort -----');
-        // console.log(this.#graph.dependency().cached_topsort().map(id => [id, id.is_system() ? this.#executable.__systems[id.index].name() : this.#graph.set_at(id)]));
-        // console.log('----- SystemSchedule system_ids -----');
-        // console.log(this.#executable.__system_ids);
-        // const final_topsort_ids = this.#executable.__system_ids.filter(id => id.is_system()).toReversed();
-        // const final_topsort_systems = final_topsort_ids.map(id => this.#executable.__systems[id.index]);
-        // this.#executable.__system_ids = final_topsort_ids;
-        // this.#executable.__systems = final_topsort_systems;
 
         this.#executor.run(this.#executable, world, undefined);
     }
@@ -905,8 +893,6 @@ export class ScheduleGraph {
         // remove redundant edges
         dependency_flattened_dag.set_graph(flat_results.transitive_reduction);
 
-        // console.log('build_schedule() Topsorted DependencyFlattenedDag', dependency_flattened_dag.cached_topsort().map(id => [id, this.get_system_at(id)?.name() ?? 'SET']));
-
         // flatten: combine `in_set` with `ambiguous_with` information
         const ambiguous_with_flattened = this.get_ambiguous_with_flattened(set_systems);
 
@@ -931,34 +917,34 @@ export class ScheduleGraph {
     auto_insert_apply_deferred(dependency_flattened: DiGraph) {
         const sync_point_graph = dependency_flattened.clone();
 
-        const topo = this.topsort_graph(dependency_flattened, ReportCycles.Dependency);
-        if (!Array.isArray(topo)) return topo;
+        // const topo = this.topsort_graph(dependency_flattened, ReportCycles.Dependency);
+        // if (!Array.isArray(topo)) return topo;
 
-        const distances = new Map<number, Option<number>>();
+        // const distances = new Map<number, Option<number>>();
 
-        for (const node of topo) {
-            const add_sync_after = this.#systems[node.index].get()?.has_deferred();
+        // for (const node of topo) {
+        //     const add_sync_after = this.#systems[node.index].get()?.has_deferred();
 
-            for (const target of dependency_flattened.neighbors_directed(node, Outgoing)) {
-                const add_sync_on_edge = add_sync_after
-                    && !is_apply_deferred(this.#systems[target.index].get()!)
-                    && !this.#no_sync_edges.contains(`${node.to_primitive()}//${target.to_primitive()}`);
+        //     for (const target of dependency_flattened.neighbors_directed(node, Outgoing)) {
+        //         const add_sync_on_edge = add_sync_after
+        //             && !is_apply_deferred(this.#systems[target.index].get()!)
+        //             && !this.#no_sync_edges.contains(`${node.to_primitive()}//${target.to_primitive()}`);
 
-                const weight = add_sync_on_edge ? 1 : 0;
+        //         const weight = add_sync_on_edge ? 1 : 0;
 
-                const distance = Math.max(distances.get(target.index) ?? 0, (distances.get(node.index) ?? 0) + weight)
-                distances.set(target.index, distance);
+        //         const distance = Math.max(distances.get(target.index) ?? 0, (distances.get(node.index) ?? 0) + weight)
+        //         distances.set(target.index, distance);
 
-                if (add_sync_on_edge) {
-                    const sync_point = this.get_sync_point(distances.get(target.index)!);
-                    sync_point_graph.add_edge(node, sync_point);
-                    sync_point_graph.add_edge(sync_point, target);
+        //         if (add_sync_on_edge) {
+        //             const sync_point = this.get_sync_point(distances.get(target.index)!);
+        //             sync_point_graph.add_edge(node, sync_point);
+        //             sync_point_graph.add_edge(sync_point, target);
 
-                    // edge is now redundant
-                    sync_point_graph.remove_edge(node, target);
-                }
-            }
-        }
+        //             // edge is now redundant
+        //             sync_point_graph.remove_edge(node, target);
+        //         }
+        //     }
+        // }
         return sync_point_graph;
     }
 
@@ -966,26 +952,26 @@ export class ScheduleGraph {
      * add a `ApplyDeferred` system with no config
      */
     add_auto_sync() {
-        const id = new NodeId.System(this.#systems.length);
+        // const id = new NodeId.System(this.#systems.length);
 
-        this.#systems.push(new SystemNode(ScheduleSystem.Infallible(
-            IntoSystemTrait.into_system(ApplyDeferred)
-        )))
+        // this.#systems.push(new SystemNode(System.Infallible(
+        //     ApplyDeferred.into_system()
+        // )))
 
-        this.#system_conditions.push([]);
+        // this.#system_conditions.push([]);
 
-        this.#ambiguous_with_all.add(id);
-        return id;
+        // this.#ambiguous_with_all.add(id);
+        // return id;
     }
 
     get_sync_point(distance: number): NodeId {
-        if (this.#auto_sync_node_ids.has(distance)) {
-            return this.#auto_sync_node_ids.get(distance)!
-        } else {
-            const node_id = this.add_auto_sync();
-            this.#auto_sync_node_ids.set(distance, node_id);
-            return node_id;
-        }
+        // if (this.#auto_sync_node_ids.has(distance)) {
+        //     return this.#auto_sync_node_ids.get(distance)!
+        // } else {
+        //     const node_id = this.add_auto_sync();
+        //     this.#auto_sync_node_ids.set(distance, node_id);
+        //     return node_id;
+        // }
     }
 
     /**
@@ -1334,7 +1320,6 @@ export class ScheduleGraph {
         if (sccs_with_cycles.length === 0) {
             // TODO: may need to reverse
             return top_sorted_nodes.reverse()
-            return top_sorted_nodes;
         } else {
             const cycles = [];
             for (const scc of sccs_with_cycles) {
@@ -1435,17 +1420,17 @@ export class ScheduleGraph {
 
     get_dependency_conflicts_error_message(cycles: Array<NodeId[]>) {
         let message = `schedule has ${cycles.length} before/after cycles:\n`
-        for (const [i, cycle] of iter(cycles).enumerate()) {
-            const names = iter(cycle).map(id => [this.get_node_kind(id), this.get_node_name(id)] as const)
-            const [first_kind, first_name] = names.next().value
-            message += writeln(`cycle ${i + 1}: ${first_kind} ${first_name} must run before itself`)
-            message += writeln(`${first_kind} ${first_name}`)
+        // for (const [i, cycle] of iter(cycles).enumerate()) {
+        //     const names = iter(cycle).map(id => [this.get_node_kind(id), this.get_node_name(id)] as const);
+        //     const [first_kind, first_name] = names.next().value;
+        //     message += writeln(`cycle ${i + 1}: ${first_kind} ${first_name} must run before itself`)
+        //     message += writeln(`${first_kind} ${first_name}`)
 
-            for (const [kind, name] of names.chain(iter.once([first_kind, first_name]))) {
-                message += writeln(`... which must run before ${kind} ${name}`)
-            }
-            message = writeln(message)
-        }
+        //     for (const [kind, name] of names.chain(iter.once([first_kind, first_name]) as any)) {
+        //         message += writeln(`... which must run before ${kind} ${name}`)
+        //     }
+        //     message = writeln(message)
+        // }
         return message;
     }
 

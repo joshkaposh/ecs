@@ -1,14 +1,14 @@
-import { ErrorExt, Option, Result, is_error, is_some } from "joshkaposh-option";
+import { ErrorExt, Option, Result } from "joshkaposh-option";
 import { Component, Resource } from "ecs/src/component";
 import { PlaceholderPlugin, Plugin, Plugins, PluginsState } from "./plugin";
-import { Schedule, ScheduleBuildSettings, ScheduleLabel, Schedules } from "ecs/src/schedule";
-import { World } from "ecs/src/world";
+import { Schedule, ScheduleBuildSettings, ScheduleLabel } from "ecs/src/schedule";
 import { Event, EventCursor, Events } from "ecs/src/event";
 import { IntoSystemConfigs, IntoSystemSetConfigs } from "ecs/src/schedule/config";
 import { SubApp, SubApps } from "./sub_app";
 import { $First, $Main, MainSchedulePlugin } from "./main_schedule";
-import { TODO } from "joshkaposh-iterator/src/util";
-import { is_class_ctor, is_class_instance } from "ecs/src/util";
+import { define_event } from "define";
+import { event_update_condition, event_update_system } from "ecs/src/event/update";
+import { SystemInput } from "ecs";
 
 type States = any;
 
@@ -48,6 +48,7 @@ export class AppExit {
     }
 
 }
+define_event(AppExit);
 
 export type AppLabel = string;
 
@@ -67,8 +68,6 @@ function run_once(app: App): AppExit {
     return app.should_exit() ?? AppExit.Success();
 }
 type RunnerFn = (app: App) => AppExit;
-
-type SystemInput<T = any> = any;
 
 export class App {
     #sub_apps: SubApps;
@@ -97,11 +96,11 @@ export class App {
         const app = App.empty();
         app.#sub_apps.main().update_schedule = $Main
 
-        app.add_plugins(MainSchedulePlugin);
-        // app.add_systems($First,
-        //     event_update_system
-        //         .run_if(event_update_condition)
-        // )
+        app.add_plugins(new MainSchedulePlugin());
+        app.add_systems($First,
+            event_update_system
+                .run_if(event_update_condition)
+        )
 
         app.add_event(AppExit);
         return app;
@@ -110,7 +109,7 @@ export class App {
     static empty() {
         return new App(
             new SubApps(new SubApp(), new Map()),
-            run_once as any
+            run_once
         )
     }
 
@@ -127,20 +126,20 @@ export class App {
             throw new Error('App.run() was called while a plugin was building.')
         }
 
-        const runner = this.#runner;
-        this.#runner = run_once;
-        const app = App.empty();
 
-        const temp_apps = this.#sub_apps;
-        this.#sub_apps = app.#sub_apps;
-        app.#sub_apps = temp_apps;
+        // const runner = this.#runner;
+        // this.#runner = run_once;
 
-        const temp_runner = this.#runner;
-        this.#runner = app.#runner;
-        app.#runner = temp_runner;
+        // const empty = App.empty();
+        // const app = this;
+
+        // app.#runner = empty.#runner;
+        // app.#sub_apps = empty.#sub_apps
 
 
-        (runner)(app);
+        this.#runner(this);
+        // return (runner)(app);
+        // return this.#runner(this);
     }
 
     set_runner(runner: (app: App) => AppExit) {
@@ -204,7 +203,7 @@ export class App {
         return this.#sub_apps.iter().any(s => s.is_building_plugins())
     }
 
-    add_systems(schedule: ScheduleLabel, ...systems: IntoSystemConfigs<any>[]) {
+    add_systems(schedule: ScheduleLabel, ...systems: (IntoSystemConfigs<any> | IntoSystemSetConfigs<any>)[]) {
         this.main().add_systems(schedule, ...systems);
         return this;
     }
@@ -219,8 +218,6 @@ export class App {
     }
 
     add_event(type: Event) {
-        console.log('App.add_event()', type);
-
         this.main().add_event(type);
         return this;
     }
@@ -283,8 +280,7 @@ export class App {
             throw new Error('Plugins cannot be added after App.cleanup() or App.finish() has been called')
         }
 
-        // @ts-expect-error
-        new plugins().add_to_app(this);
+        plugins.add_to_app(this);
         return this;
     }
 
@@ -369,13 +365,12 @@ export class App {
         return this;
     }
 
-    should_exit() {
+    should_exit(): Option<AppExit> {
         const reader = new EventCursor()
-        const _events = this.world().get_resource(internal_get_event(AppExit));
+        const _events = this.world().get_resource(AppExit.ECS_EVENTS_TYPE);
 
         if (!_events) {
-            console.log('Exiting early as AppExit events does not exist');
-
+            console.warn('Exitting early as AppExit events does not exist');
             return
         }
         const events = reader.read(_events);
@@ -384,6 +379,19 @@ export class App {
         }
 
         return;
+    }
+
+    #replace(other: App) {
+        this.#runner = other.#runner;
+        const this_sub_apps = this.#sub_apps;
+        const this_main = this.main();
+        const other_sub_apps = other.#sub_apps;
+        const other_main = other.main();
+
+
+        this.#sub_apps = other.#sub_apps;
+
+        return other;
     }
 
 }

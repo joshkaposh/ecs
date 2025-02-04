@@ -19,7 +19,7 @@ import { Instance, unit } from "../util";
 import { u32 } from "../../../intrinsics/src";
 import { CHECK_TICK_THRESHOLD, Mut, TicksMut } from "../change_detection";
 import { Schedule, ScheduleLabel, Schedules } from "../schedule";
-// import { define_component, TypeId } from "define";
+import { TypeId } from "define";
 
 export type WorldId = number;
 
@@ -509,7 +509,7 @@ export class World {
         const component_id = this.register_resource(resource);
         if (!this.#storages.resources.get(component_id)) {
             const ptr = resource.from_world(this);
-            this.insert_resource_by_id(component_id, ptr as TypeId)
+            this.insert_resource_by_id(component_id, ptr)
         }
 
         const data = this.#storages.resources.get(component_id)!;
@@ -520,17 +520,14 @@ export class World {
 
     }
 
-    // @ts-expect-error
     send_event<E extends Event>(type: Events<E>, event: InstanceType<E>): Option<EventId> {
         return this.send_event_batch(type, once(event))?.next().value
     }
 
     send_event_default<E extends Event>(type: Events<E>, event: E): Option<EventId> {
-        // @ts-expect-error
         return this.send_event(type as any, new event())
     }
 
-    // @ts-expect-error
     send_event_batch<E extends Event>(type: Events<E>, events: Iterable<InstanceType<E>>): SendBatchIds<E> {
         const events_resource = this.get_resource(type as any)
         return TODO('World::send_event_batch()', events, events_resource);
@@ -625,7 +622,44 @@ export class World {
         this.#storages.resources.clear()
     }
 
-    resource_scope() { }
+    try_resource_scope<R extends Resource, U extends Mut<InstanceType<R>>>(resource: R, scope: (world: World, resource: U) => U): U | undefined {
+        const last_change_tick = this.last_change_tick();
+        const change_tick = this.change_tick();
+
+        const component_id = this.#components.get_resource_id(resource);
+        if (typeof component_id !== 'number') {
+            return;
+        }
+
+        const tuple = this.#storages.resources
+            .get_mut(component_id)?.remove<R>();
+
+        if (!tuple) {
+            return;
+        }
+        const [ptr, ticks] = tuple;
+        const value_mut = new Mut(ptr, new TicksMut(
+            ticks.added,
+            ticks.changed,
+            last_change_tick,
+            change_tick
+        )) as U
+
+        const result = scope(this, value_mut);
+        assert(!this.contains_resource(resource), `Resource ${resource.name} was inserted during a call to World.try_resource_scope()\n This is not allowed as the original resource is reinserted to the world after the closure is invoked.`)
+
+        this.#storages.resources.get_mut(component_id)?.insert_with_ticks(ptr, ticks);
+        return result;
+    }
+
+    resource_scope<R extends Resource, U extends Mut<InstanceType<R>>>(resource: R, scope: (world: World, resource: U) => U): U {
+        const result = this.try_resource_scope(resource, scope);
+        if (result === undefined) {
+            throw new Error(`Resource does not exist: ${resource.name}`)
+        }
+        return result;
+    }
+
 
     add_schedule(schedule: Schedule) {
         const schedules = this.get_resource_or_init(Schedules) as Schedules;
@@ -647,6 +681,7 @@ export class World {
     }
 
     schedule_scope(label: ScheduleLabel, scope: (world: World, schedule: Schedule) => void) {
+        console.log('World running schedule in schedule_scope', label)
         const res = this.try_schedule_scope(label, scope)
         if (res instanceof TryRunScheduleError) {
             throw new Error(res.get())

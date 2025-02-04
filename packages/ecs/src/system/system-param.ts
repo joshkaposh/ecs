@@ -116,9 +116,21 @@ export class ParamBuilder<P extends any[] = []> {
         this.#params = [] as unknown as P;
     }
 
-    local<T>(value: T): ParamBuilder<[...P, T]> {
+    world(): ParamBuilder<[...P, World]> {
+        this.#params.push(this.#w);
+        return this as unknown as ParamBuilder<[...P, World]>;
+    }
+
+    last_change_tick(): ParamBuilder<[...P, Local<Tick>]> {
+        const tick = this.#w.last_change_tick();
+        const local = new Local(tick);
+        this.#params.push(local);
+        return this as unknown as ParamBuilder<[...P, Local<Tick>]>;
+    }
+
+    local<T>(value: T): ParamBuilder<[...P, Local<T>]> {
         this.#params.push(new Local(value))
-        return this as unknown as ParamBuilder<[...P, T]>;
+        return this as unknown as ParamBuilder<[...P, Local<T>]>;
     }
 
     commands(): ParamBuilder<[...P, InstanceType<typeof Commands>]> {
@@ -136,6 +148,18 @@ export class ParamBuilder<P extends any[] = []> {
         const res = this.#w.resource_mut(resource);
         this.#params.push(res);
         return this as unknown as ParamBuilder<[...P, InstanceType<T>]>;
+    }
+
+    res_opt<T extends Resource>(resource: T) {
+        const res = this.#w.get_resource(resource);
+        this.#params.push(res);
+        return this as unknown as ParamBuilder<[...P, Option<InstanceType<T>>]>;
+    }
+
+    res_mut_opt<T extends Resource>(resource: T) {
+        const res = this.#w.get_resource_mut(resource);
+        this.#params.push(res);
+        return this as unknown as ParamBuilder<[...P, Option<InstanceType<T>>]>;
     }
 
     // @ts-expect-error
@@ -162,7 +186,6 @@ export class ParamBuilder<P extends any[] = []> {
 
     reader<E extends Event>(type: E): ParamBuilder<[...P, EventReader<E>]> {
         const event = this.#get_events(type);
-        // @ts-expect-error
         const reader = new EventReader(event.get_cursor(), event)
         this.#params.push(reader);
         return this as unknown as ParamBuilder<[...P, EventReader<E>]>;
@@ -175,7 +198,8 @@ export class ParamBuilder<P extends any[] = []> {
         return this as unknown as ParamBuilder<[...P, EventWriter<E>]>;
     }
 
-    params() {
+
+    private params() {
         return this.#params;
     }
 

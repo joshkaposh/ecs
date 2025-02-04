@@ -146,15 +146,13 @@ export function define_system<P>(
         }
 
         initialize(world: World): void {
-            // console.log('SYSTEM IMPL INITIALIZE');
-
             if (this.#state) {
                 assert(this.#state.matches_world(world.id()), 'System built with a different world than the one it was added to');
             } else {
-                let builder = new ParamBuilder(world);
+                const builder = new ParamBuilder(world);
                 // @ts-expect-error
-                builder ??= params(builder);
-                const p = define_params(...builder.params())
+                const p = params(builder).params() as any;
+                // const p = define_params(_params.params())
                 this.#params = p;
                 this.#state = SystemState.new(world, p)
             }
@@ -209,7 +207,9 @@ export function define_system<P>(
                 throw new Error(`System's state was not found. Did you forget to initialize this system before running it?`)
             }
             const param_state = this.#state.get(world);
-            return this.#fn(...param_state)
+            const system_params = input === unit ? param_state : [input, ...param_state];
+            console.log('SystemImpl.run_unsafe', system_params);
+            return this.#fn(...system_params)
         }
 
         validate_param(world: World): boolean {
@@ -236,13 +236,13 @@ export function define_system<P>(
     return new SystemImpl(system as any);
 }
 
-export function define_condition<const P extends readonly any[], const F extends (...args: P) => boolean>(
-    condition: F,
-    params: (builder: ParamBuilder<P>) => P
+export function define_condition<P>(
+    params: (builder: ParamBuilder) => P,
+    condition: (...args: P extends any[] ? P : P extends ParamBuilder<infer Args> ? Args : never) => boolean
 ) {
 
     class ConditionImpl<const P extends Parameters<F>> extends System<any, any> implements Condition<any, any> {
-        #fn: F;
+        #fn: typeof condition;
         #name: string;
         // #params_initial: P;
         #params!: SystemParam<any, any>;
@@ -251,7 +251,7 @@ export function define_condition<const P extends readonly any[], const F extends
 
         readonly fallible = false;
 
-        constructor(fn: F) {
+        constructor(fn: typeof condition) {
             super()
             this.#fn = fn;
             this.#system_meta = SystemMeta.new(fn)
@@ -269,8 +269,8 @@ export function define_condition<const P extends readonly any[], const F extends
          * Short-curcuits: Condition `other` will not run if `this` condition returns false.
          */
         and<M, C extends Condition<M, any>>(other: C): And<System<any, boolean>, System<any, boolean>> {
-            const a = IntoSystemTrait.into_system(this as any);
-            const b = IntoSystemTrait.into_system(other as any);
+            const a = this.into_system();
+            const b = other.into_system();
             const name = `${a.name()} && ${b.name()}`;
             return new CombinatorSystem(new AndMarker(), a, b, name) as any;
         }
@@ -285,8 +285,8 @@ export function define_condition<const P extends readonly any[], const F extends
          * Short-curcuits: Condition `other` will not run if `this` condition returns true.
          */
         nand<M, C extends Condition<M, any>>(other: C): Nand<System<any, boolean>, System<any, boolean>> {
-            const a = IntoSystemTrait.into_system(this as any);
-            const b = IntoSystemTrait.into_system(other as any);
+            const a = this.into_system();
+            const b = other.into_system();
             const name = `${a.name()} && ${b.name()}`;
             return new CombinatorSystem(new NandMarker(), a, b, name) as any;
         }
@@ -302,8 +302,8 @@ export function define_condition<const P extends readonly any[], const F extends
          * Short-curcuits: Condition `other` will not run if `this` condition returns true.
          */
         or<M, C extends Condition<M, any>>(other: C): Or<System<any, boolean>, System<any, boolean>> {
-            const a = IntoSystemTrait.into_system(this as any);
-            const b = IntoSystemTrait.into_system(other as any);
+            const a = this.into_system();
+            const b = other.into_system();
             const name = `${a.name()} && ${b.name()}`;
             return new CombinatorSystem(new OrMarker(), a, b, name) as any;
 
@@ -319,8 +319,8 @@ export function define_condition<const P extends readonly any[], const F extends
          * Short-curcuits: Condition `other` may not run if `this` condition returns false.
          */
         nor<M, C extends Condition<M, any>>(other: C): Nor<System<any, boolean>, System<any, boolean>> {
-            const a = IntoSystemTrait.into_system(this as any);
-            const b = IntoSystemTrait.into_system(other as any);
+            const a = this.into_system();
+            const b = other.into_system();
             const name = `${a.name()} && ${b.name()}`;
             return new CombinatorSystem(new NorMarker(), a, b, name) as any;
 
@@ -336,8 +336,8 @@ export function define_condition<const P extends readonly any[], const F extends
          * Both conditions will always run.
          */
         xor<M, C extends Condition<M, any>>(other: C): Xor<System<any, boolean>, System<any, boolean>> {
-            const a = IntoSystemTrait.into_system(this as any);
-            const b = IntoSystemTrait.into_system(other as any);
+            const a = this.into_system();
+            const b = other.into_system();
             const name = `${a.name()} && ${b.name()}`;
             return new CombinatorSystem(new XorMarker(), a, b, name) as any;
         }
@@ -352,8 +352,8 @@ export function define_condition<const P extends readonly any[], const F extends
          * Both conditions will always run.
          */
         xnor<M, C extends Condition<M, any>>(other: C): Xnor<System<any, boolean>, System<any, boolean>> {
-            const a = IntoSystemTrait.into_system(this as any);
-            const b = IntoSystemTrait.into_system(other as any);
+            const a = this.into_system();
+            const b = other.into_system();
             const name = `${a.name()} && ${b.name()}`;
             return new CombinatorSystem(new XnorMarker(), a, b, name) as any;
         }
@@ -386,7 +386,9 @@ export function define_condition<const P extends readonly any[], const F extends
             if (this.#state) {
                 assert(this.#state.matches_world(world.id()), 'System built with a different world than the one it was added to');
             } else {
-                const p = define_params(...params(new ParamBuilder(world)))
+                const builder = new ParamBuilder(world);
+                // @ts-expect-error
+                const p = params(builder).params() as any;
                 this.#params = p;
                 this.#state = SystemState.new(world, p)
             }
@@ -441,7 +443,10 @@ export function define_condition<const P extends readonly any[], const F extends
                 throw new Error(`System's state was not found. Did you forget to initialize this system before running it?`)
             }
             const param_state = this.#state.get(world);
-            return this.#fn(...param_state)
+
+            const system_params = input === unit ? param_state : [input, ...param_state];
+            console.log('CONDITION_IMPL', system_params);
+            return this.#fn(...system_params)
         }
 
         validate_param(world: World): boolean {

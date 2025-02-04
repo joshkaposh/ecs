@@ -1,5 +1,5 @@
 import { test, assert, expect } from "vitest";
-import { ComponentMetadata, define_system, ParamBuilder, Resource, StorageType, World } from "../../packages/ecs";
+import { ComponentMetadata, define_system, Local, ParamBuilder, Resource, StorageType, World } from "../../packages/ecs";
 import { define_component, define_event, define_resource } from "define";
 
 const Counter = define_resource(class Counter { constructor(public count = 0) { } });
@@ -22,8 +22,11 @@ test('param_builder', () => {
         .res(Counter)
         .query([CompA, CompB, CompC]);
 
+    // @ts-expect-error
     const [events] = new ParamBuilder(w).events(MyEvent).params();
+    // @ts-expect-error
     const [reader] = new ParamBuilder(w).reader(MyEvent).params();
+    // @ts-expect-error
     const [writer] = new ParamBuilder(w).writer(MyEvent).params();
 
     writer.send(new MyEvent());
@@ -48,22 +51,21 @@ test('run_system_once', () => {
 
 test('run_system_once_with', () => {
 
-    // const Test = define_resource(class Test { constructor(public value: number = 0) { } });
-    // type Test = InstanceType<typeof Test>;
-    // const w = new World();
-    // w.init_resource(Test);
+    const Test = define_resource(class Test { constructor(public value: number = 0) { } });
+    const w = new World();
+    w.init_resource(Test);
 
-    // const system = define_system(
-    //     function system(input: number) {
-    //         console.log('system running!', input);
+    const system = define_system(
+        (b) => b.local(1),
+        function system(input) {
+            console.log('system running!', input);
 
-    //         return input + 1;
-    //     },
-    //     (b) => b.local(1).params()
-    // );
+            return input.value + 1;
+        },
+    );
 
-    // let n = w.run_system_once_with(system, 1);
+    let n = w.run_system_once_with(system, new Local(1));
 
-    // assert(n === 2);
+    assert(n === 2);
 
 })

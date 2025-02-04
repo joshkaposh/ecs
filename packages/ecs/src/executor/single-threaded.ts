@@ -105,13 +105,11 @@ export class SingleThreadedExecutor implements SystemExecutor {
 
             // try {
             if (system.is_exclusive()) {
-                // console.log('Executor calling system.run()');
 
-                system.run(undefined, world)
+                system.run(unit, world);
             } else {
-                // console.log('Executor calling system.run_unsafe()');
                 system.update_archetype_component_access(world);
-                system.run_unsafe(undefined, world);
+                system.run_unsafe(unit, world);
             }
             // } catch (error) {
             // throw new Error(`Encountered an error in system: ${system}`, { cause: error && typeof error === 'object' && 'cause' in error ? error.cause : undefined })

@@ -1,13 +1,13 @@
-import { IntoSystemTrait, ScheduleSystem } from "../system";
 import { Condition } from "./condition";
 import { Chain, ProcessNodeConfig, ScheduleGraph } from "./schedule";
 import { Ambiguity, DependencyKind, GraphInfo } from './graph'
 import { assert } from "joshkaposh-iterator/src/util";
 import { is_none } from "joshkaposh-option";
 import { InternedSystemSet, IntoSystemSet } from "./set";
+import type { ScheduleSystem } from "./schedule";
 
 function new_condition<M>(condition: Condition<M>): any {
-    const condition_system = IntoSystemTrait.into_system(condition as any);
+    const condition_system = condition.into_system();
     assert(condition_system.is_send(), `Condition ${condition_system.name()} accesses \`NonSend\` resources. This is currently unsupported`)
     return condition_system
 }
@@ -42,8 +42,7 @@ export class NodeConfig<T extends ProcessNodeConfig> implements IntoSystemConfig
     }
 
     process_config(schedule_graph: ScheduleGraph) {
-        // console.log('NodeConfig process_config()');
-        return schedule_graph.add_system_inner(this);
+        return schedule_graph.add_system_inner(this as any);
     }
 
     // * IntoSystemConfigs impl    

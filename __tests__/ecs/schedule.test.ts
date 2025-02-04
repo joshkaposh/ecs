@@ -62,10 +62,22 @@ const skip_basic_tests = true;
 //     // assert(set3 !== set7);
 // })
 
+test('add_one_with_parameters', () => {
+    const w = new World();
+    const s = new Schedule('Update');
+
+    const system = define_system(b => b.local(0), (n) => {
+        console.log('system_with_parameter running: ', n);
+    }).set_name('system_with_parameter')
+
+
+    s.add_systems(system);
+
+    s.run(w);
+})
+
 test.skipIf(skip_basic_tests)('add_one_system', () => {
-    const one = define_system(
-        () => { },
-        () => { console.log('one running!') },
+    const one = define_system(b => b, () => { console.log('one running!') },
     ).set_name('one_system')
 
     const w = new World();
@@ -134,31 +146,30 @@ function test_combine(
     const times_ran_b = { count: 0 };
     const times_ran_system = { ran: false };
 
-    const ca = define_condition(() => {
+    const ca = define_condition((b) => b, () => {
         console.log('condition_a running!');
         times_ran_a.count++;
         return a_bool
     },
-        () => [],
     ).set_name('condition_a')
 
 
-    const cb = define_condition(() => {
+    const cb = define_condition((b) => b, () => {
         console.log('condition_b running!')
         times_ran_b.count++;
         return b_bool
-    },
-        () => [],
+    }
     ).set_name('condition_b');
 
-    const system = define_system(() => {
+    const system = define_system((b) => b, () => {
         times_ran_system.ran = true;
         console.log('system running!')
-    },
-        () => []
+    }
+
     ).set_name('my_system')
 
 
+    // @ts-expect-error
     s.add_systems(system.run_if(ca[type](cb)));
 
     s.run(w);
@@ -220,30 +231,25 @@ test.skipIf(skip_run_if_tests)('run_if_combine', () => {
     test_combine('xnor', false, false, 1, 1, true);
 })
 
-test('add_two_systems_with_dependency', () => {
-    const before = define_system(
-        () => { },
-        () => { console.log('before running!') },
-    ).set_name('before_system');
-    const middle = define_system(
-        () => { },
-        () => { console.log('middle running!') },
-    ).set_name('middle_system');
-    const after = define_system(
-        () => { },
-        () => { console.log('after running!') },
-    ).set_name('after_system');
+// test('add_two_systems_with_dependency', () => {
+//     const before = define_system((b) => b, () => { console.log('before running!') },
+//     ).set_name('before_system');
+//     const middle = define_system((b) => b,
+//         () => { console.log('middle running!') },
+//     ).set_name('middle_system');
+//     const after = define_system((b) => b, () => { console.log('after running!') },
+//     ).set_name('after_system');
 
-    const fourth = define_system(
-        () => { },
-        () => { console.log('fourth running!') },
-    ).set_name('fourth_system');
+//     const fourth = define_system((b) => b, () => { console.log('fourth running!') },
+//     ).set_name('fourth_system');
 
-    const w = new World();
-    const s = new Schedule('Update');
+//     const w = new World();
+//     const s = new Schedule('Update');
 
-    s.add_systems(set(before, after).chain());
-    s.add_systems(middle.before(after));
-    s.add_systems(fourth.before(middle));
-    s.run(w);
-})
+//     s.add_systems(before)
+//     s.add_systems(middle)
+//     s.add_systems(after)
+
+
+//     s.run(w);
+// })

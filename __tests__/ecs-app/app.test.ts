@@ -1,10 +1,12 @@
 import { test, assert, expect } from "vitest";
 import { App } from '../../packages/ecs-app'
 import { define_event } from "../../packages/define";
+import { MainScheduleOrder } from "../../packages/ecs-app/src/main_schedule";
+import { is_some } from "joshkaposh-option";
 
 const MyEvent = define_event(class MyEvent { constructor(public value = 'event instance!') { } });
 
-test('app', () => {
+test('app add_event', () => {
     const app = App.empty();
 
     app.add_event(MyEvent);
@@ -20,4 +22,9 @@ test('app', () => {
     event_from_world.send(new MyEvent('second instance!'))
     expect(reader.read(event_from_world).collect()).toEqual([new MyEvent('second instance!')]);
     expect(reader_b.read(event_from_world).collect()).toEqual([new MyEvent(), new MyEvent('second instance!')]);
+})
+
+test('app default', () => {
+    const app = App.default();
+    app.run();
 })

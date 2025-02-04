@@ -1,8 +1,8 @@
 import { unit } from "../util";
-import { IntoSystemTrait, System, SystemInput } from "../system";
+import { System, SystemInput } from "../system";
 import { CombinatorSystem, Combine } from "../system/combinator";
 
-export type Condition<Marker, In extends SystemInput = unit> = {
+export interface Condition<Marker, In extends SystemInput = unit> extends System<In, boolean> {
     and<M, C extends Condition<M, In>>(other: C): And<System<In, boolean>, System<In, boolean>>;
     nand<M, C extends Condition<M, In>>(other: C): Nand<System<In, boolean>, System<In, boolean>>
 

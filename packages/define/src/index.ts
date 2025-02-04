@@ -4,7 +4,7 @@ import type { World, Event } from 'ecs';
 import { Events } from 'ecs/src/event/collections';
 
 type Class<Static = {}, Inst = {}> = (new (...args: any[]) => Inst) & Static;
-type TypeId = { readonly type_id: UUID }
+export type TypeId = { readonly type_id: UUID }
 
 type StorageType = 0 | 1;
 

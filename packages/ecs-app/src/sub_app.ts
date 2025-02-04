@@ -7,6 +7,7 @@ import { Plugin, Plugins, PluginsState } from "./plugin";
 import { IntoSystemConfigs, IntoSystemSetConfigs } from "ecs/src/schedule/config";
 // import { $Main, Main } from "./main_schedule";
 import { IntoSystemSet } from "ecs/src/schedule/set";
+import { MainScheduleOrder } from "./main_schedule";
 
 type ExtractFn = (world1: World, world2: World) => void;
 
@@ -89,7 +90,11 @@ export class SubApp {
         }
 
         const label = this.update_schedule;
+        console.log('SubApp.run_default_schedule()', label);
+
+
         if (label) {
+            console.log('SubApp it exists??', this.#world.get_resource(MainScheduleOrder));
             this.#world.run_schedule(label)
         }
     }
@@ -206,9 +211,6 @@ export class SubApp {
 
 
     add_event(type: Event) {
-        console.log('SubApp.add_event()', type, type.ECS_EVENTS_TYPE);
-
-
         if (!this.#world.contains_resource(type.ECS_EVENTS_TYPE)) {
             EventRegistry.register_event(type, this.#world)
         }

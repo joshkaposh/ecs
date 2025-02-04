@@ -5,7 +5,6 @@ import { NodeId } from "./graph";
 import { define_type, TypeId } from "define";
 import { $is_system, System } from "../system";
 
-
 export const $is_system_set = Symbol('SYSTEM SET');
 
 export type InternedSystemSet = SystemSet;
@@ -19,21 +18,24 @@ export interface SystemSet {
 
 }
 
-export class SystemTypeSet<T> implements SystemSet {
-    #phantom_data: UUID;
+export class SystemTypeSet implements SystemSet {
+    #phantom_data: TypeId;
     constructor(phantom_data: TypeId) {
-        this.#phantom_data = phantom_data.type_id;
+        this.#phantom_data = phantom_data;
     }
 
     [$is_system_set] = true;
 
-
     process_config(schedule_graph: ScheduleGraph, config: NodeConfig<SystemSet>): NodeId {
-        return schedule_graph.configure_set_inner(config) as NodeId;
+        const id = schedule_graph.configure_set_inner(config);
+        if (!(id instanceof NodeId)) {
+            throw id;
+        }
+        return id;
     }
 
     clone() {
-        return this;
+        return new SystemTypeSet(this.#phantom_data);
     }
 
     is_anonymous(): boolean {
@@ -41,7 +43,7 @@ export class SystemTypeSet<T> implements SystemSet {
     }
 
     system_type(): Option<UUID> {
-        return this.#phantom_data
+        return this.#phantom_data.type_id;
     }
 }
 
@@ -65,7 +67,6 @@ export class AnonymousSet implements SystemSet {
     is_anonymous() {
         return true
     }
-
 }
 
 export interface IntoSystemSet<M> {
@@ -132,7 +133,6 @@ export function set<const S extends readonly (System<any, any> | SystemSet)[]>(.
                 [],
                 Chain.No
             )
-            // return this.#configs as unknown as SystemSetConfigs;
         }
 
         process_config(schedule_graph: ScheduleGraph, config: NodeConfig<SystemSetImpl>) {
@@ -158,6 +158,7 @@ export function set<const S extends readonly (System<any, any> | SystemSet)[]>(.
             return this;
         }
     }
+
     define_type(SystemSetImpl);
 
     const system_set = new SystemSetImpl(system_sets as any, hash);

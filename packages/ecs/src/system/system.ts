@@ -3,8 +3,8 @@ import { World } from "../world";
 import { Access } from "../query";
 import { ArchetypeComponentId, ComponentId, Condition, FunctionSystem, ScheduleGraph, SystemInput, SystemParamFunction, Tick, TypeId } from "..";
 import { unit } from "../util";
-import { ErrorExt } from "joshkaposh-option";
-import { InternedSystemSet, SystemTypeSet } from "../schedule/set";
+import { ErrorExt, Option } from "joshkaposh-option";
+import { InternedSystemSet, SystemSet, SystemTypeSet } from "../schedule/set";
 import { v4 } from "uuid";
 import { IntoSystemConfigs, NodeConfig, NodeConfigs, SystemConfigs } from "../schedule/config";
 import { TODO } from "joshkaposh-iterator/src/util";
@@ -48,8 +48,11 @@ export abstract class System<In, Out> implements IntoSystemConfigs<unit> {
     abstract set_last_run(last_run: Tick): void;
 
     process_config(schedule_graph: ScheduleGraph, config: NodeConfig<ProcessNodeConfig>) {
-        console.log('System.process_config()', config);
-        return schedule_graph.add_system_inner(config) as NodeId;
+        const id = schedule_graph.add_system_inner(config);
+        if (!(id instanceof NodeId)) {
+            throw id;
+        }
+        return id;
     }
 
     chain() {
@@ -122,8 +125,6 @@ export abstract class System<In, Out> implements IntoSystemConfigs<unit> {
     //* IntoSystemSet impl
     into_system_set<T extends FunctionSystem<any, SystemParamFunction<any>>>() {
         type Set = SystemTypeSet<T>;
-        // console.log('System.into_system_set()', this);
-
         return new SystemTypeSet(this as unknown as TypeId) as Set;
     }
 
@@ -152,9 +153,13 @@ export function check_system_change_tick(last_run: Tick, this_run: Tick, system_
     }
 }
 
+interface IntoSystem<In, Out, Marker> {
+    into_system(): System<In, Out>;
+}
+
 export type RunSystemOnce = {
-    run_system_once<Out, Marker, T extends IntoSystemTrait<unit, Out, Marker>>(system: T): void;
-    run_system_once_with<Out, Marker, T extends IntoSystemTrait<any, Out, Marker>>(system: T): void;
+    run_system_once<Out, Marker, T extends IntoSystem<unit, Out, Marker>>(system: T): void;
+    run_system_once_with<Out, Marker, T extends IntoSystem<any, Out, Marker>>(system: T): void;
 }
 
 export type RunSystemError = ErrorExt<string>;
@@ -167,10 +172,26 @@ export const RunSystemError = {
 export type BoxedSystem<In extends any[] = any[], Out = void | boolean> = System<In, Out>;
 export type SystemId = number;
 
-export class AnonymousSet {
+export class AnonymousSet implements SystemSet {
     #id: NodeId;
     constructor(id: NodeId) {
         this.#id = id;
+    }
+
+    process_config(schedule_graph: ScheduleGraph, config: NodeConfig<InternedSystemSet>): NodeId {
+        const id = schedule_graph.configure_set_inner(config);
+        if (!(id instanceof NodeId)) {
+            throw id;
+        }
+        return id;
+    }
+
+    system_type(): Option<UUID> {
+        return
+    }
+
+    is_anonymous(): boolean {
+        return true;
     }
 }
 
@@ -179,7 +200,6 @@ export function assert_is_system(system: System<any, any>) {
     system.initialize(world);
 }
 
-// const acc = new Access();
 export class ApplyDeferred extends System<unit, unit> {
     static readonly type_id: UUID = v4() as UUID;
     readonly fallible = false;
@@ -189,15 +209,15 @@ export class ApplyDeferred extends System<unit, unit> {
     }
 
     name(): string {
-        return 'joshkaposh-ecs: apply_deferred'
+        return 'joshkaposh-ecs: apply_deferred';
     }
 
     component_access(): Access<ComponentId> {
-        // return acc;
+        return TODO('class ApplyDeferred.component_access()')
     }
 
     archetype_component_access(): Access<ArchetypeComponentId> {
-        // return acc;
+        return TODO('class ApplyDeferred.archetype_component_access()')
     }
 
     is_send(): boolean {
@@ -247,5 +267,4 @@ export class ApplyDeferred extends System<unit, unit> {
     into_system_set() {
         return new SystemTypeSet(this);
     }
-
 }
