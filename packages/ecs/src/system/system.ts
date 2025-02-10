@@ -123,9 +123,8 @@ export abstract class System<In, Out> implements IntoSystemConfigs<unit> {
     }
 
     //* IntoSystemSet impl
-    into_system_set<T extends FunctionSystem<any, SystemParamFunction<any>>>() {
-        type Set = SystemTypeSet<T>;
-        return new SystemTypeSet(this as unknown as TypeId) as Set;
+    into_system_set() {
+        return new SystemTypeSet(this as unknown as TypeId) as SystemSet;
     }
 
     [Symbol.toPrimitive]() {

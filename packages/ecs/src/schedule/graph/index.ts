@@ -3,29 +3,43 @@ import { InternedSystemSet, SystemSet } from '../set';
 import { FixedBitSet } from 'fixed-bit-set';
 import { NodeId } from './node';
 import { DiGraph, Direction, Incoming } from './graphmap';
-import { iter, Iterator, range } from 'joshkaposh-iterator';
+import { iter, Iterator } from 'joshkaposh-iterator';
 import { is_some } from 'joshkaposh-option';
 import { extend } from 'joshkaposh-index-map/src/util';
+import { TypeId } from 'define';
 
 export * from './node';
 export * from './graphmap'
 export { new_tarjan_scc } from './tarjan_scc'
 
-export type DependencyKind = 0 | 1 | 2 | 3;
+export type DependencyKind = typeof DependencyKind[keyof typeof DependencyKind];
 export const DependencyKind = {
     // node should be preceded
     Before: 0,
     // node should be succeeded
-    After: 2,
-    // node that should be preceded and will NOT automatically insert an instance of `ApplyDeferred on the edge`
-    BeforeNoSync: 1,
-    // node that should be succeeded and will NOT automatically insert an instance of `ApplyDeferred on the edge`
-    AfterNoSync: 3,
+    After: 1,
 } as const
 
-export type Dependency = {
+// export type Dependency = {
+//     kind: DependencyKind;
+//     set: SystemSet;
+//     options: Map<any, any>;
+// }
+
+export class Dependency {
     kind: DependencyKind;
-    set: SystemSet;
+    set: InternedSystemSet;
+    options: Map<any, any>;
+    constructor(kind: DependencyKind, set: InternedSystemSet) {
+        this.kind = kind;
+        this.set = set;
+        this.options = new Map();
+    }
+
+    add_config(option: TypeId) {
+        this.options.set(option.type_id, option);
+        return this;
+    }
 }
 
 export type Ambiguity = 0 | 1 | SystemSet[]

@@ -1,5 +1,5 @@
 import { test, assert, expect } from "vitest";
-import { ComponentMetadata, define_system, Local, ParamBuilder, Resource, StorageType, World } from "../../packages/ecs";
+import { $is_system, ComponentMetadata, define_system, Local, ParamBuilder, Resource, StorageType, World } from "../../packages/ecs";
 import { define_component, define_event, define_resource } from "define";
 
 const Counter = define_resource(class Counter { constructor(public count = 0) { } });
@@ -22,12 +22,15 @@ test('param_builder', () => {
         .res(Counter)
         .query([CompA, CompB, CompC]);
 
-    // @ts-expect-error
-    const [events] = new ParamBuilder(w).events(MyEvent).params();
-    // @ts-expect-error
-    const [reader] = new ParamBuilder(w).reader(MyEvent).params();
-    // @ts-expect-error
-    const [writer] = new ParamBuilder(w).writer(MyEvent).params();
+    const [events] = new ParamBuilder(w).events(MyEvent)
+        // @ts-expect-error
+        .params();
+    const [reader] = new ParamBuilder(w).reader(MyEvent)
+        // @ts-expect-error
+        .params();
+    const [writer] = new ParamBuilder(w).writer(MyEvent)
+        // @ts-expect-error
+        .params();
 
     writer.send(new MyEvent());
 })
@@ -38,12 +41,9 @@ test('run_system_once', () => {
 
     const w = new World();
 
-    const system = define_system(
-        (b) => b.local(Test),
-        (t) => {
-            console.log('testme running', t);
-        },
-    );
+    const system = define_system((b) => b.local(Test), (t) => {
+        console.log('testme running', t);
+    });
 
     w.init_resource(Test);
     w.run_system_once(system);
@@ -67,5 +67,11 @@ test('run_system_once_with', () => {
     let n = w.run_system_once_with(system, new Local(1));
 
     assert(n === 2);
+
+})
+
+test('system_custom_name', () => {
+    const system = define_system(b => b, () => { }).set_name('himom');
+
 
 })

@@ -90,11 +90,7 @@ export class SubApp {
         }
 
         const label = this.update_schedule;
-        console.log('SubApp.run_default_schedule()', label);
-
-
         if (label) {
-            console.log('SubApp it exists??', this.#world.get_resource(MainScheduleOrder));
             this.#world.run_schedule(label)
         }
     }

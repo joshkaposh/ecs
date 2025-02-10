@@ -129,7 +129,7 @@ class TarjanScc<AllNodes extends Iterator<NodeId>, Neighbors extends Iterator<No
                 return done()
             }
 
-            const visited = this.#nodes[this.#graph.to_index2(node.value)].root_index !== undefined;
+            const visited = this.#nodes[this.#graph.to_index(node.value)].root_index !== undefined;
             if (!visited) {
                 this.#visitation_stack.push([node.value, true]);
             }
@@ -144,7 +144,7 @@ class TarjanScc<AllNodes extends Iterator<NodeId>, Neighbors extends Iterator<No
      * If no SCC can be found in the current visitation stack, return `done()`.
      */
     visit_once(v: NodeId, v_is_local_root: boolean) {
-        const node_v = this.#nodes[this.#graph.to_index2(v)];
+        const node_v = this.#nodes[this.#graph.to_index(v)];
         //* SAFETY: root_index is either undefined or > 1
         if (!node_v.root_index) {
             const v_index = this.#index;
@@ -153,11 +153,13 @@ class TarjanScc<AllNodes extends Iterator<NodeId>, Neighbors extends Iterator<No
         }
 
         let w;
-        while (!(w = this.#nodes[this.#graph.to_index2(v)].neighbors.next()).done) {
+        while (!(w = this.#nodes[this.#graph.to_index(v)].neighbors.next()).done) {
             const w_value = w.value;
 
             //* SAFETY: root_index is either undefined or > 1
-            if (!this.#nodes[this.#graph.to_index2(w.value)].root_index) {
+            // console.log('TarjanScc.visit_once()', this.#graph.to_index(w.value), w.value, this.#nodes);
+
+            if (!this.#nodes[this.#graph.to_index(w.value)].root_index) {
                 // If neighbor hasn't been visited yet,
                 // Push the current node and the neigbor back onto the visitation stack.
                 // On the next execution of `visit_once`, the neighbor will be visited.
@@ -166,11 +168,11 @@ class TarjanScc<AllNodes extends Iterator<NodeId>, Neighbors extends Iterator<No
                 return
             }
 
-            const w_root_index = this.#nodes[this.#graph.to_index2(w_value)].root_index!;
-            const v_root_index = this.#nodes[this.#graph.to_index2(v)].root_index!;
+            const w_root_index = this.#nodes[this.#graph.to_index(w_value)].root_index!;
+            const v_root_index = this.#nodes[this.#graph.to_index(v)].root_index!;
 
             if (w_root_index < v_root_index) {
-                this.#nodes[this.#graph.to_index2(v)].root_index = this.#nodes[this.#graph.to_index2(w_value)].root_index;
+                this.#nodes[this.#graph.to_index(v)].root_index = this.#nodes[this.#graph.to_index(w_value)].root_index;
                 v_is_local_root = false;
             }
         }
@@ -185,7 +187,7 @@ class TarjanScc<AllNodes extends Iterator<NodeId>, Neighbors extends Iterator<No
         const nodes = this.#nodes;
         const i = iter(this.#stack)
             .rposition(w => {
-                if ((nodes[this.#graph.to_index2(v)].root_index ?? 1) > (nodes[this.#graph.to_index2(w)].root_index ?? 1)) {
+                if ((nodes[this.#graph.to_index(v)].root_index ?? 1) > (nodes[this.#graph.to_index(w)].root_index ?? 1)) {
                     return true
                 } else {
                     index_adjustment += 1;
@@ -193,7 +195,7 @@ class TarjanScc<AllNodes extends Iterator<NodeId>, Neighbors extends Iterator<No
                 }
             })
         const start = is_some(i) ? i + 1 : 0;
-        nodes[this.#graph.to_index2(v)].root_index = c;
+        nodes[this.#graph.to_index(v)].root_index = c;
         this.#stack.push(v);
         this.#start = start;
         this.#index_adjustment = index_adjustment;

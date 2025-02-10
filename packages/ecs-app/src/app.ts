@@ -380,18 +380,4 @@ export class App {
 
         return;
     }
-
-    #replace(other: App) {
-        this.#runner = other.#runner;
-        const this_sub_apps = this.#sub_apps;
-        const this_main = this.main();
-        const other_sub_apps = other.#sub_apps;
-        const other_main = other.main();
-
-
-        this.#sub_apps = other.#sub_apps;
-
-        return other;
-    }
-
 }

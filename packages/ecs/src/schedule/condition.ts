@@ -31,7 +31,6 @@ export class NorMarker implements Combine<System<any, any>, System<any, any>> {
     }
 }
 
-
 export class OrMarker implements Combine<System<any, any>, System<any, any>> {
     combine(input: SystemInput, a: (input: any) => any, b: (input: any) => any) {
         return a(input) || b(input);

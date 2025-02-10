@@ -1,6 +1,6 @@
 import { Condition } from "./condition";
 import { Chain, ProcessNodeConfig, ScheduleGraph } from "./schedule";
-import { Ambiguity, DependencyKind, GraphInfo } from './graph'
+import { Ambiguity, Dependency, DependencyKind, GraphInfo } from './graph'
 import { assert } from "joshkaposh-iterator/src/util";
 import { is_none } from "joshkaposh-option";
 import { InternedSystemSet, IntoSystemSet } from "./set";
@@ -62,7 +62,8 @@ export class NodeConfig<T extends ProcessNodeConfig> implements IntoSystemConfig
     }
 
     before_inner(set: InternedSystemSet) {
-        this.graph_info.dependencies.push({ kind: DependencyKind.Before, set })
+        this.graph_info.dependencies.push(new Dependency(DependencyKind.Before, set));
+        this.graph_info.hierarchy.push(set);
     }
 
     before<M>(this: SystemConfigs, set: IntoSystemSet<M>): SystemConfigs {
@@ -72,7 +73,8 @@ export class NodeConfig<T extends ProcessNodeConfig> implements IntoSystemConfig
     }
 
     after_inner(set: InternedSystemSet) {
-        this.graph_info.dependencies.push({ kind: DependencyKind.After, set })
+        this.graph_info.dependencies.push(new Dependency(DependencyKind.After, set));
+        this.graph_info.hierarchy.push(set);
     }
 
     after<M>(this: SystemConfigs, set: IntoSystemSet<M>): SystemConfigs {
@@ -82,12 +84,22 @@ export class NodeConfig<T extends ProcessNodeConfig> implements IntoSystemConfig
     }
 
     before_ignore_deferred_inner(set: InternedSystemSet) {
-        this.graph_info.dependencies.push({ kind: DependencyKind.BeforeNoSync, set })
+        this.graph_info.dependencies.push(new Dependency(DependencyKind.Before, set))
     }
 
     before_ignore_deferred<M>(this: SystemConfigs, set: IntoSystemSet<M>): SystemConfigs {
         const set_ = set.into_system_set();
         this.before_ignore_deferred_inner(set_);
+        return this;
+    }
+
+    after_ignore_deferred_inner(set: InternedSystemSet) {
+        this.graph_info.dependencies.push(new Dependency(DependencyKind.After, set))
+    }
+
+    after_ignore_deferred<M>(this: SystemConfigs, set: IntoSystemSet<M>): SystemConfigs {
+        const set_ = set.into_system_set();
+        this.after_ignore_deferred_inner(set_);
         return this;
     }
 
@@ -197,6 +209,13 @@ export class Configs<T extends ProcessNodeConfig> implements IntoSystemSetConfig
         return this;
     }
 
+    after_ignore_deferred_inner(set: InternedSystemSet) {
+        const configs = this.configs;
+        for (let i = 0; i < configs.length; i++) {
+            configs[i].after_ignore_deferred_inner(set);
+        }
+    }
+
     after_ignore_deferred<M extends InternedSystemSet>(this: SystemSetConfigs, set: IntoSystemSet<M>): SystemSetConfigs {
         const set_ = set.into_system_set();
         this.after_inner(set_)
@@ -238,7 +257,7 @@ export class Configs<T extends ProcessNodeConfig> implements IntoSystemSetConfig
     }
 
     chain_inner() {
-        this.chained = Chain.Yes;
+        this.chained = Chain.Chained(new Map());
     }
 
     chain(this: SystemSetConfigs): SystemSetConfigs {
@@ -247,7 +266,7 @@ export class Configs<T extends ProcessNodeConfig> implements IntoSystemSetConfig
     }
 
     chain_ignore_deferred_inner() {
-        this.chained = Chain.YesIgnoreDeferred;
+        this.chained = Chain.Chained(new Map());
         return this;
     }
 

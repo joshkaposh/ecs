@@ -14,7 +14,7 @@ import { EntityRef, EntityWorldMut } from './entity-ref'
 import { SpawnBatchIter } from "./spawn-batch";
 import { UnsafeEntityCell } from "./unsafe-world-cell";
 import { CommandQueue } from "./command_queue";
-import { RunSystemError, System, SystemInput } from "../system";
+import { RunSystemError, System, SystemDefinitionImpl, SystemFn, SystemInput } from "../system";
 import { Instance, unit } from "../util";
 import { u32 } from "../../../intrinsics/src";
 import { CHECK_TICK_THRESHOLD, Mut, TicksMut } from "../change_detection";
@@ -681,7 +681,6 @@ export class World {
     }
 
     schedule_scope(label: ScheduleLabel, scope: (world: World, schedule: Schedule) => void) {
-        console.log('World running schedule in schedule_scope', label)
         const res = this.try_schedule_scope(label, scope)
         if (res instanceof TryRunScheduleError) {
             throw new Error(res.get())
@@ -702,12 +701,12 @@ export class World {
         this.schedule_scope(label, (world, sched) => sched.run(world))
     }
 
-    run_system_once<In extends SystemInput, Out, T extends System<In, Out>>(system: T): Result<Out, RunSystemError> {
+    run_system_once<P, Out, T extends SystemDefinitionImpl<P, SystemFn<P, boolean>>>(system: T): Result<Out, RunSystemError> {
         return this.run_system_once_with(system, unit)
     }
 
-    run_system_once_with<In extends SystemInput, Out, Marker, T extends System<In, Out>>(system: T, input: any): Result<Out, RunSystemError> {
-        system = system.into_system();
+    run_system_once_with<P, Out, T extends SystemDefinitionImpl<P, SystemFn<P, boolean>>>(system: T, input: any): Result<Out, RunSystemError> {
+        system = system.into_system() as T;
         system.initialize(this);
         if (system.validate_param(this)) {
             return system.run(input, this)

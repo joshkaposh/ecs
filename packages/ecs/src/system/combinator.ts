@@ -1,4 +1,4 @@
-import { ArchetypeComponentId, ComponentId, IntoSystemTrait, Tick, World } from "..";
+import { ArchetypeComponentId, ComponentId, Tick, World } from "..";
 import { Access } from "../query";
 import { And, AndMarker, Condition, Nand, NandMarker, Nor, NorMarker, Or, OrMarker, Xnor, XnorMarker, Xor, XorMarker } from "../schedule/condition";
 import { SystemInput } from "./input";
@@ -10,8 +10,6 @@ export type Combine<A extends System<any, any>, B extends System<any, any>, In =
         a: (input: any) => ReturnType<A['run']>,
         b: (input: any) => ReturnType<B['run']>,
     ): Out;
-
-
 }
 
 export class CombinatorSystem<Marker extends Combine<A, B>, A extends System<any, any>, B extends System<any, any>> extends System<any, any> {
@@ -52,8 +50,8 @@ export class CombinatorSystem<Marker extends Combine<A, B>, A extends System<any
              * Short-curcuits: Condition `other` will not run if `this` condition returns false.
              */
     and<M, C extends Condition<M, any>>(other: C): And<System<any, boolean>, System<any, boolean>> {
-        const a = IntoSystemTrait.into_system(this as any);
-        const b = IntoSystemTrait.into_system(other as any);
+        const a = this.#a.into_system();
+        const b = other.into_system();
         const name = `${a.name()} && ${b.name()}`;
         return new CombinatorSystem(new AndMarker(), a, b, name) as any;
     }
@@ -68,8 +66,8 @@ export class CombinatorSystem<Marker extends Combine<A, B>, A extends System<any
      * Short-curcuits: Condition `other` will not run if `this` condition returns true.
      */
     nand<M, C extends Condition<M, any>>(other: C): Nand<System<any, boolean>, System<any, boolean>> {
-        const a = IntoSystemTrait.into_system(this as any);
-        const b = IntoSystemTrait.into_system(other as any);
+        const a = this.#a.into_system();
+        const b = other.into_system();
         const name = `${a.name()} && ${b.name()}`;
         return new CombinatorSystem(new NandMarker(), a, b, name) as any;
     }
@@ -85,8 +83,8 @@ export class CombinatorSystem<Marker extends Combine<A, B>, A extends System<any
      * Short-curcuits: Condition `other` will not run if `this` condition returns true.
      */
     or<M, C extends Condition<M, any>>(other: C): Or<System<any, boolean>, System<any, boolean>> {
-        const a = IntoSystemTrait.into_system(this as any);
-        const b = IntoSystemTrait.into_system(other as any);
+        const a = this.#a.into_system();
+        const b = other.into_system();
         const name = `${a.name()} && ${b.name()}`;
         return new CombinatorSystem(new OrMarker(), a, b, name) as any;
 
@@ -102,8 +100,8 @@ export class CombinatorSystem<Marker extends Combine<A, B>, A extends System<any
      * Short-curcuits: Condition `other` may not run if `this` condition returns false.
      */
     nor<M, C extends Condition<M, any>>(other: C): Nor<System<any, boolean>, System<any, boolean>> {
-        const a = IntoSystemTrait.into_system(this as any);
-        const b = IntoSystemTrait.into_system(other as any);
+        const a = this.#a.into_system();
+        const b = other.into_system();
         const name = `${a.name()} && ${b.name()}`;
         return new CombinatorSystem(new NorMarker(), a, b, name) as any;
 
@@ -119,8 +117,8 @@ export class CombinatorSystem<Marker extends Combine<A, B>, A extends System<any
      * Both conditions will always run.
      */
     xor<M, C extends Condition<M, any>>(other: C): Xor<System<any, boolean>, System<any, boolean>> {
-        const a = IntoSystemTrait.into_system(this as any);
-        const b = IntoSystemTrait.into_system(other as any);
+        const a = this.#a.into_system();
+        const b = other.into_system();
         const name = `${a.name()} && ${b.name()}`;
         return new CombinatorSystem(new XorMarker(), a, b, name) as any;
     }
@@ -135,8 +133,8 @@ export class CombinatorSystem<Marker extends Combine<A, B>, A extends System<any
      * Both conditions will always run.
      */
     xnor<M, C extends Condition<M, any>>(other: C): Xnor<System<any, boolean>, System<any, boolean>> {
-        const a = IntoSystemTrait.into_system(this as any);
-        const b = IntoSystemTrait.into_system(other as any);
+        const a = this.#a.into_system();
+        const b = other.into_system();
         const name = `${a.name()} && ${b.name()}`;
         return new CombinatorSystem(new XnorMarker(), a, b, name) as any;
     }

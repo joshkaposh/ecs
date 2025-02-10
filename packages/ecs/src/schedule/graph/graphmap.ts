@@ -108,12 +108,16 @@ export class Graph<const DIRECTED extends boolean, S extends (value: any) => num
         if (!sus) {
             return false
         }
-        const index = iter(sus)
-            .map(c => c.load())
-            .position(([node, direction]) => {
-                return (this.#DIRECTED && node.index === b.index && direction.value === dir.value)
-                    || (!this.#DIRECTED && node.index === b.index)
-            })
+
+        let index;
+        for (let i = 0; i < sus.length; i++) {
+            const [node, direction] = sus[i].load();
+            if ((this.#DIRECTED && node.index === b.index && direction.value === dir.value)
+                || (!this.#DIRECTED && node.index === b.index)) {
+                index = i;
+                break;
+            }
+        }
 
         if (is_none(index)) {
             return false
@@ -143,13 +147,11 @@ export class Graph<const DIRECTED extends boolean, S extends (value: any) => num
 
     neighbors(a: NodeId) {
         const neighbors = this.#nodes.get(a);
-        const it = neighbors ? iter(neighbors) : iter([]);
-        return it
-            .map(c => c.load())
-            .filter_map(([n, dir]) => {
-                return !this.#DIRECTED || dir.value === Outgoing.value ?
-                    n : undefined;
-            })
+        return iter(neighbors ?? []).filter_map((c) => {
+            const [n, dir] = c.load();
+            return !this.#DIRECTED || dir.value === Outgoing.value ?
+                n : undefined;
+        })
     }
 
     neighbors_directed(a: NodeId, dir: Direction) {
@@ -164,9 +166,9 @@ export class Graph<const DIRECTED extends boolean, S extends (value: any) => num
     edges(a: NodeId) {
         return this.neighbors(a)
             .map(b => {
-                const key = this.edge_key(a, b);
-                assert(this.#edges.has(key.to_primitive()), `Failed to map ${key} to Graph edge as it does not exist`)
-                return [a, b];
+                // const key = this.edge_key(a, b);
+                // assert(this.#edges.has(key.to_primitive()), `Failed to map ${key} to Graph edge as it does not exist`)
+                return [a, b] as [NodeId, NodeId];
             })
     }
 
@@ -175,38 +177,28 @@ export class Graph<const DIRECTED extends boolean, S extends (value: any) => num
             .map(b => {
                 const [a1, b1] = dir.value === Incoming.value ? [b, a] : [a, b]
                 const key = this.edge_key(a1, b1);
-                assert(this.#edges.has(key.to_primitive()), `Failed to map ${key} to Graph edge as it does not exist`)
-                return [a, b] as const;
+                // assert(this.#edges.has(key.to_primitive()), `Failed to map ${key} to Graph edge as it does not exist`)
+                return [a, b] as [NodeId, NodeId];
             })
     }
 
     all_edges() {
-        return iter(this.#edges).map(e => CompactNodeIdPair.from_primitive(e))
+        return iter(this.#edges).map(e => CompactNodeIdPair.from_primitive(e).load())
         // return iter(this.#edges).map(e => e.load())
     }
 
-    to_index(ix: NodeId) {
-        const i = this.#nodes.get_index_of(ix)!;
-        return i;
-    }
+    // to_index(ix: NodeId) {
+    //     return this.#nodes.get_index_of(ix)!;
+    // }
 
-    to_index2(ix: NodeId) {
-        // console.log('Graph to_index()', ix, this.#nodes.get_index_of(ix), this.#nodes.contains_key(ix));
-        return this.#nodes.keys().enumerate().find_map(([i, id]) => {
-            if (ix.eq(id)) {
-                assert(ix.to_primitive() === id.to_primitive())
-                return i
-            }
-            return
-        })!
+    to_index(ix: NodeId) {
+        return this.#nodes.keys().position(n => n.eq(ix))!;
     }
 
     iter_sccs() {
         assert(this.#DIRECTED, 'Graph must be directed in order to call iter_sccs()')
         return new_tarjan_scc(this as DiGraph);
     }
-
-
 }
 
 export type UnGraph = Graph<false>;
@@ -243,11 +235,18 @@ export const Incoming = Direction.Incoming()
 
 
 class CompactNodeIdAndDirection {
+    index: number;
+    is_system: boolean;
+    direction: Direction;
     constructor(
-        public index: number,
-        public is_system: boolean,
-        public direction: Direction
-    ) { }
+        index: number,
+        is_system: boolean,
+        direction: Direction
+    ) {
+        this.index = index;
+        this.is_system = is_system;
+        this.direction = direction;
+    }
 
     static store(node: NodeId, direction: Direction) {
         return new CompactNodeIdAndDirection(

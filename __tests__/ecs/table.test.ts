@@ -44,8 +44,8 @@ test('move_to_superset', () => {
     // @ts-expect-error
     table_a.__move_to_superset_unchecked(0, table_ab);
 
-    console.log(table_a.get_component(aid, 0));
-    console.log(table_ab.get_component(aid, 0));
+    assert(!table_a.get_component(aid, 0))
+    assert(!!table_ab.get_component(aid, 0))
 })
 
 function alloc(table: Table, entity: Entity, component_id: number, value: any) {

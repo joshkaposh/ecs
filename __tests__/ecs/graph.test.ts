@@ -1,4 +1,4 @@
-import { DiGraph, NodeId, Outgoing } from 'ecs/src/schedule/graph';
+import { DiGraph, NodeId } from 'ecs/src/schedule/graph';
 import { expect, test } from 'vitest';
 
 const System = (id: number) => new NodeId.System(id);
@@ -50,14 +50,9 @@ test('strongly_connected_components', () => {
 
     const sccs = graph.iter_sccs().collect();
 
-    for (const k of graph.nodes()) {
-        console.log(`Edges Out: ${k}`, graph.edges_directed(k, Outgoing).collect())
-    }
-
-    console.log(sccs)
-    // expect(sccs).toEqual([
-    //     [System(3), System(2), System(1)],
-    //     [System(5), System(4)],
-    //     [System(6)]
-    // ])
+    expect(sccs).toEqual([
+        [System(3), System(2), System(1)],
+        [System(5), System(4)],
+        [System(6)]
+    ])
 })

@@ -1,5 +1,5 @@
 import { is_some, Option } from "joshkaposh-option";
-import { Chain, ProcessNodeConfig, ScheduleGraph, ScheduleSystem } from "./schedule";
+import { Chain, ProcessNodeConfig, ScheduleGraph } from "./schedule";
 import { Configs, NodeConfig, SystemSetConfig, SystemSetConfigs } from "./config";
 import { NodeId } from "./graph";
 import { define_type, TypeId } from "define";
@@ -19,8 +19,8 @@ export interface SystemSet {
 }
 
 export class SystemTypeSet implements SystemSet {
-    #phantom_data: TypeId;
-    constructor(phantom_data: TypeId) {
+    #phantom_data: { type_id(): UUID };
+    constructor(phantom_data: { type_id(): UUID }) {
         this.#phantom_data = phantom_data;
     }
 
@@ -43,7 +43,11 @@ export class SystemTypeSet implements SystemSet {
     }
 
     system_type(): Option<UUID> {
-        return this.#phantom_data.type_id;
+        return this.#phantom_data.type_id();
+    }
+
+    [Symbol.toPrimitive]() {
+        return `${this.#phantom_data}`;
     }
 }
 
@@ -105,10 +109,8 @@ export function set<const S extends readonly (System<any, any> | SystemSet)[]>(.
     class SystemSetImpl implements SystemSet {
         #id: string;
         #sets: SystemSet[];
-        // #configs: Configs<ScheduleSystem>
         constructor(sets: SystemSet[], id: string) {
             this.#sets = sets;
-            // this.#configs = 
             this.#id = id;
         }
 
@@ -131,31 +133,26 @@ export function set<const S extends readonly (System<any, any> | SystemSet)[]>(.
                 // @ts-expect-error
                 this.#sets.map(s => s.into_configs()),
                 [],
-                Chain.No
+                Chain.Unchained
             )
         }
 
         process_config(schedule_graph: ScheduleGraph, config: NodeConfig<SystemSetImpl>) {
-            console.log('SystemSetImpl.process_config()', config);
-
             const id = schedule_graph.configure_set_inner(config);
             if (!(id instanceof NodeId)) throw new Error(`Expected ${config} to be a NodeId`)
             return id
         }
 
         chain() {
-            this.into_configs().chain();
-            return this;
+            return this.into_configs().chain();
         }
 
         before(set: SystemSet) {
-            this.into_configs().before(set as any);
-            return this;
+            return this.into_configs().before(set as any);
         }
 
         after(set: SystemSet) {
-            this.into_configs().after(set as any);
-            return this;
+            return this.into_configs().after(set as any);
         }
     }
 
