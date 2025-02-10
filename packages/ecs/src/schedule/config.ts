@@ -4,7 +4,9 @@ import { Ambiguity, Dependency, DependencyKind, GraphInfo } from './graph'
 import { assert } from "joshkaposh-iterator/src/util";
 import { is_none } from "joshkaposh-option";
 import { InternedSystemSet, IntoSystemSet } from "./set";
-import type { ScheduleSystem } from "./schedule";
+import { System } from "../system";
+
+type ScheduleSystem = System<any, any>;
 
 function new_condition<M>(condition: Condition<M>): any {
     const condition_system = condition.into_system();
@@ -31,8 +33,6 @@ export interface IntoSystemSetConfigs<Marker> {
     into_configs(): SystemSetConfigs;
 };
 
-export type SystemConfig = NodeConfig<ScheduleSystem>;
-
 export class NodeConfig<T extends ProcessNodeConfig> implements IntoSystemConfigs<T> {
     constructor(
         public node: T,
@@ -46,18 +46,18 @@ export class NodeConfig<T extends ProcessNodeConfig> implements IntoSystemConfig
     }
 
     // * IntoSystemConfigs impl    
-    into_configs(this: SystemConfigs): SystemConfigs {
-        return this
+    into_configs(): SystemConfigs {
+        return this as unknown as SystemConfigs;
     }
 
     in_set_inner(set: InternedSystemSet) {
         this.graph_info.hierarchy.push(set)
     }
 
-    in_set(this: SystemConfigs, set: InternedSystemSet): SystemConfigs {
+    in_set(set: InternedSystemSet): SystemConfigs {
         assert(is_none(set.system_type()));
         this.in_set_inner(set);
-        return this;
+        return this as unknown as SystemConfigs;
     }
 
     before_inner(set: InternedSystemSet) {
@@ -65,10 +65,10 @@ export class NodeConfig<T extends ProcessNodeConfig> implements IntoSystemConfig
         this.graph_info.hierarchy.push(set);
     }
 
-    before<M>(this: SystemConfigs, set: IntoSystemSet<M>): SystemConfigs {
+    before<M>(set: IntoSystemSet<M>): SystemConfigs {
         const set_ = set.into_system_set();
         this.before_inner(set_);
-        return this;
+        return this as unknown as SystemConfigs;
     }
 
     after_inner(set: InternedSystemSet) {
@@ -76,30 +76,30 @@ export class NodeConfig<T extends ProcessNodeConfig> implements IntoSystemConfig
         this.graph_info.hierarchy.push(set);
     }
 
-    after<M>(this: SystemConfigs, set: IntoSystemSet<M>): SystemConfigs {
+    after<M>(set: IntoSystemSet<M>): SystemConfigs {
         const set_ = set.into_system_set()
         this.after_inner(set_);
-        return this
+        return this as unknown as SystemConfigs;
     }
 
     before_ignore_deferred_inner(set: InternedSystemSet) {
         this.graph_info.dependencies.push(new Dependency(DependencyKind.Before, set))
     }
 
-    before_ignore_deferred<M>(this: SystemConfigs, set: IntoSystemSet<M>): SystemConfigs {
+    before_ignore_deferred<M>(set: IntoSystemSet<M>): SystemConfigs {
         const set_ = set.into_system_set();
         this.before_ignore_deferred_inner(set_);
-        return this;
+        return this as unknown as SystemConfigs;
     }
 
     after_ignore_deferred_inner(set: InternedSystemSet) {
         this.graph_info.dependencies.push(new Dependency(DependencyKind.After, set))
     }
 
-    after_ignore_deferred<M>(this: SystemConfigs, set: IntoSystemSet<M>): SystemConfigs {
+    after_ignore_deferred<M>(set: IntoSystemSet<M>): SystemConfigs {
         const set_ = set.into_system_set();
         this.after_ignore_deferred_inner(set_);
-        return this;
+        return this as unknown as SystemConfigs;
     }
 
     distributive_run_if_inner<M>(condition: Condition<M>) {
@@ -110,19 +110,20 @@ export class NodeConfig<T extends ProcessNodeConfig> implements IntoSystemConfig
         this.conditions.push(condition);
     }
 
-    run_if<M>(this: SystemConfigs, condition: Condition<M>): SystemConfigs {
+    run_if<M>(condition: Condition<M>): SystemConfigs {
         this.run_if_dyn(new_condition(condition));
-        return this
+        return this as unknown as SystemConfigs;
+
     }
 
     ambiguous_with_inner(set: InternedSystemSet) {
         ambiguous_with(this.graph_info, set);
     }
 
-    ambiguous_with<M extends InternedSystemSet>(this: SystemConfigs, set: IntoSystemSet<M>): SystemConfigs {
+    ambiguous_with<M>(set: IntoSystemSet<M>): SystemConfigs {
         const set_ = set.into_system_set();
         this.ambiguous_with_inner(set_);
-        return this;
+        return this as unknown as SystemConfigs;
     }
 
     chain() {
@@ -130,7 +131,10 @@ export class NodeConfig<T extends ProcessNodeConfig> implements IntoSystemConfig
     }
 }
 
-export type SystemConfigs = NodeConfigs<ScheduleSystem>;
+// export type SystemConfig = NodeConfig<ScheduleSystem>;
+// export type SystemConfigs = NodeConfigs<ScheduleSystem>;
+export type SystemConfig = NodeConfig<ProcessNodeConfig>;
+export type SystemConfigs = NodeConfigs<ProcessNodeConfig>;
 
 export class Configs<T extends ProcessNodeConfig> implements IntoSystemSetConfigs<any> {
     constructor(
@@ -150,8 +154,8 @@ export class Configs<T extends ProcessNodeConfig> implements IntoSystemSetConfig
     }
 
 
-    into_configs(this: SystemSetConfigs): SystemSetConfigs {
-        return this;
+    into_configs(): SystemSetConfigs {
+        return this as unknown as SystemSetConfigs;
     }
 
     in_set_inner(set: InternedSystemSet) {
@@ -162,10 +166,10 @@ export class Configs<T extends ProcessNodeConfig> implements IntoSystemSetConfig
         }
     }
 
-    in_set(this: SystemSetConfigs, set: InternedSystemSet): SystemSetConfigs {
+    in_set(set: InternedSystemSet): SystemSetConfigs {
         assert(!set.system_type());
         this.in_set_inner(set);
-        return this;
+        return this as unknown as SystemSetConfigs;
     }
 
     before_inner(set: InternedSystemSet) {
@@ -176,10 +180,10 @@ export class Configs<T extends ProcessNodeConfig> implements IntoSystemSetConfig
         }
     }
 
-    before<M extends InternedSystemSet>(this: SystemSetConfigs, set: IntoSystemSet<M>): SystemSetConfigs {
+    before<M>(set: IntoSystemSet<M>): SystemSetConfigs {
         const set_ = set.into_system_set();
         this.before_inner(set_)
-        return this;
+        return this as unknown as SystemSetConfigs;
     }
 
     after_inner(set: InternedSystemSet) {
@@ -189,10 +193,10 @@ export class Configs<T extends ProcessNodeConfig> implements IntoSystemSetConfig
         }
     }
 
-    after<M extends InternedSystemSet>(this: SystemSetConfigs, set: IntoSystemSet<M>): SystemSetConfigs {
+    after<M>(set: IntoSystemSet<M>): SystemSetConfigs {
         const set_ = set.into_system_set();
         this.after_inner(set_)
-        return this
+        return this as unknown as SystemSetConfigs;
     }
 
     before_ignore_deferred_inner(set: InternedSystemSet) {
@@ -202,10 +206,10 @@ export class Configs<T extends ProcessNodeConfig> implements IntoSystemSetConfig
         }
     }
 
-    before_ignore_deferred<M extends InternedSystemSet>(this: SystemSetConfigs, set: IntoSystemSet<M>): SystemSetConfigs {
+    before_ignore_deferred<M>(set: IntoSystemSet<M>): SystemSetConfigs {
         const set_ = set.into_system_set();
         this.before_inner(set_)
-        return this;
+        return this as unknown as SystemSetConfigs;
     }
 
     after_ignore_deferred_inner(set: InternedSystemSet) {
@@ -215,10 +219,10 @@ export class Configs<T extends ProcessNodeConfig> implements IntoSystemSetConfig
         }
     }
 
-    after_ignore_deferred<M extends InternedSystemSet>(this: SystemSetConfigs, set: IntoSystemSet<M>): SystemSetConfigs {
+    after_ignore_deferred<M>(set: IntoSystemSet<M>): SystemSetConfigs {
         const set_ = set.into_system_set();
         this.after_inner(set_)
-        return this
+        return this as unknown as SystemSetConfigs;
     }
 
     // distributive_run_if_inner<M>(condition: Condition<M>) {
@@ -237,9 +241,10 @@ export class Configs<T extends ProcessNodeConfig> implements IntoSystemSetConfig
         this.collective_conditions.push(condition);
     }
 
-    run_if<M>(this: SystemSetConfigs, condition: Condition<M>): SystemSetConfigs {
+    run_if<M>(condition: Condition<M>): SystemSetConfigs {
         this.run_if_dyn(new_condition(condition));
-        return this;
+        return this as unknown as SystemSetConfigs;
+
     }
 
     ambiguous_with_inner(set: InternedSystemSet) {
@@ -249,19 +254,19 @@ export class Configs<T extends ProcessNodeConfig> implements IntoSystemSetConfig
         }
     }
 
-    ambiguous_with<M extends InternedSystemSet>(this: SystemSetConfigs, set: IntoSystemSet<M>): SystemSetConfigs {
+    ambiguous_with<M>(set: IntoSystemSet<M>): SystemSetConfigs {
         const set_ = set.into_system_set();
         this.ambiguous_with_inner(set_)
-        return this
+        return this as unknown as SystemSetConfigs;
     }
 
     chain_inner() {
         this.chained = Chain.Chained(new Map());
     }
 
-    chain(this: SystemSetConfigs): SystemSetConfigs {
+    chain(): SystemSetConfigs {
         this.chain_inner()
-        return this;
+        return this as unknown as SystemSetConfigs;
     }
 
     chain_ignore_deferred_inner() {
@@ -293,6 +298,10 @@ export const NodeConfigs = {
     },
 }
 
-export type SystemSetConfig = NodeConfig<InternedSystemSet>;
-export type SystemSetConfigs = Configs<InternedSystemSet>;
+
+export type SystemSetConfig = NodeConfig<ProcessNodeConfig>;
+export type SystemSetConfigs = Configs<ProcessNodeConfig>;
+
+// export type SystemSetConfig = NodeConfig<InternedSystemSet>;
+// export type SystemSetConfigs = Configs<InternedSystemSet>;
 

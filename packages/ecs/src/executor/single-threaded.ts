@@ -60,12 +60,6 @@ export class SingleThreadedExecutor implements SystemExecutor {
         const systems = schedule.__systems;
         const sets_with_conditions_of_systems = schedule.__sets_with_conditions_of_systems;
         const evaluated_sets = this.#evaluated_sets;
-        // console.log('SingleThreadedExecutor.run() systems', systems.map(s => {
-        //     if (s) {
-        //         return s.name();
-        //     }
-        //     return 'UNDEFINED'
-        // }));
 
         for (let system_index = 0; system_index < systems.length; system_index++) {
             let should_run = !completed_systems.contains(system_index);

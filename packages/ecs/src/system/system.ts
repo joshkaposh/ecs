@@ -1,14 +1,13 @@
 import { NodeId } from "../schedule/graph";
 import { World } from "../world";
 import { Access } from "../query";
-import { ArchetypeComponentId, ComponentId, Condition, FunctionSystem, ScheduleGraph, SystemInput, SystemParamFunction, Tick, TypeId } from "..";
+import { ArchetypeComponentId, ComponentId, Condition, FunctionSystem, ScheduleGraph, SystemInput, SystemParamFunction, Tick } from "..";
 import { unit } from "../util";
 import { ErrorExt, Option } from "joshkaposh-option";
-import { InternedSystemSet, SystemSet, SystemTypeSet } from "../schedule/set";
+import { InternedSystemSet, IntoSystemSet, SystemSet, SystemTypeSet } from "../schedule/set";
 import { v4 } from "uuid";
-import { IntoSystemConfigs, NodeConfig, NodeConfigs, SystemConfigs } from "../schedule/config";
+import { IntoSystemConfigs, NodeConfig, NodeConfigs, SystemConfig, SystemConfigs } from "../schedule/config";
 import { TODO } from "joshkaposh-iterator/src/util";
-import { ProcessNodeConfig } from "../schedule/schedule";
 
 // export type SystemFn<In extends any[] = any[], Out extends boolean | void = boolean | void> = (...args: In) => Out;
 // export type ConditionFn<In extends any[] = any[]> = (...args: In) => boolean;
@@ -47,7 +46,7 @@ export abstract class System<In, Out> implements IntoSystemConfigs<unit> {
     abstract get_last_run(): Tick;
     abstract set_last_run(last_run: Tick): void;
 
-    process_config(schedule_graph: ScheduleGraph, config: NodeConfig<ProcessNodeConfig>) {
+    process_config(schedule_graph: ScheduleGraph, config: SystemConfig) {
         const id = schedule_graph.add_system_inner(config);
         if (!(id instanceof NodeId)) {
             throw id;
@@ -77,17 +76,17 @@ export abstract class System<In, Out> implements IntoSystemConfigs<unit> {
 
     }
 
-    pipe<Bin extends SystemInput, Bout, Bmarker, B extends IntoSystemTrait<Bin, Bout, Bmarker>>(system: B) {
-        TODO('System.pipe()')
-        // @ts-expect-error
-        return IntoPipeSystem.new(this, this)
-    }
+    // pipe<Bin extends SystemInput, Bout, Bmarker, B extends IntoSystemTrait<Bin, Bout, Bmarker>>(system: B) {
+    //     TODO('System.pipe()')
+    //     // @ts-expect-error
+    //     return IntoPipeSystem.new(this, this)
+    // }
 
-    map<T>(fn: (output: Out) => T) {
-        TODO('System.map()')
-        // @ts-expect-error
-        IntoAdaperSystem.new(fn, this)
-    }
+    // map<T>(fn: (output: Out) => T) {
+    //     TODO('System.map()')
+    //     // @ts-expect-error
+    //     IntoAdaperSystem.new(fn, this)
+    // }
 
     system_type_id() {
         return this.type_id();
@@ -108,23 +107,20 @@ export abstract class System<In, Out> implements IntoSystemConfigs<unit> {
     }
 
     run_if(condition: Condition<any>) {
-        // @ts-expect-error
         return this.into_configs().run_if(condition)
     }
 
-    before(other: System<any, any>) {
-        // @ts-expect-error
-        return this.into_configs().before(other as any);
+    before<M>(other: IntoSystemSet<M>) {
+        return this.into_configs().before(other);
     }
 
-    after(other: any) {
-        // @ts-expect-error
+    after<M>(other: IntoSystemSet<M>) {
         return this.into_configs().after(other);
     }
 
     //* IntoSystemSet impl
     into_system_set() {
-        return new SystemTypeSet(this as unknown as TypeId) as SystemSet;
+        return new SystemTypeSet(this) as SystemSet;
     }
 
     [Symbol.toPrimitive]() {

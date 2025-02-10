@@ -382,9 +382,6 @@ function define_system_base<P, Fallible extends boolean, Fn extends SystemFn<P, 
 
     system.into_system_set = function into_system_set() {
         return new SystemTypeSet(this as any);
-        // return set
-        // return this as unknown as SystemTypeSet;
-
     }
 
     system.chain = function chain() {
@@ -392,23 +389,19 @@ function define_system_base<P, Fallible extends boolean, Fn extends SystemFn<P, 
     }
 
     system.run_if = function run_if(condition: Condition<any>) {
-        // @ts-expect-error
         return this.into_configs!().run_if(condition)
     }
 
-    system.before = function before<P2>(other: SystemDefinitionImpl<P2, SystemFn<P2>>) {
-        // @ts-expect-error
+    system.before = function before<P2>(other: SystemDefinitionImpl<P2, SystemFn<P2, boolean>>) {
         return this.into_configs!().before(other as any);
     }
 
-    system.after = function after<P2>(other: SystemDefinitionImpl<P2, SystemFn<P2>>) {
-        // @ts-expect-error
-        return this.into_configs!().after(other as any);
+    system.after = function after<P2>(other: SystemDefinitionImpl<P2, SystemFn<P2, boolean>>) {
+        return this.into_configs!().after(other);
     }
 
     system.in_set = function in_set(set: InternedSystemSet) {
-        // @ts-expect-error
-        return this.into_configs!().in_set(set);
+        return this.into_configs!().in_set(set) as SystemConfigs;
     }
 
     system[Symbol.toPrimitive] = function () {
