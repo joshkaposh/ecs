@@ -1,5 +1,5 @@
 import { test, expect, assert } from 'vitest';
-import { World, Schedule, define_system, define_condition, set, Condition, Schedules } from 'ecs';
+import { World, Schedule, define_system, define_condition, set, Condition, Schedules, Local } from 'ecs';
 import { define_resource } from 'define';
 
 // function a() {
@@ -28,75 +28,164 @@ type N = NeverArray<typeof empty>;
 function a() { }
 type Aparam = NeverArray<Parameters<typeof a>>;
 
-function with_timestamps(world: World, num_systems: number, config: {
+const TimesRan = define_resource(class TimesRan extends Map<any, number> { })
+const Timestamps = define_resource(class Timestamps extends Map<any, number> { })
+
+const skip_set_tests = false;
+const skip_run_if_tests = false;
+const skip_dependency_tests = false;
+
+function with_timestamps(world: World, { num_systems, conditions, log_running, set_name }: {
+    num_systems: number;
+    conditions?: { return_type: boolean }[]
     log_running?: boolean;
     set_name?: boolean;
-} = {}) {
+}) {
 
-    const Timestamps = define_resource(class Timestamps extends Map<any, number> { })
+    set_name ??= true;
+
     const systems = Array.from({ length: num_systems }, (_, i) => {
-        const system = define_system(b => b.res_mut(Timestamps), function (timestamps) {
-            if (config.log_running) {
+        const system = define_system(b => b.res_mut(TimesRan), function (times) {
+            if (log_running) {
                 console.log(`system_${i} running!`)
             }
-            timestamps.set(this, performance.now())
+            times.set(this, performance.now())
         })
 
-        if (config.set_name) {
+        if (set_name) {
             system.set_name(`system_${i}`)
         }
 
         return system
     })
 
-    const timestamps = world.get_resource_or_init(Timestamps);
+    const condition_systems = (conditions ?? []).map(({ return_type }, i) => {
+        const condition = define_condition(b => b.res_mut(TimesRan), function (times) {
+            if (log_running) {
+                console.log(`condition_${i} running!`)
+            }
+            times.set(this, performance.now())
+            return return_type;
+        })
 
-    return [timestamps, systems] as const;
+        if (set_name) {
+            condition.set_name(`condition_${i}`)
+        }
+
+        return condition
+    })
+
+    const timestamps = world.get_resource_or_init(TimesRan);
+
+    return [timestamps, { systems, conditions: condition_systems }] as const;
 }
 
-const skip_basic_tests = true;
-const skip_set_tests = true;
-const skip_run_if_tests = true;
-const skip_dependency_tests = true;
+function with_times_ran(world: World, { num_systems, conditions, log_running, set_name }: {
+    num_systems: number;
+    conditions?: { return_type: boolean }[]
+    log_running?: boolean;
+    set_name?: boolean;
+}) {
+    set_name ??= true;
 
-test.skipIf(skip_basic_tests)('add_one_with_parameters', () => {
-    const w = new World();
+    const systems = Array.from({ length: num_systems }, (_, i) => {
+        const system = define_system(b => b.res_mut(TimesRan), function (times) {
+            if (log_running) {
+                console.log(`system_${i} running!`)
+            }
+            const amount = times.get(this) ?? 0;
+            times.set(this, amount + 1);
+        })
+
+        if (set_name) {
+            system.set_name(`system_${i}`)
+        }
+
+        return system
+    })
+
+    const condition_systems = (conditions ?? []).map(({ return_type }, i) => {
+        const system = define_condition(b => b.res_mut(TimesRan), function (times) {
+            if (log_running) {
+                console.log(`condition_${i} running!`)
+            }
+            const amount = times.get(this) ?? 0;
+            times.set(this, amount + 1);
+            return return_type;
+        })
+
+        if (set_name) {
+            system.set_name(`condition_${i}`)
+        }
+
+        return system
+
+    })
+
+    const timestamps = world.get_resource_or_init(TimesRan);
+
+    return [timestamps, { systems, conditions: condition_systems }] as const;
+}
+
+function test_combine(
+    type: keyof Condition<any, any>,
+    a_bool: boolean,
+    b_bool: boolean,
+    expected_times_ran_a: number,
+    expected_times_ran_b: number,
+    system_expected_to_run: boolean,
+    { log_running }: { log_running?: boolean } = {}
+) {
     const s = new Schedule('Update');
+    const w = new World();
 
-    const system = define_system(b => b.local(0), (n) => {
-        console.log('system_with_parameter running: ', n);
-    }).set_name('system_with_parameter')
+    const condition_returns = [{ return_type: a_bool }, { return_type: b_bool }]
 
+    const [times_ran, { systems, conditions }] = with_times_ran(w, {
+        num_systems: 1,
+        conditions: condition_returns,
+        set_name: true,
+        log_running
+    })
 
-    s.add_systems(system);
+    const system = systems[0];
+    const [ca, cb] = conditions;
+
+    // @ts-expect-error
+    s.add_systems(system.run_if(ca[type](cb)));
 
     s.run(w);
-})
 
-test.skipIf(skip_set_tests)('add_systems_with_2_in_set', () => {
+    if (expected_times_ran_a === 0) {
+        assert(times_ran.get(ca) === undefined);
+    } else {
+        assert(times_ran.get(ca) === expected_times_ran_a);
+    }
+
+    if (expected_times_ran_b === 0) {
+        assert(times_ran.get(cb) === undefined);
+    } else {
+        assert(times_ran.get(cb) === expected_times_ran_b);
+    }
+
+    if (!system_expected_to_run) {
+        assert(times_ran.get(system) === undefined);
+    } else {
+        assert(!!times_ran.get(system) === system_expected_to_run)
+    }
+}
+
+function assert_order(timestamps: InstanceType<typeof Timestamps>, a: any, b: any) {
+    assert(timestamps.get(a)! < timestamps.get(b)!)
+}
+
+test.skipIf(skip_dependency_tests)('before_and_after', () => {
     const w = new World();
     const s = new Schedule('Update');
 
-    const system_a = define_system(b => b, () => { console.log('running system a!') }).set_name('system_a');
-    const system_b = define_system(b => b, () => { console.log('running system b!') }).set_name('system_b');
-    const system_c = define_system(b => b, () => { console.log('running system c!') }).set_name('system_c');
-    const system_d = define_system(b => b, () => { console.log('running system d!') }).set_name('system_d');
-
-    s.add_systems(set(system_a, system_b));
-    s.run(w);
-
-})
-
-test.skipIf(skip_dependency_tests)('before', () => {
-    const w = new World();
-    const s = new Schedule('Update');
-
-    const [timestamps, [
-        system_a,
-        system_b,
-        system_c,
-        system_d
-    ]] = with_timestamps(w, 4)
+    const [timestamps, {
+        systems: [system_a, system_b, system_c, system_d]
+    }] = with_timestamps(w, { num_systems: 4 })
 
     s.add_systems(system_a);
     s.add_systems(system_b);
@@ -109,56 +198,11 @@ test.skipIf(skip_dependency_tests)('before', () => {
     assert(timestamps.get(system_b)! < timestamps.get(system_c)!)
 })
 
-
-test.skipIf(skip_basic_tests)('add_one_system', () => {
-    const one = define_system(b => b, () => { console.log('one running!') },
-    ).set_name('one_system')
-
-    const w = new World();
-    const s = new Schedule('Update');
-    s.add_systems(one);
-    s.run(w);
-
-})
-
-test.skipIf(skip_set_tests)('add_one_system_in_set', () => {
-    const one = define_system(b => b, () => {
-        console.log('one running!')
-    },
-    ).set_name('one_system')
-
+test.skipIf(skip_set_tests)('add_two_systems_in_set_chained', () => {
     const w = new World();
     const s = new Schedule('Update');
 
-    s.add_systems(set(one));
-    s.run(w);
-})
-
-test.skipIf(skip_set_tests)('add_two_systems_in_set', () => {
-    const one = define_system(
-        b => b,
-        () => { console.log('one running!') },
-    ).set_name('one_system')
-    const two = define_system(
-        b => b,
-        () => { console.log('two running!') },
-    ).set_name('two_system')
-
-    const w = new World();
-    const s = new Schedule('Update');
-
-    s.add_systems(set(one, two));
-
-    s.run(w);
-})
-
-test('add_two_systems_in_set_chained', () => {
-
-
-    const w = new World();
-    const s = new Schedule('Update');
-
-    const [timestamps, [one, two]] = with_timestamps(w, 2)
+    const [timestamps, { systems: [one, two] }] = with_timestamps(w, { num_systems: 2 })
 
     s.add_systems(set(one, two).chain());
 
@@ -168,63 +212,16 @@ test('add_two_systems_in_set_chained', () => {
 })
 
 
-function test_combine(
-    type: keyof Condition<any, any>,
-    a_bool: boolean,
-    b_bool: boolean,
-    expected_times_ran_a: number,
-    expected_times_ran_b: number,
-    system_expected_to_run: boolean,
-) {
-    const s = new Schedule('Update');
-    const w = new World();
-
-    const times_ran_a = { count: 0 };
-    const times_ran_b = { count: 0 };
-    let system_ran = false;
-
-    const ca = define_condition((b) => b, () => {
-        console.log('condition_a running!');
-        times_ran_a.count++;
-        return a_bool
-    },
-    ).set_name('condition_a')
-
-
-    const cb = define_condition((b) => b, () => {
-        console.log('condition_b running!')
-        times_ran_b.count++;
-        return b_bool
-    }
-    ).set_name('condition_b');
-
-    const system = define_system((b) => b, () => {
-        system_ran = true;
-        console.log('system running!')
-    }
-
-    ).set_name('my_system')
-
-    // @ts-expect-error
-    s.add_systems(system.run_if(ca[type](cb)));
-
-    s.run(w);
-
-    assert(times_ran_a.count === expected_times_ran_a);
-    assert(times_ran_b.count === expected_times_ran_b);
-    assert(system_ran === system_expected_to_run);
-}
-
-test.skipIf(skip_run_if_tests)('add_two_system_run_if', () => {
-    const system = define_system(b => b, () => { console.log('system running!') }).set_name('my_system')
-    const condition = define_condition(b => b, () => { console.log('condition running!'); return false }).set_name('my_condition')
-
+test.skipIf(skip_run_if_tests)('system_never_runs', () => {
     const w = new World();
     const s = new Schedule('Update');
+    const [times_ran, { systems: [system], conditions: [condition] }] = with_times_ran(w, { num_systems: 1, conditions: [{ return_type: false }] })
 
-    // @ts-expect-error
-    s.add_systems(system.run_if(condition).chain());
+    s.add_systems(system.run_if(condition));
     s.run(w);
+
+    assert(times_ran.get(system) === undefined);
+
 })
 
 test.skipIf(skip_run_if_tests)('run_if_combine', () => {
@@ -267,25 +264,37 @@ test.skipIf(skip_run_if_tests)('run_if_combine', () => {
     test_combine('xnor', false, false, 1, 1, true);
 })
 
-// test('add_two_systems_with_dependency', () => {
-//     const before = define_system((b) => b, () => { console.log('before running!') },
-//     ).set_name('before_system');
-//     const middle = define_system((b) => b,
-//         () => { console.log('middle running!') },
-//     ).set_name('middle_system');
-//     const after = define_system((b) => b, () => { console.log('after running!') },
-//     ).set_name('after_system');
+test('in-between_set', () => {
+    const w = new World();
+    const s = new Schedule('Update');
 
-//     const fourth = define_system((b) => b, () => { console.log('fourth running!') },
-//     ).set_name('fourth_system');
+    const [timestamps, { systems: [first, middle, last] }] = with_timestamps(w, { num_systems: 3, log_running: false })
 
-//     const w = new World();
-//     const s = new Schedule('Update');
+    s.add_systems(set(first, last).chain());
+    s.add_systems(middle.before(last));
 
-//     s.add_systems(before)
-//     s.add_systems(middle)
-//     s.add_systems(after)
+    s.run(w);
 
+    assert_order(timestamps, first, last);
+    assert_order(timestamps, middle, last);
+})
 
-//     s.run(w);
-// })
+test('system_add_in_set', () => {
+    const w = new World();
+    const s = new Schedule('Update');
+
+    const [timestamps, { systems: [a, b, c, d, e, f, g, h] }] = with_timestamps(w, { num_systems: 8, log_running: true })
+
+    const my_set = set(a, b, c);
+
+    s.add_systems(my_set.chain());
+    s.add_systems(set(d, e, f).chain());
+
+    s.add_systems(g.in_set(my_set).after(a));
+
+    s.run(w);
+
+    assert_order(timestamps, a, b);
+    assert_order(timestamps, b, c);
+
+})

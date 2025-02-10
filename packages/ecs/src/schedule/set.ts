@@ -154,6 +154,10 @@ export function set<const S extends readonly (System<any, any> | SystemSet)[]>(.
         after(set: SystemSet) {
             return this.into_configs().after(set as any);
         }
+
+        in_set(set: SystemSet) {
+            return this.into_configs().in_set(set);
+        }
     }
 
     define_type(SystemSetImpl);

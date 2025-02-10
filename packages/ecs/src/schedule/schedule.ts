@@ -18,6 +18,7 @@ import { AnonymousSet, InternedSystemSet, IntoSystemSet, SystemSet, set } from "
 import { Condition } from "./condition";
 import { assert, TODO } from "joshkaposh-iterator/src/util";
 import { ScheduleBuildPassObj } from "./pass";
+import { $is_system } from "../system";
 
 type BTreeSet<T> = BTree<T, undefined>;
 
@@ -369,6 +370,7 @@ export class SystemSetNode {
     }
 
     is_system_type(): boolean {
+        console.log('SystemSetNode is_system_type', this.inner)
         return !!this.inner.system_type();
     }
 
@@ -593,15 +595,9 @@ export class ScheduleGraph {
             return this.process_config(type, _configs, collect_nodes);
         } else if (_configs instanceof Configs) {
             const { configs, collective_conditions, chained } = _configs;
-            console.log('INITIAL', _configs);
-
             this.apply_collective_conditions(configs, collective_conditions);
             const is_chained = chained instanceof Map;
-            console.log('DenselyChained initial and actual', is_chained, chained);
-
-
             let densely_chained = is_chained || configs.length === 1;
-            // console.log('Process configs initial chained', is_chained, densely_chained);
             const nodes: any[] = [];
 
             if (configs.length === 0) {
@@ -660,8 +656,6 @@ export class ScheduleGraph {
              * unchained with a single densely chained config
              */
 
-            console.log('ProcessConfigs densely_chained', densely_chained);
-
             return {
                 densely_chained: Boolean(densely_chained),
                 nodes
@@ -705,7 +699,10 @@ export class ScheduleGraph {
     }
 
     #add_set(set: InternedSystemSet): NodeId {
-        const id = this.#system_ids.get(set as any)!;
+        // const id = new NodeId.Set(this.#system_sets.length);
+        const id = this.#system_ids.get(set as any) ?? new NodeId.System(this.#system_sets.length);
+        // const system_set = set[$is_system] ? set.into_system_set() : set;
+
         this.#system_sets.push(new SystemSetNode(set));
         this.#system_set_conditions.push([]);
         this.#system_set_ids.set(set, id);
@@ -723,6 +720,12 @@ export class ScheduleGraph {
     }
 
     #check_hierarchy_set(id: NodeId, set: SystemSet): Result<undefined, ScheduleBuildError> {
+        // @ts-expect-error
+        if (set[$is_system]) {
+            // @ts-expect-error
+            set = set.into_system_set();
+        }
+
         const set_id = this.#system_set_ids.get(set);
         if (set_id) {
             if (id.eq(set_id)) {
@@ -745,7 +748,6 @@ export class ScheduleGraph {
         for (let i = 0; i < dependencies.length; i++) {
             const { set } = dependencies[i];
             const set_id = this.#system_set_ids.get(set);
-            // console.log('ScheduleGraph check_edges() set_id and set', id, set_id, set)
             if (set_id) {
                 if (id.eq(set_id)) {
                     return ScheduleBuildError.DependencyLoop(this.get_node_name(id))
@@ -862,7 +864,6 @@ export class ScheduleGraph {
         const toph = this.topsort_graph(this.#hierarchy.graph(), ReportCycles.Hierarchy);
         if (!Array.isArray(toph)) return toph;
         this.#hierarchy.set_topsort(toph);
-        // console.log('BuildSchedule hierarchy graph topsort', toph);
         const hier_results = check_graph(this.#hierarchy.graph(), this.#hierarchy.cached_topsort())
         let err;
         err = this.optionally_check_hierarchy_conflicts(hier_results.transitive_edges, schedule_label);
@@ -875,8 +876,7 @@ export class ScheduleGraph {
         const topd = this.topsort_graph(this.#dependency.graph(), ReportCycles.Dependency);
         if (!Array.isArray(topd)) return topd
         this.#dependency.set_topsort(topd);
-        console.log('BuildSchedule dependency graph topsort', topd);
-
+        // console.log("BuildSchedule dependency topsort", topd)
         // check for systems or system sets depending on sets they belong to
         const dep_results = check_graph(this.#dependency.graph(), this.#dependency.cached_topsort())
         err = this.check_for_cross_dependencies(dep_results, hier_results.connected)
@@ -1296,18 +1296,12 @@ export class ScheduleGraph {
 
         // move systems into new schedule
         const system_ids = schedule.__system_ids;
-        // console.log('SystemSchedule system_ids', system_ids);
         for (let i = 0; i < system_ids.length; i++) {
             const id = system_ids[i];
-            // TODO: remove
-            if (id.is_set()) {
-                continue
-            }
             const system = this.systems[id.index].inner!;
             this.systems[id.index].inner = null;
             const conditions = this.system_conditions[id.index];
             this.system_conditions[id.index] = [];
-            // console.log('PUSHING INTO SYSTEMSCHEDULE', id, system.name());
             schedule.__systems.push(system);
             schedule.__system_conditions[id.index] = conditions;
         }
@@ -1387,8 +1381,6 @@ export class ScheduleGraph {
 
     get_node_name_inner(id: NodeId, report_sets: boolean): string {
         let name;
-        console.log('GET_NODE_NAME', id, id.is_system());
-
         if (id.is_system()) {
             const name_ = this.systems[id.index].inner!.name();
             if (report_sets) {
@@ -1405,8 +1397,6 @@ export class ScheduleGraph {
             }
         } else {
             const set = this.#system_sets[id.index];
-            console.log('GET_NODE_NAME_INNER', set.name(), set.is_anonymous());
-
             if (set.is_anonymous()) {
                 name = this.anonymous_set_name(id);
             } else {

@@ -55,7 +55,6 @@ export class NodeConfig<T extends ProcessNodeConfig> implements IntoSystemConfig
     }
 
     in_set(this: SystemConfigs, set: InternedSystemSet): SystemConfigs {
-
         assert(is_none(set.system_type()));
         this.in_set_inner(set);
         return this;
@@ -281,8 +280,6 @@ export const NodeConfigs = {
     Configs,
     NodeConfig,
     new_system(system: ScheduleSystem) {
-        // console.log('NodeConfigs.new_system()', system);
-
         const sets = system.default_system_sets();
         return new NodeConfig(
             system,

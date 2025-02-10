@@ -37,12 +37,12 @@ test('param_builder', () => {
 
 
 test('run_system_once', () => {
-    const Test = define_resource(class Test { constructor(public value: number) { } });
+    const Test = define_resource(class Test { constructor(public value = 0) { } });
 
     const w = new World();
 
-    const system = define_system((b) => b.local(Test), (t) => {
-        console.log('testme running', t);
+    const system = define_system((b) => b.res(Test), (t) => {
+        expect(t).toEqual(new Test(0))
     });
 
     w.init_resource(Test);
@@ -58,8 +58,6 @@ test('run_system_once_with', () => {
     const system = define_system(
         (b) => b.local(1),
         function system(input) {
-            console.log('system running!', input);
-
             return input.value + 1;
         },
     );
@@ -67,11 +65,5 @@ test('run_system_once_with', () => {
     let n = w.run_system_once_with(system, new Local(1));
 
     assert(n === 2);
-
-})
-
-test('system_custom_name', () => {
-    const system = define_system(b => b, () => { }).set_name('himom');
-
 
 })

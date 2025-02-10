@@ -241,10 +241,10 @@ export interface SystemDefinitionImpl<P, Fn extends SystemFn<P, false>> {
     // system ordering
 
     chain(): SystemConfigs;
-
     run_if(condition: Condition<any>): SystemConfigs | SystemSetConfigs;
     before<P2>(other: SystemDefinitionImpl<P2, SystemFn<P2, false>>): SystemConfigs;
     after<P2>(other: SystemDefinitionImpl<P2, SystemFn<P2, false>>): SystemConfigs;
+    in_set(other: InternedSystemSet): SystemConfigs;
 
     [Symbol.toPrimitive](): string;
     [Symbol.toStringTag](): string;
@@ -381,9 +381,9 @@ function define_system_base<P, Fallible extends boolean, Fn extends SystemFn<P, 
 
 
     system.into_system_set = function into_system_set() {
-        // const set = new SystemTypeSet(this as any);
+        return new SystemTypeSet(this as any);
         // return set
-        return this as unknown as SystemTypeSet;
+        // return this as unknown as SystemTypeSet;
 
     }
 
@@ -401,10 +401,14 @@ function define_system_base<P, Fallible extends boolean, Fn extends SystemFn<P, 
         return this.into_configs!().before(other as any);
     }
 
-
     system.after = function after<P2>(other: SystemDefinitionImpl<P2, SystemFn<P2>>) {
         // @ts-expect-error
         return this.into_configs!().after(other as any);
+    }
+
+    system.in_set = function in_set(set: InternedSystemSet) {
+        // @ts-expect-error
+        return this.into_configs!().in_set(set);
     }
 
     system[Symbol.toPrimitive] = function () {
