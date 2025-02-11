@@ -18,6 +18,7 @@ function read(target: Record<string | symbol, any>, p: string | symbol, receiver
     return value;
 }
 
+// @ts-ignore
 export function $readonly<T extends Component>(ty: T, ticks?: Ticks): DeepReadonly<InstanceType<T>> {
     return new Proxy(ty as { [key: string | symbol]: any }, {
         get(target, p, receiver) {

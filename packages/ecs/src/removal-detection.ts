@@ -8,8 +8,13 @@ import { unit } from "./util";
 import { World } from "./world";
 import { iter, Iterator } from "joshkaposh-iterator";
 import { Archetype } from "./archetype";
+import { define_event } from "define";
+import type { StorageType } from "./storage";
 
 class RemovedComponentEntity {
+    static readonly type_id: UUID;
+    static readonly storage_type: StorageType;
+    static from_world: (world: World) => InstanceType<typeof RemovedComponentEntity>
     constructor(public entity: Entity) { }
     clone() {
         return new RemovedComponentEntity(this.entity);
@@ -19,6 +24,7 @@ class RemovedComponentEntity {
         return this.entity;
     }
 }
+define_event(RemovedComponentEntity)
 
 export class RemovedComponentEvents implements SystemParam<unit, RemovedComponentEvents> {
     State!: unit;
@@ -142,7 +148,7 @@ export class RemovedComponents<T extends Component> implements SystemParam<any, 
             return reader
                 .reader
                 .read(events)
-                .flatten()
+                // .flatten()
                 .map(e => e.entity);
         }
         return iter.of();

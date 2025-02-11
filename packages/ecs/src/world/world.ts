@@ -4,8 +4,8 @@ import { Option, Result, is_none, ErrorExt } from 'joshkaposh-option';
 import { v4 } from "uuid";
 import { Archetype, ArchetypeComponentId, Archetypes } from "../archetype";
 import { Component, ComponentId, ComponentInfo, Components, ComponentTicks, Resource, ResourceId, Tick } from "../component";
-import { Storages, StorageType } from "../storage";
-import { AllocAtWithoutReplacement, Entities, Entity, EntityLocation } from "../entity";
+import { Storages } from "../storage";
+import { Entities, Entity, EntityLocation } from "../entity";
 import { Bundle, Bundles, BundleSpawner, DynamicBundle } from "../bundle";
 import { Query, QueryData, QueryEntityError, QueryFilter, QueryState } from "../query";
 import { RemovedComponentEvents } from "../removal-detection";
@@ -14,10 +14,10 @@ import { EntityRef, EntityWorldMut } from './entity-ref'
 import { SpawnBatchIter } from "./spawn-batch";
 import { UnsafeEntityCell } from "./unsafe-world-cell";
 import { CommandQueue } from "./command_queue";
-import { RunSystemError, System, SystemDefinitionImpl, SystemFn, SystemInput } from "../system";
+import { RunSystemError, SystemDefinitionImpl, SystemFn } from "../system";
 import { Instance, unit } from "../util";
 import { u32 } from "../../../intrinsics/src";
-import { $readonly, CHECK_TICK_THRESHOLD, Mut, Ref, Res, Ticks, TicksMut } from "../change_detection";
+import { CHECK_TICK_THRESHOLD, Mut, Ref, Ticks, TicksMut } from "../change_detection";
 import { Schedule, ScheduleLabel, Schedules } from "../schedule";
 import { TypeId } from "define";
 
@@ -96,6 +96,7 @@ export class World {
     #removed_components: RemovedComponentEvents;
     #change_tick: number;
     #last_change_tick: Tick;
+    // @ts-ignore
     #last_check_tick: Tick;
     #last_trigger_id: number;
     #command_queue: CommandQueue;
@@ -177,19 +178,20 @@ export class World {
     register_system<I extends any, O, M>(system: any) {
 
     }
-
+    // @ts-ignore
     register_required_components<T extends Component, R extends Component<new () => any>>(component: T, required: R) {
         // this.try_register_required_components(component, required);
     }
-
+    // @ts-ignore
     register_required_components_with<T extends Component>(component: T, constructor: new () => any) {
         // this.try_registry_required_components_with(component, constructor);
     }
 
+    // @ts-ignore
     try_register_required_components(component: Component, required: Component<new () => any>) {
         // this.try_register_required_components_with(component, required.constructor);
     }
-
+    // @ts-ignore
     try_register_required_components_with<T extends Component, R extends Component>(component: T, required: R, constructor: () => InstanceType<R>) {
         // const requiree = this.register_component(component);
 
@@ -391,11 +393,15 @@ export class World {
         return from_fn(() => { return done() })
     }
 
+    // @ts-ignore
     trigger_on_add(archetype: Archetype, entity: Entity, archetype_after_insert: any) { }
+    // @ts-ignore
     trigger_on_insert(archetype: Archetype, entity: Entity, archetype_after_insert: any) { }
+    // @ts-ignore
     trigger_on_replace(archetype: Archetype, entity: Entity, archetype_after_insert: any) { }
+    // @ts-ignore
     trigger_on_remove(archetype: Archetype, entity: Entity, archetype_after_insert: any) { }
-
+    // @ts-ignore
     trigger_observers(type: ObserverId, entity: Entity, archetype_after_insert: any) {
 
     }
@@ -546,6 +552,7 @@ export class World {
         return data.get_mut(last_change_tick, change_tick)!;
     }
 
+    // @ts-ignore
     insert_or_spawn_batch(iterable: Iterable<[Entity, Bundle]> & ArrayLike<[Entity, Bundle]>) {
 
     }

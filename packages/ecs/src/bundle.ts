@@ -8,19 +8,19 @@ import { StorageType, Storages } from "./storage";
 import { SparseSets } from "./storage/sparse-set";
 import { Table, TableRow } from "./storage/table";
 import { entry, is_class_ctor, recursively_flatten_nested_arrays } from "./util";
-import { ArchetypeAfterBundleInsert, TypeId } from '.';
+import { ArchetypeAfterBundleInsert } from '.';
 import { ON_ADD, World } from './world/world';
 import { retain } from './array-helpers';
-
+import { TypeId } from 'define';
 import { TODO } from 'joshkaposh-iterator/src/util';
 
 export type BundleId = number;
 
-export type Bundle<F = Component> = {
+export type Bundle = {
     readonly hash: string;
     readonly name: string;
     // Gets this `Bundle`s component_ids, in the order of this bundle's `Component`s
-    component_ids(components: Components, storages: Storages, ids: (component_id: ComponentId) => void): void;
+    component_ids(components: Components, ids: (component_id: ComponentId) => void): void;
 
     // Calls `func`, which should return data for each component in the bundle, in the order of
     // this bundle's `Component`s
@@ -41,12 +41,12 @@ export type DynamicBundle = {
     get_components(func: (storage_type: StorageType, ptr: {}) => void): void;
 };
 
-function ComponentBundle(type: Component | InstanceType<Component>): Bundle {
+function ComponentBundle(type: TypeId): Bundle {
     // @ts-expect-error
     return {
-        component_ids(components, storages, ids) {
+        component_ids(components, ids) {
             const ty = type.type_id ? type : type.constructor;
-            ids(components.register_component(ty));
+            ids(components.register_component(ty as Component));
         },
         from_components(ctx, func) {
             return func(ctx);
@@ -54,7 +54,7 @@ function ComponentBundle(type: Component | InstanceType<Component>): Bundle {
     }
 }
 
-function ComponentDynamicBundle(type: Component | InstanceType<Component>): DynamicBundle {
+function ComponentDynamicBundle(type: any): DynamicBundle {
     return {
         get_components(func) {
             return func(type.storage_type ?? type.constructor.storage_type, type)
@@ -90,9 +90,9 @@ export function define_bundle(bundle: any[], world: World): Bundle & DynamicBund
     const bun: Bundle & DynamicBundle = {
         hash: hash,
         name: name,
-        component_ids(components, storages, ids) {
+        component_ids(components, ids) {
             for (const b of bundles) {
-                b.component_ids(components, storages, ids)
+                b.component_ids(components, ids)
             }
         },
 
@@ -112,7 +112,9 @@ export function define_bundle(bundle: any[], world: World): Bundle & DynamicBund
 export class BundleInfo {
     #id: BundleId;
     #component_ids: ComponentId[];
+    // @ts-ignore
     #required_component_ids: ComponentId[];
+    // @ts-ignore
     #explicit_components_len: number;
 
     //! SAFETY: Every ID in this list must be valid within the World that owns the BundleInfo,
@@ -142,6 +144,7 @@ export class BundleInfo {
 
         // handle explicit components
 
+        // @ts-ignore
         const explicit_components_len = component_ids.length;
         for (let i = 0; i < component_ids.length; i++) {
             const component_id = component_ids[i];
@@ -309,7 +312,6 @@ export class BundleInfo {
             }
 
             const new_archetype_id = archetypes.get_id_or_insert(
-                components,
                 table_id,
                 table_components,
                 sparse_set_components
@@ -377,7 +379,6 @@ export class BundleInfo {
                 storages.tables.__get_id_or_insert(next_table_components, components)
 
             const new_archetype_id = archetypes.get_id_or_insert(
-                components,
                 next_table_id,
                 next_table_components,
                 next_sparse_set_components
@@ -402,7 +403,7 @@ export class BundleInfo {
     }
 
     iter_required_components(): Iterator<ComponentId> {
-        return iter([])
+        return iter<number[]>([])
     }
 
     iter_explicit_components() {
@@ -886,7 +887,7 @@ export class Bundles {
             id = this.#bundle_ids.get(bundle.hash)!
         } else {
             const component_ids: number[] = [];
-            bundle.component_ids(components, storages, id => component_ids.push(id))
+            bundle.component_ids(components, id => component_ids.push(id))
             let _id = bundle_infos.length;
             const bundle_info = new BundleInfo(bundle.name, storages, components, component_ids, _id)
             bundle_infos.push(bundle_info)
@@ -915,7 +916,7 @@ export class Bundles {
     __init_info(bundle: Bundle, components: Components, storages: Storages): BundleInfo {
         const bundle_infos = this.#bundle_infos;
         const ids: ComponentId[] = [];
-        bundle.component_ids(components, storages, (id) => ids.push(id));
+        bundle.component_ids(components, (id) => ids.push(id));
         const hash = bundle_hash(ids);
         const id = entry(this.#bundle_ids, hash, () => {
             const id = bundle_infos.length;
@@ -950,10 +951,10 @@ export class Bundles {
      * @throws If the provided `ComponentId` does not exist in the provided `Components`.
      * @returns A tuple [BundleInfo, StorageType].
     */
-    __init_component_info(components: Components, component_id: ComponentId): BundleId {
+    __init_component_info(components: Components, storages: Storages, component_id: ComponentId): BundleId {
         const bundle_infos = this.#bundle_infos;
         return entry(this.#dynamic_component_bundle_ids, component_id, () => {
-            const [id, storage_type] = initialize_dynamic_bundle(bundle_infos, components, [component_id])
+            const [id, storage_type] = initialize_dynamic_bundle(bundle_infos, storages, components, [component_id])
             this.#dynamic_component_storages.set(id, storage_type[0])
             return id;
         })

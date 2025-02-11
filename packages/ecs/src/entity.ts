@@ -4,7 +4,7 @@ import { Err, ErrorExt, Option, Result, is_error, is_some } from 'joshkaposh-opt
 import { ArchetypeId, ArchetypeRow } from "./archetype";
 import { TableId, TableRow } from "./storage/table";
 import { extend, reserve, swap_remove } from "./array-helpers";
-import { HIGH_MASK, IdKind, Identifier, IdentifierError, IdentifierErrorType, IdentifierMask } from "./identifier";
+import { IdKind, Identifier, IdentifierError, IdentifierErrorType, IdentifierMask } from "./identifier";
 import { u32, u8 } from "../../intrinsics/src";
 
 export type EntityId = number;
@@ -463,13 +463,14 @@ export class Entities {
     ///  - `index` must be a valid entity index.
     ///  - `location` must be valid for the entity at `index` or immediately made valid afterwards
     ///    before handing control to unknown code.
+    // @ts-ignore
     private __set(index: number, location: EntityLocation) {
         // SAFETY: Caller guarantees that `index` a valid entity index
         // self.meta.get_unchecked_mut(index as usize).location = location;
         this.__meta[index].location = location;
     }
 
-    // @ts-expect-error
+    // @ts-ignore
     private __reserve_generations(index: number, generations: number): boolean {
         if (index >= this.__meta.length) {
             return false
@@ -580,7 +581,6 @@ export class Entities {
         this.__meta.length = count;
         this.__len = count; // count as u32
     }
-
 
     // The count of all entities in the World that have ever been allocated including the entities that are currently freed.
     // This does not include entities that have been reserved but have never been allocated yet.

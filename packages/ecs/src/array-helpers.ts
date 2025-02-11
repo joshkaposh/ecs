@@ -6,17 +6,12 @@ export function truncate(array: any[], len: number) {
 }
 
 export function retain<T>(data: T[], f: (element: T) => boolean) {
-    const result = [];
     for (let i = 0; i < data.length; i++) {
         if (f(data[i])) {
             continue
         }
         data.splice(i, 1);
-        // result.push(data[i])
     }
-    // data.length = 0;
-    // data.push(...result);
-    // data.splice(0, data.length, ...result)
 }
 
 export function split_at<T>(array: T[], index: number): Option<[T[], T[]]> {

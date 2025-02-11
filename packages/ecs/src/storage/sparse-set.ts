@@ -78,6 +78,7 @@ export class ComponentSparseSet {
         this.#sparse.clear();
     }
 
+    // @ts-ignore
     private __insert(entity: Entity, value: {}, change_tick: Tick) {
         const dense_index = this.#sparse.get(entity.index());
         if (is_some(dense_index)) {
@@ -152,6 +153,7 @@ export class ComponentSparseSet {
         return this.#dense.get_ticks_unchecked(dense_index);
     }
 
+    // @ts-ignore
     private __remove_and_forget(entity: Entity) {
         const dense_index = this.#sparse.remove(entity.index())
         if (is_some(dense_index)) {
@@ -171,6 +173,7 @@ export class ComponentSparseSet {
         }
     }
 
+    // @ts-ignore
     private __remove(entity: Entity) {
         const dense_index = this.#sparse.remove(entity.index());
 
@@ -207,15 +210,15 @@ export class SparseSet<I extends number, V> {
         return new SparseSet<I, V>([], [], new SparseArray())
     }
 
-    static with_capacity(capacity: number) {
+    // @ts-ignore
+    static with_capacity<I extends number, V>(capacity: number) {
         // TODO: create with capacity to increase performance (reduce array resizes)
-        return new SparseSet([], [], new SparseArray())
+        return new SparseSet<I, V>([], [], new SparseArray())
         // return new SparseSet(new Array(capacity), new Array(capacity), new SparseArray())
     }
 
     into_immutable(): SparseSet<I, V> {
-        // @ts-expect-error
-        return new SparseSet(Object.freeze(this.#indices), Object.freeze(this.#dense), this.#sparse.into_immutable())
+        return new SparseSet<I, V>(Object.freeze(this.#indices) as I[], Object.freeze(this.#dense) as V[], this.#sparse.into_immutable())
     }
 
     capacity() {

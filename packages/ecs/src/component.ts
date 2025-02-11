@@ -271,7 +271,10 @@ export class Components {
         })
     }
 
-    register_component_internal(type: Component, recursion_check_stack: ComponentId[]) {
+    register_component_internal(
+        type: Component,
+        // @ts-expect-error
+        recursion_check_stack: ComponentId[]) {
         let is_new_registration = false;
         const indices = this.#indices;
         const components = this.#components;

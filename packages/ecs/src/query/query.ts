@@ -4,7 +4,7 @@ import { Maybe, QueryData, Read, Write } from "./fetch";
 import { QueryFilter } from "./filter";
 import { Iterator } from "joshkaposh-iterator";
 import { Option } from "joshkaposh-option";
-import { Archetype, ComponentMetadata, Entity, EntityRef, init_query_param, SystemMeta, SystemParam, Tick } from "../../../../src";
+import { Archetype, Entity, EntityRef, SystemMeta, SystemParam, Tick } from "../";
 
 type Inst<T> = T extends new (...args: any) => infer I ? I : never;
 
@@ -39,7 +39,7 @@ export class Query<const D extends readonly any[], const F extends readonly any[
 
     param_init_state(world: World, system_meta: SystemMeta) {
         const state = QueryState.new_with_access(this.#state.D, this.#state.F, world, system_meta.__archetype_component_access)
-        init_query_param(world, system_meta, state);
+        // init_query_param(world, system_meta, state);
         return state;
     }
 

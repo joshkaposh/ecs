@@ -374,12 +374,13 @@ export class EntityWorldMut {
     insert_by_id(component_id: ComponentId, component: InstanceType<Component>) {
 
         this.#assert_not_despawned();
-        const change_tick = this.#world.change_tick();
-        const bundle_id = this.#world.bundles().__init_component_info(this.#world.components(), component_id)
-        const storage_type = this.#world.bundles().get_storage_unchecked(bundle_id);
+        const world = this.#world;
+        const change_tick = world.change_tick();
+        const bundle_id = world.bundles().__init_component_info(world.components(), world.storages(), component_id)
+        const storage_type = world.bundles().get_storage_unchecked(bundle_id);
 
         const bundle_inserter = BundleInserter.new_with_id(
-            this.#world,
+            world,
             this.#location.archetype_id,
             bundle_id,
             change_tick
@@ -392,7 +393,7 @@ export class EntityWorldMut {
             iter([component]),
             iter([storage_type])
         )
-        this.#world.flush();
+        world.flush();
         this.update_location();
         return this;
     }
@@ -411,14 +412,15 @@ export class EntityWorldMut {
     /// - Each [`OwningPtr`] must be a valid reference to the type represented by [`ComponentId`]
     insert_by_ids(component_ids: ComponentId[], iter_components: InstanceType<Component>[]) {
         this.#assert_not_despawned();
-        const change_tick = this.#world.change_tick();
-        const bundle_id = this.#world.bundles().__init_dynamic_info(this.#world.components(), component_ids);
+        const world = this.#world;
+        const change_tick = world.change_tick();
+        const bundle_id = world.bundles().__init_dynamic_info(world.components(), world.storages(), component_ids);
 
-        const storage_types = this.#world.bundles().get_storages_unchecked(bundle_id);
-        this.#world.bundles().set_storages_unchecked(bundle_id, []);
+        const storage_types = world.bundles().get_storages_unchecked(bundle_id);
+        world.bundles().set_storages_unchecked(bundle_id, []);
 
         const bundle_inserter = BundleInserter.new_with_id(
-            this.#world,
+            world,
             this.#location.archetype_id,
             bundle_id,
             change_tick
@@ -431,8 +433,8 @@ export class EntityWorldMut {
             iter(storage_types),
         )
 
-        this.#world.bundles().set_storages_unchecked(bundle_id, storage_types);
-        this.#world.flush();
+        world.bundles().set_storages_unchecked(bundle_id, storage_types);
+        world.flush();
         this.update_location();
         return this;
     }
@@ -572,12 +574,13 @@ export class EntityWorldMut {
     }
 
     retain(bundle: Bundle): this {
-        const archetypes = this.#world.archetypes();
-        const storages = this.#world.storages();
-        const components = this.#world.components();
+        const world = this.#world;
+        const archetypes = world.archetypes();
+        const storages = world.storages();
+        const components = world.components();
 
-        const retained_bundle = this.#world.bundles().register_info(bundle, components, storages)
-        const retained_bundle_info = this.#world.bundles().get(retained_bundle)!;
+        const retained_bundle = world.bundles().register_info(bundle, components, storages)
+        const retained_bundle_info = world.bundles().get(retained_bundle)!;
 
         const old_location = this.#location;
         const old_archetype = archetypes.get(old_location.archetype_id)!;
@@ -587,32 +590,33 @@ export class EntityWorldMut {
             .filter(c => !retained_bundle_info.contributed_components().includes(c))
             .collect();
 
-        const remove_bundle = this.#world.bundles().__init_dynamic_info(components, to_remove)
+        const remove_bundle = world.bundles().__init_dynamic_info(components, world.storages(), to_remove)
 
         this.#location = this.#remove_bundle(remove_bundle);
-        this.#world.flush();
+        world.flush();
         this.update_location();
         return this
     }
 
     remove_by_id(component_id: ComponentId) {
         this.#assert_not_despawned();
-        const components = this.#world.components();
-        const bundle_id = this.#world.bundles().__init_component_info(components, component_id)
+        const world = this.#world;
+        const components = world.components();
+        const bundle_id = world.bundles().__init_component_info(components, world.storages(), component_id)
         this.#location = this.#remove_bundle(bundle_id)
-        this.#world.flush();
+        world.flush();
         this.update_location();
         return this
     }
 
     remove_by_ids(component_ids: ComponentId[]) {
         this.#assert_not_despawned();
-        const components = this.#world.components();
-
-        const bundle_id = this.#world.bundles().__init_dynamic_info(components, component_ids)
+        const world = this.#world;
+        const components = world.components();
+        const bundle_id = world.bundles().__init_dynamic_info(components, world.storages(), component_ids)
         this.#remove_bundle(bundle_id);
 
-        this.#world.flush();
+        world.flush();
         this.update_location();
         return this;
     }
@@ -620,12 +624,12 @@ export class EntityWorldMut {
     clear() {
         this.#assert_not_despawned();
         const component_ids = this.archetype().components().collect();
-        const components = this.#world.components();
-
-        const bundle_id = this.#world.bundles().__init_dynamic_info(components, component_ids)
+        const world = this.#world;
+        const components = world.components();
+        const bundle_id = world.bundles().__init_dynamic_info(components, world.storages(), component_ids)
 
         this.#location = this.#remove_bundle(bundle_id);
-        this.#world.flush();
+        world.flush();
         this.update_location();
         return this;
     }

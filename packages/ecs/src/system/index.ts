@@ -4,7 +4,7 @@ import { System, SystemMeta } from '.'
 import { World } from '../world';
 import { ComponentId, is_component, Tick } from '../component';
 import { define_type } from 'define';
-import { assert, TODO } from 'joshkaposh-iterator/src/util';
+import { assert } from 'joshkaposh-iterator/src/util';
 import { SystemState } from './function-system';
 import { Option } from 'joshkaposh-option';
 import { ParamBuilder, SystemParam } from './system-param';
@@ -13,7 +13,7 @@ import { And, AndMarker, Condition, Nand, NandMarker, Nor, NorMarker, Or, OrMark
 import { CombinatorSystem } from './combinator';
 import { SystemIn } from './system';
 import { v4 } from 'uuid';
-import { InternedSystemSet, SystemSet, SystemTypeSet } from '../schedule/set';
+import { InternedSystemSet, SystemTypeSet } from '../schedule/set';
 import { ScheduleGraph } from '../schedule';
 import { NodeConfigs, SystemConfig, SystemConfigs, SystemSetConfigs } from '../schedule/config';
 import { NodeId } from '../schedule/graph';
@@ -44,7 +44,16 @@ export function define_params<P extends readonly any[]>(...params: P) {
             }
         }
 
-        param_get_param(state: any, system_meta: SystemMeta, world: World, change_tick: Tick) {
+        param_get_param(
+            // @ts-expect-error
+            state: any,
+            // @ts-expect-error
+            system_meta: SystemMeta,
+            // @ts-expect-error
+            world: World,
+            // @ts-expect-error
+            change_tick: Tick
+        ) {
             return this.#param;
         }
 
@@ -258,6 +267,7 @@ function define_system_base<P, Fallible extends boolean, Fn extends SystemFn<P, 
     const TYPE_ID = v4() as UUID;
     let state: Option<SystemState<any>>;
     let system_name = system.name;
+    // @ts-ignore
     let system_params;
 
     function type_id() {
@@ -314,7 +324,10 @@ function define_system_base<P, Fallible extends boolean, Fn extends SystemFn<P, 
         system_meta.last_run.set(tick.get());
     }
 
-    system.check_change_tick = function check_change_tick(tick: Tick) { }
+    //@ts-expect-error 
+    system.check_change_tick = function check_change_tick(tick: Tick) {
+
+    }
 
     system.component_access = function component_access() {
         return system_meta.__component_access_set.combined_access();
@@ -325,9 +338,13 @@ function define_system_base<P, Fallible extends boolean, Fn extends SystemFn<P, 
         return system_meta.__archetype_component_access;
     }
 
+    // @ts-ignore
     system.apply_deferred = function apply_deferred(world: World) { }
+    // @ts-ignore
     system.queue_deferred = function queue_deferred(world: World) { }
 
+
+    // @ts-ignore
     system.update_archetype_component_access = function update_archetype_component_access(world: World) { }
 
     system.run = function run(input: SystemIn<Fn>, world: World): ReturnType<Fn> {
@@ -335,6 +352,7 @@ function define_system_base<P, Fallible extends boolean, Fn extends SystemFn<P, 
     }
 
     system.run_unsafe = function run_unsafe(input: SystemIn<Fn>, world: World): ReturnType<Fn> {
+        // @ts-ignore
         const change_tick = world.increment_change_tick();
         if (!state) {
             throw new Error(`System's state was not found. Did you forget to initialize this system before running it?`)
@@ -350,6 +368,7 @@ function define_system_base<P, Fallible extends boolean, Fn extends SystemFn<P, 
     }
 
 
+    // @ts-ignore
     system.validate_param_unsafe = function validate_param_unsafe(world: World) {
         return true;
     }
@@ -451,10 +470,10 @@ export function define_condition<P>(
     condition: (...args: P extends any[] ? P : P extends ParamBuilder<infer Args> ? Args : never) => boolean
 ) {
 
-    class ConditionImpl<const P extends Parameters<typeof condition>> extends System<any, any> implements Condition<any, any> {
+    class ConditionImpl extends System<any, any> implements Condition<any, any> {
         #fn: typeof condition;
         #name: string;
-        // #params_initial: P;
+        // @ts-expect-error
         #params!: SystemParam<any, any>;
         #state: Option<SystemState<any>>;
         #system_meta: SystemMeta;
@@ -618,6 +637,7 @@ export function define_condition<P>(
             return this
         }
 
+        // @ts-ignore
         check_change_tick(change_tick: Tick): void {
         }
 
@@ -629,14 +649,18 @@ export function define_condition<P>(
             return this.#system_meta.__archetype_component_access;
         }
 
+        // @ts-ignore
+
         apply_deferred(world: World): void {
 
         }
+        // @ts-ignore
 
         queue_deferred(world: World): void {
 
         }
 
+        // @ts-ignore
         update_archetype_component_access(world: World): void {
 
         }
@@ -646,6 +670,7 @@ export function define_condition<P>(
         }
 
         run_unsafe(input: SystemIn<System<any, any>>, world: World) {
+            // @ts-ignore
             const change_tick = world.increment_change_tick();
             if (!this.#state) {
                 throw new Error(`System's state was not found. Did you forget to initialize this system before running it?`)
@@ -693,6 +718,7 @@ export interface ConditionDefinitionImpl<P, Fn extends SystemFn<P, true>> extend
 }
 
 // TODO: use this instead of define_condition
+// @ts-ignore
 function define_condition2<P, Fn extends SystemFn<P, true>>(
     params: (builder: ParamBuilder) => P,
     condition: Fn & Omit<Partial<ConditionDefinitionImpl<P, Fn>>, 'name'>

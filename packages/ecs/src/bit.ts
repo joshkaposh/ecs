@@ -82,5 +82,5 @@ export function count_ones(n: number) {
 }
 
 export function subset(bits: IterInputType<number>, target: number) {
-    return iter(bits).all(bit => check(target, bit));
+    return iter(bits).all((bit) => check(target, bit as number));
 }
