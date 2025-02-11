@@ -19,12 +19,12 @@ test('archetype', () => {
     const components = new Components();
     const storages = new Storages();
 
-    const a_id = components.init_component(A, storages)
-    const b_id = components.init_component(B, storages)
-    const c_id = components.init_component(C, storages);
+    const a_id = components.register_component(A)
+    const b_id = components.register_component(B)
+    const c_id = components.register_component(C);
 
-    const ma_id = components.init_component(MarkerA, storages)
-    const mb_id = components.init_component(MarkerB, storages)
+    const ma_id = components.register_component(MarkerA)
+    const mb_id = components.register_component(MarkerB)
 
     assert(a_id === 0)
     assert(mb_id === 4)

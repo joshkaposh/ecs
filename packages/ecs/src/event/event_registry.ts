@@ -31,9 +31,10 @@ export class EventRegistry {
     }
 
     static register_event<T extends Event>(type: T, world: World) {
+        // @ts-expect-error
         const component_id = world.init_resource(type.ECS_EVENTS_TYPE);
         const registry = world.get_resource_or_init(EventRegistry)
-        registry.event_updates.push({
+        registry.v.event_updates.push({
             component_id,
             previously_updated: false,
             // @ts-expect-error
@@ -59,8 +60,8 @@ export class EventRegistry {
     static deregister_events(type: Event, world: World) {
         const events_type = type;
         const component_id = world.init_resource(events_type as any);
-        const registry = world.get_resource_or_init(EventRegistry as any) as EventRegistry;
-        registry.event_updates = registry.event_updates.filter(e => e.component_id === component_id);
+        const registry = world.get_resource_or_init(EventRegistry);
+        registry.v.event_updates = registry.v.event_updates.filter(e => e.component_id === component_id);
         world.remove_resource(events_type);
     }
 }

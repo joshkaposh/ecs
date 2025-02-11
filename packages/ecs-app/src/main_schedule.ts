@@ -169,7 +169,7 @@ export const run_main = define_system(b => b.world().local(false), (world, run_a
 
     if (!run_at_least_once.value) {
         world.resource_scope(MainScheduleOrder, (world, order) => {
-            const startup_labels = order.value.startup_labels;
+            const startup_labels = order.v.startup_labels;
             for (let i = 0; i < startup_labels.length; i++) {
                 world.try_run_schedule(startup_labels[i]);
             }
@@ -179,7 +179,7 @@ export const run_main = define_system(b => b.world().local(false), (world, run_a
     }
 
     world.resource_scope(MainScheduleOrder, (world, order) => {
-        const labels = order.value.labels;
+        const labels = order.v.labels;
         for (let i = 0; i < labels.length; i++) {
             world.try_run_schedule(labels[i]);
         }
@@ -190,7 +190,7 @@ export const run_main = define_system(b => b.world().local(false), (world, run_a
 export const run_fixed_main = define_system(b => b.world(), (world) => {
     console.log('run_fixed_main() running');
     world.resource_scope(FixedMainScheduleOrder, (world, order) => {
-        const labels = order.value.labels;
+        const labels = order.v.labels;
         for (let i = 0; i < labels.length; i++) {
             world.try_run_schedule(labels[i]);
         }

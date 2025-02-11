@@ -1,3 +1,4 @@
+import { ComponentInfo } from "../component";
 import { Resources } from "./resources";
 import { SparseSets } from "./sparse-set";
 import { Tables } from "./table";
@@ -20,5 +21,11 @@ export class Storages {
         this.tables = tables;
         this.sparse_sets = sparse_sets;
         this.resources = resources;
+    }
+
+    prepare_component(component: ComponentInfo) {
+        if (component.storage_type() === StorageType.SparseSet) {
+            this.sparse_sets.__get_or_insert(component);
+        }
     }
 }

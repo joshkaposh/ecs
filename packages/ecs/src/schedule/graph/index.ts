@@ -2,10 +2,9 @@ import { assert } from 'joshkaposh-iterator/src/util';
 import { InternedSystemSet, SystemSet } from '../set';
 import { FixedBitSet } from 'fixed-bit-set';
 import { NodeId } from './node';
-import { DiGraph, Direction, Incoming } from './graphmap';
+import { DiGraph, Direction, Incoming, Outgoing } from './graphmap';
 import { iter, Iterator } from 'joshkaposh-iterator';
 import { is_some } from 'joshkaposh-option';
-import { extend } from 'joshkaposh-index-map/src/util';
 import { TypeId } from 'define';
 
 export * from './node';
@@ -112,8 +111,11 @@ export function check_graph(graph: DiGraph, topological_order: NodeId[]): CheckG
         topsorted.add_node(node);
 
         // insert nodes as successors to their predecessors
-        for (const pred of graph.neighbors_directed(node, Incoming)) {
+        const predecessors = graph.neighbors_directed(node, Incoming)
+        for (let j = 0; j < predecessors.length; j++) {
+            const pred = predecessors[j];
             topsorted.add_edge(pred, node);
+
         }
     }
 
@@ -135,9 +137,10 @@ export function check_graph(graph: DiGraph, topological_order: NodeId[]): CheckG
     for (const a of topsorted.nodes().rev()) {
         const index_a = map.get(a.to_primitive())!;
         // iterate their successors in topological order
-        for (const b of topsorted.neighbors_directed(a, Direction.Outgoing())) {
+        const b_array = topsorted.neighbors_directed(a, Outgoing);
+        for (let i = 0; i < b_array.length; i++) {
+            const b = b_array[i];
             const index_b = map.get(b.to_primitive())!;
-            // console.log('check_graph topsorted', b, index_b);
 
             if (!visited.contains(index_b)) {
                 // edge <a, b> is not redundant
@@ -145,11 +148,9 @@ export function check_graph(graph: DiGraph, topological_order: NodeId[]): CheckG
                 transitive_closure.add_edge(a, b);
                 reachable.insert(index(index_a, index_b, n))
 
-                const successors = transitive_closure
-                    .neighbors_directed(b, Direction.Outgoing())
-                    .collect()
-
-                for (const c of successors) {
+                const successors = transitive_closure.neighbors_directed(b, Direction.Outgoing())
+                for (let j = 0; j < successors.length; j++) {
+                    const c = successors[j];
                     const index_c = map.get(c.to_primitive())!;
                     assert(index_b < index_c)
                     if (!visited.contains(index_c)) {
@@ -232,7 +233,7 @@ export function simple_cycles_in_component(graph: DiGraph, scc: NodeId[]) {
         // DFS
 
         stack.length = 0;
-        stack.push([root, subgraph.neighbors(root)])
+        stack.push([root, iter(subgraph.neighbors(root))])
         while (stack.length !== 0) {
             const [node, successors] = stack[stack.length - 1]
             const { done, value } = successors.next();
@@ -240,29 +241,31 @@ export function simple_cycles_in_component(graph: DiGraph, scc: NodeId[]) {
             if (!done) {
                 if (next === root) {
                     // found a cycle
-                    extend(maybe_in_more_cycles, iter(path))
+                    for (let i = 0; i < path.length; i++) {
+                        maybe_in_more_cycles.add(path[i])
+                    }
                     cycles.push(structuredClone(path))
                 } else if (!blocked.has(next)) {
                     maybe_in_more_cycles.delete(next);
                     path.push(next);
                     blocked.add(next);
-                    stack.push([next, subgraph.neighbors(next)])
+                    stack.push([next, subgraph.iter_neighbors(next)])
                     continue
                 }
             }
 
             if (successors.peekable().peek().done) {
                 unblock_stack.push(node);
-                let n
+                let n: NodeId;
                 while (is_some(n = unblock_stack.pop()!)) {
                     if (blocked.delete(n)) {
-                        let unblocked_predecessors = unblock_together.get(n)!
+                        let unblocked_predecessors: Set<NodeId> = unblock_together.get(n)!
                         if (!unblocked_predecessors) {
                             unblocked_predecessors = new Set()
                             unblock_together.set(n, unblocked_predecessors)
                         }
 
-                        extend(unblock_stack, iter(unblocked_predecessors));
+                        unblock_stack.push(...unblocked_predecessors)
                         unblocked_predecessors.clear();
                     }
                 }
@@ -282,7 +285,7 @@ export function simple_cycles_in_component(graph: DiGraph, scc: NodeId[]) {
         }
         subgraph.remove_node(root);
 
-        extend(sccs, subgraph.iter_sccs().filter(scc => scc.length > 1))
+        sccs.push(...subgraph.iter_sccs().filter(scc => scc.length > 1))
     }
 
     return cycles

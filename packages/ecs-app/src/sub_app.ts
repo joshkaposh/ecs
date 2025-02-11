@@ -138,9 +138,9 @@ export class SubApp {
         return this;
     }
 
-    add_systems(schedule: ScheduleLabel, ...systems: IntoSystemConfigs<any>[]) {
+    add_systems(schedule: ScheduleLabel, systems: IntoSystemConfigs<any> | IntoSystemSetConfigs<any>) {
         const schedules = this.#world.resource(Schedules);
-        schedules.add_systems(schedule, ...systems as any[])
+        schedules.add_systems(schedule, systems)
         return this;
     }
 

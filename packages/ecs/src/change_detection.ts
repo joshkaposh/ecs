@@ -1,7 +1,7 @@
 import { is_some, Option } from "joshkaposh-option";
 import { Component, Resource, Tick } from 'ecs';
 import { u32 } from "intrinsics";
-import { DeepReadonly } from "./util";
+import { DeepReadonly, Instance } from "./util";
 
 export const CHECK_TICK_THRESHOLD = 518_400_000;
 
@@ -30,7 +30,7 @@ export function $readonly<T extends Component>(ty: T, ticks?: Ticks): DeepReadon
     }) as DeepReadonly<InstanceType<T>>
 }
 
-export function $read_and_write<T>(type: T, ticks: TicksMut) {
+export function $read_and_write<T>(type: Instance<T>, ticks: TicksMut) {
     const mut = new Mut(type, ticks);
     const proxy = new Proxy(type as { [key: string | symbol]: any }, {
         get(target, p, receiver) {
@@ -52,11 +52,11 @@ type TickCells = {
 }
 
 export abstract class DetectChanges<T extends any> {
-    abstract value: T
+    abstract v: T
     abstract ticks: Ticks;
 
     deref() {
-        return this.value;
+        return this.v;
     }
 
     is_added() {
@@ -75,28 +75,28 @@ export abstract class DetectChanges<T extends any> {
 }
 
 export abstract class DetectChangesMut<T extends any> extends DetectChanges<T> {
-    abstract value: T;
+    abstract v: T;
     abstract ticks: Ticks;
     deref() {
-        return this.value
+        return this.v
     }
 
     deref_mut() {
         this.set_changed();
-        return this.value
+        return this.v
     }
 
     into_inner() {
         this.set_changed();
-        return this, this.value;
+        return this, this.v;
     }
 
     map_unchanged<U>(f: (value: T) => U): Mut<U> {
-        return this.constructor(f(this.value), this.ticks);
+        return this.constructor(f(this.v), this.ticks);
     }
 
     filter_map_unchanged<U>(f: (value: T) => Option<U>) {
-        const value = f(this.value);
+        const value = f(this.v);
         if (is_some(value)) {
             return this.constructor(value, this.ticks)
         }
@@ -114,7 +114,7 @@ export abstract class DetectChangesMut<T extends any> extends DetectChanges<T> {
     set_if_neq(value: T) {
         const old = this.bypass_change_detection();
         if (old !== value) {
-            this.value = value;
+            this.v = value;
             this.set_changed();
             return true;
         } else {
@@ -126,7 +126,7 @@ export abstract class DetectChangesMut<T extends any> extends DetectChanges<T> {
         const old = this.bypass_change_detection();
         if (old !== value) {
             const prev = old;
-            this.value = value;
+            this.v = value;
             return prev;
         } {
             return
@@ -134,7 +134,7 @@ export abstract class DetectChangesMut<T extends any> extends DetectChanges<T> {
     }
 
     bypass_change_detection() {
-        return this.value;
+        return this.v;
     }
 }
 
@@ -188,20 +188,22 @@ export class TicksMut {
 }
 
 export class Ref<T> extends DetectChanges<T> {
-    constructor(public value: T, public ticks: Ticks) {
+    v: Instance<T>;
+    ticks: Ticks;
+    constructor(value: Instance<T>, ticks: Ticks) {
         super();
-    }
-    static new<T>(value: T, added: Tick, last_changed: Tick, last_run: Tick, this_run: Tick): Ref<T> {
-        return new Ref(value, new Ticks(added, last_changed, last_run, this_run))
+        this.v = value;
+        this.ticks = ticks;
     }
 }
 
 export class Mut<T> extends DetectChangesMut<T> {
-    constructor(public value: T, public ticks: TicksMut) {
+    v: Instance<T>;
+    ticks: TicksMut;
+    constructor(value: Instance<T>, ticks: TicksMut) {
         super();
-    }
-    static new<T>(value: T, added: Tick, last_changed: Tick, last_run: Tick, this_run: Tick): Mut<T> {
-        return new Mut(value, new TicksMut(added, last_changed, last_run, this_run))
+        this.v = value;
+        this.ticks = ticks;
     }
 
     has_changed_since(tick: Tick) {
@@ -211,34 +213,34 @@ export class Mut<T> extends DetectChangesMut<T> {
 }
 
 export class Res<T> extends DetectChanges<T> {
-    value: T;
+    v: Instance<T>;
     ticks: Ticks;
-    constructor(type: T, ticks: Ticks) {
+    constructor(type: Instance<T>, ticks: Ticks) {
         super()
-        this.value = type;
+        this.v = type;
         this.ticks = ticks;
     }
 
-    static from<T extends Resource>(res: ResMut<T>): Res<T> {
-        return new Res(res.value, res.ticks);
+    static from<T extends Resource>(res: ResMut<Instance<T>>): Res<T> {
+        return new Res(res.v, res.ticks);
     }
 
     clone() {
-        return new Res(this.value, this.ticks.clone())
+        return new Res(this.v, this.ticks.clone())
     }
 }
 
 export class ResMut<T> extends DetectChangesMut<T> {
-    value: T;
+    v: Instance<T>;
     ticks: TicksMut;
-    constructor(type: T, ticks: TicksMut) {
+    constructor(type: Instance<T>, ticks: TicksMut) {
         super();
-        this.value = type;
+        this.v = type;
         this.ticks = ticks;
     }
 
     clone() {
-        return new Res(this.value, this.ticks.clone())
+        return new Res(this.v, this.ticks.clone())
     }
 }
 

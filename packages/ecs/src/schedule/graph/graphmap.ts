@@ -146,28 +146,54 @@ export class Graph<const DIRECTED extends boolean, S extends (value: any) => num
     }
 
     neighbors(a: NodeId) {
-        const neighbors = this.#nodes.get(a);
-        return iter(neighbors ?? []).filter_map((c) => {
+        const neighbors = this.#nodes.get(a) ?? [];
+        const array = [];
+        for (let i = neighbors.length - 1; i >= 0; i--) {
+            const [n, dir] = neighbors[i].load();
+            if (!this.#DIRECTED || dir.value === Outgoing.value) {
+                array.push(n);
+            }
+        }
+        return array;
+    }
+
+    iter_neighbors(a: NodeId) {
+        const neighbors = this.#nodes.get(a) ?? [];
+        return iter(neighbors).filter_map(c => {
             const [n, dir] = c.load();
-            return !this.#DIRECTED || dir.value === Outgoing.value ?
-                n : undefined;
+            if (!this.#DIRECTED || dir.value === Outgoing.value) {
+                return n;
+            }
+            return;
         })
     }
 
     neighbors_directed(a: NodeId, dir: Direction) {
-        const neighbors = this.#nodes.get(a);
-        return iter(neighbors ?? []).filter_map((c) => {
+        const neighbors = this.#nodes.get(a) ?? [];
+        const array = [];
+        for (let i = neighbors?.length - 1; i >= 0; i--) {
+            const [n, d] = neighbors[i].load();
+            if (!this.#DIRECTED || d.value === dir.value || n.eq(a)) {
+                array.push(n);
+            }
+        }
+        return array;
+    }
+
+    iter_neigbors_directed(a: NodeId, dir: Direction) {
+        const neighbors = this.#nodes.get(a) ?? [];
+        return iter(neighbors).filter_map(c => {
             const [n, d] = c.load();
-            const bool = !this.#DIRECTED || d.value === dir.value || n.eq(a);
-            return bool ? n : undefined;
+            if (!this.#DIRECTED || d.value === dir.value || n.eq(a)) {
+                return n;
+            }
+            return;
         })
     }
 
     edges(a: NodeId) {
         return this.neighbors(a)
             .map(b => {
-                // const key = this.edge_key(a, b);
-                // assert(this.#edges.has(key.to_primitive()), `Failed to map ${key} to Graph edge as it does not exist`)
                 return [a, b] as [NodeId, NodeId];
             })
     }
@@ -177,14 +203,13 @@ export class Graph<const DIRECTED extends boolean, S extends (value: any) => num
             .map(b => {
                 const [a1, b1] = dir.value === Incoming.value ? [b, a] : [a, b]
                 const key = this.edge_key(a1, b1);
-                // assert(this.#edges.has(key.to_primitive()), `Failed to map ${key} to Graph edge as it does not exist`)
+                assert(this.#edges.has(key.to_primitive()), `Failed to map ${key} to Graph edge as it does not exist`)
                 return [a, b] as [NodeId, NodeId];
             })
     }
 
     all_edges() {
         return iter(this.#edges).map(e => CompactNodeIdPair.from_primitive(e).load())
-        // return iter(this.#edges).map(e => e.load())
     }
 
     // to_index(ix: NodeId) {
@@ -192,6 +217,7 @@ export class Graph<const DIRECTED extends boolean, S extends (value: any) => num
     // }
 
     to_index(ix: NodeId) {
+        // TODO: figure out why above errors out (in TarjanScc)
         return this.#nodes.keys().position(n => n.eq(ix))!;
     }
 

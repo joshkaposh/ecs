@@ -297,7 +297,7 @@ function define_system_base<P, Fallible extends boolean, Fn extends SystemFn<P, 
         if (state) {
             assert(state.matches_world(world.id()), 'System built with a different world than the one it was added to');
         } else {
-            const builder = new ParamBuilder(world);
+            const builder = new ParamBuilder(world, system_meta, system_name);
             // @ts-expect-error
             const p = params(builder).params() as any;
             system_params = p;
@@ -379,6 +379,9 @@ function define_system_base<P, Fallible extends boolean, Fn extends SystemFn<P, 
         return NodeConfigs.new_system(this as any);
     }
 
+    // system.into_config_type = function into_config_type() {
+    //     return this;
+    // }
 
     system.into_system_set = function into_system_set() {
         return new SystemTypeSet(this as any);
@@ -393,11 +396,11 @@ function define_system_base<P, Fallible extends boolean, Fn extends SystemFn<P, 
     }
 
     system.before = function before<P2>(other: SystemDefinitionImpl<P2, SystemFn<P2, boolean>>) {
-        return this.into_configs!().before(other as any);
+        return this.into_configs!().before(other as any) as SystemConfigs;
     }
 
     system.after = function after<P2>(other: SystemDefinitionImpl<P2, SystemFn<P2, boolean>>) {
-        return this.into_configs!().after(other);
+        return this.into_configs!().after(other) as SystemConfigs;
     }
 
     system.in_set = function in_set(set: InternedSystemSet) {
@@ -593,7 +596,7 @@ export function define_condition<P>(
             if (this.#state) {
                 assert(this.#state.matches_world(world.id()), 'System built with a different world than the one it was added to');
             } else {
-                const builder = new ParamBuilder(world);
+                const builder = new ParamBuilder(world, this.#system_meta, this.#name);
                 // @ts-expect-error
                 const p = params(builder).params() as any;
                 this.#params = p;

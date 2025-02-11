@@ -1,6 +1,6 @@
-import type { Resource } from "../../../../src";
+import type { Resource } from "../";
 
-export type Event<T = any> = Resource<T>
+export type Event<T = new (...args: any[]) => any> = Resource<T>
 // @ts-ignore
 export type EventId<T = any> = number;
 

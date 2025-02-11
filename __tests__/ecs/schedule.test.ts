@@ -34,6 +34,7 @@ const Timestamps = define_resource(class Timestamps extends Map<any, number> { }
 const skip_set_tests = false;
 const skip_run_if_tests = false;
 const skip_dependency_tests = false;
+const skip_hierarchy_tests = false;
 
 function with_timestamps(world: World, { num_systems, conditions, log_running, set_name }: {
     num_systems: number;
@@ -49,7 +50,7 @@ function with_timestamps(world: World, { num_systems, conditions, log_running, s
             if (log_running) {
                 console.log(`system_${i} running!`)
             }
-            times.set(this, performance.now())
+            times.v.set(this, performance.now())
         })
 
         if (set_name) {
@@ -64,7 +65,7 @@ function with_timestamps(world: World, { num_systems, conditions, log_running, s
             if (log_running) {
                 console.log(`condition_${i} running!`)
             }
-            times.set(this, performance.now())
+            times.v.set(this, performance.now())
             return return_type;
         })
 
@@ -93,8 +94,8 @@ function with_times_ran(world: World, { num_systems, conditions, log_running, se
             if (log_running) {
                 console.log(`system_${i} running!`)
             }
-            const amount = times.get(this) ?? 0;
-            times.set(this, amount + 1);
+            const amount = times.v.get(this) ?? 0;
+            times.v.set(this, amount + 1);
         })
 
         if (set_name) {
@@ -109,8 +110,8 @@ function with_times_ran(world: World, { num_systems, conditions, log_running, se
             if (log_running) {
                 console.log(`condition_${i} running!`)
             }
-            const amount = times.get(this) ?? 0;
-            times.set(this, amount + 1);
+            const amount = times.v.get(this) ?? 0;
+            times.v.set(this, amount + 1);
             return return_type;
         })
 
@@ -157,21 +158,21 @@ function test_combine(
     s.run(w);
 
     if (expected_times_ran_a === 0) {
-        assert(times_ran.get(ca) === undefined);
+        assert(times_ran.v.get(ca) === undefined);
     } else {
-        assert(times_ran.get(ca) === expected_times_ran_a);
+        assert(times_ran.v.get(ca) === expected_times_ran_a);
     }
 
     if (expected_times_ran_b === 0) {
-        assert(times_ran.get(cb) === undefined);
+        assert(times_ran.v.get(cb) === undefined);
     } else {
-        assert(times_ran.get(cb) === expected_times_ran_b);
+        assert(times_ran.v.get(cb) === expected_times_ran_b);
     }
 
     if (!system_expected_to_run) {
-        assert(times_ran.get(system) === undefined);
+        assert(times_ran.v.get(system) === undefined);
     } else {
-        assert(!!times_ran.get(system) === system_expected_to_run)
+        assert(!!times_ran.v.get(system) === system_expected_to_run)
     }
 }
 
@@ -179,7 +180,7 @@ function assert_order(timestamps: InstanceType<typeof Timestamps>, a: any, b: an
     assert(timestamps.get(a)! < timestamps.get(b)!)
 }
 
-test.skipIf(skip_dependency_tests)('before_and_after', () => {
+test('before_and_after', () => {
     const w = new World();
     const s = new Schedule('Update');
 
@@ -194,8 +195,8 @@ test.skipIf(skip_dependency_tests)('before_and_after', () => {
 
     s.run(w);
 
-    assert(timestamps.get(system_d)! < timestamps.get(system_c)!);
-    assert(timestamps.get(system_b)! < timestamps.get(system_c)!)
+    assert(timestamps.v.get(system_d)! < timestamps.v.get(system_c)!);
+    assert(timestamps.v.get(system_b)! < timestamps.v.get(system_c)!)
 })
 
 test.skipIf(skip_set_tests)('add_two_systems_in_set_chained', () => {
@@ -208,7 +209,7 @@ test.skipIf(skip_set_tests)('add_two_systems_in_set_chained', () => {
 
     s.run(w);
 
-    assert(timestamps.get(one)! < timestamps.get(two)!)
+    assert_order(timestamps.v, one, two);
 })
 
 
@@ -220,7 +221,7 @@ test.skipIf(skip_run_if_tests)('system_never_runs', () => {
     s.add_systems(system.run_if(condition));
     s.run(w);
 
-    assert(times_ran.get(system) === undefined);
+    assert(times_ran.v.get(system) === undefined);
 
 })
 
@@ -264,7 +265,7 @@ test.skipIf(skip_run_if_tests)('run_if_combine', () => {
     test_combine('xnor', false, false, 1, 1, true);
 })
 
-test('in-between_set', () => {
+test.skipIf(skip_dependency_tests)('in-between_set', () => {
     const w = new World();
     const s = new Schedule('Update');
 
@@ -275,11 +276,11 @@ test('in-between_set', () => {
 
     s.run(w);
 
-    assert_order(timestamps, first, last);
-    assert_order(timestamps, middle, last);
+    assert_order(timestamps.v, first, last);
+    assert_order(timestamps.v, middle, last);
 })
 
-test('system_add_in_set', () => {
+test.skipIf(skip_hierarchy_tests)('system_add_in_set', () => {
     const w = new World();
     const s = new Schedule('Update');
 
@@ -294,7 +295,7 @@ test('system_add_in_set', () => {
 
     s.run(w);
 
-    assert_order(timestamps, a, b);
-    assert_order(timestamps, b, c);
+    assert_order(timestamps.v, a, b);
+    assert_order(timestamps.v, b, c);
 
 })

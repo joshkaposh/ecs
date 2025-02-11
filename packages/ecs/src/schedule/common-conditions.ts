@@ -1,32 +1,37 @@
 import { is_some, Option } from "joshkaposh-option";
 import { Condition } from "./condition";
-import { Res } from "../../../../src/ecs/change_detection";
-import { Component, Event, EventReader, In, IntoSystemTrait, Query, QueryData, QueryFilter, Resource, System, SystemInput, With } from "..";
-import { RemovedComponents } from "../../../../src/ecs/removal-detection";
+import { Res } from "../change_detection";
+import { Component, define_condition, Event, EventReader, In, Local, Query, QueryData, QueryFilter, Resource, System, SystemInput, With } from "..";
+import { RemovedComponents } from "../removal-detection";
 import { unit } from "../util";
 
-export function run_once(has_run: Local<boolean>) {
-    if (!has_run) {
-        has_run = true
-        return true
-    }
 
-    return false;
-}
+// export const run_once = define_condition(b => b.local(false), function run_once(has_run) {
+//     if (!has_run.value) {
+//         has_run.value = true;
+//         return true;
+//     }
+//     return false;
+// })
 
-export function resource_exists<T extends Resource>(res: Option<Res<T>>) {
-    return is_some(res)
-}
 
-export function resource_equals<T extends Resource>(value: T): (resource: Res<T>) => boolean {
-    return (res) => res.value === value;
-}
+// export const resource_exists = <T extends Resource>(resource: T) => define_condition(b => b.res_opt(resource), function resource_exists(resource) {
+//     return is_some(resource);
+// })
+
+// export function resource_equals<T extends Resource>(value: T): (resource: Res<T>) => boolean {
+//     return (res) => res.value === value;
+// }
 
 export function resource_exists_and_equals<T extends Resource>(value: T): (resource: Option<Res<T>>) => boolean {
     return (res) => res?.value === value;
 }
 
-export function resource_added<T extends Resource>(res: Option<Res<T>>): boolean {
+export function resource_added<T extends Resource>(resource: T): boolean {
+
+    // return define_condition(b => b.res_opt(resource), function resource_added(res) {
+    //     return res?.is_added() ?? false;
+    // })
     return res?.is_added() ?? false;
 }
 

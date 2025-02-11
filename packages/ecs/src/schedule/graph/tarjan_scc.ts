@@ -1,13 +1,11 @@
 import { DiGraph } from "./graphmap";
 import { NodeId } from "./node";
-import { is_none, is_some, Option } from "joshkaposh-option";
+import { Option, is_some } from "joshkaposh-option";
 import { done, item, iter, Iterator } from "joshkaposh-iterator";
-import { truncate } from "../../array-helpers";
-import { u32 } from "../../../../intrinsics/src";
-import { assert } from "joshkaposh-iterator/src/util";
+import { u32 } from "intrinsics";
 
 type NodeData<N extends Iterator<NodeId>> = {
-    root_index: Option<number> // NonZeroUsize;
+    root_index: number | undefined // NonZeroUsize;
     neighbors: N;
 }
 
@@ -20,7 +18,7 @@ export function new_tarjan_scc(graph: DiGraph) {
         .nodes()
         .map(node => ({
             root_index: undefined,
-            neighbors: graph.neighbors(node)
+            neighbors: graph.iter_neighbors(node)
         }))
         .collect();
 
@@ -118,7 +116,7 @@ class TarjanScc<AllNodes extends Iterator<NodeId>, Neighbors extends Iterator<No
                 const [v, v_is_local_root] = n;
                 const start = this.visit_once(v, v_is_local_root);
                 // If this visitation finds a complete SCC, return it.
-                if (start !== undefined) {
+                if (is_some(start)) {
                     return item(this.#stack.slice(start) as [NodeId, NodeId, NodeId, NodeId]);
                 }
             }
@@ -129,11 +127,10 @@ class TarjanScc<AllNodes extends Iterator<NodeId>, Neighbors extends Iterator<No
                 return done()
             }
 
-            const visited = this.#nodes[this.#graph.to_index(node.value)].root_index !== undefined;
+            const visited = is_some(this.#nodes[this.#graph.to_index(node.value)].root_index);
             if (!visited) {
                 this.#visitation_stack.push([node.value, true]);
             }
-
         }
     }
 

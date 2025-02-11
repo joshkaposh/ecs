@@ -1,10 +1,11 @@
-import { Bundle, Component, ComponentId, ComponentMetadata, DynamicBundle, Entity, Event, EventReader, Events, EventWriter, Resource, Tick } from "..";
+import { Entity, Event, EventReader, Events, EventWriter, Res, Resource, Tick } from "..";
 import { Archetype } from "../archetype";
-import { FilteredAccess, FilteredAccessSet, Maybe, Query, QueryData, QueryFilter, QueryState, Read, Write } from "../query";
+import { Maybe, Query, Read, Write } from "../query";
 import { World } from "../world";
 import { SystemMeta } from './function-system';
 import { Commands } from "../world/world";
 import { Option } from "joshkaposh-option";
+import { ResMut, Ticks, TicksMut } from "../change_detection";
 
 export interface SystemParam<State, Item> {
     param_init_state(world: World, system_meta: SystemMeta): State;
@@ -90,14 +91,6 @@ export class Local<T> {
     constructor(public value: T) { }
 }
 
-// T[K] extends typeof Entity ? Entity :
-//     T[K] extends typeof EntityRef ? EntityRef :
-
-//     T[K] extends Write<infer C> | Read<infer C> ? Inst<C> :
-//     T[K] extends Maybe<infer C> ? Option<Inst<C>> :
-//     T[K] extends new (...args: any[]) => infer C ? C :
-
-
 type Inst<T> = T extends new (...args: any) => infer I ? I : never;
 type ExcludeMetadata<T extends readonly any[]> = {
     [K in keyof T]:
@@ -108,122 +101,174 @@ type ExcludeMetadata<T extends readonly any[]> = {
     never
 }
 
+export class SystemChangeTick {
+    #last_run: Tick;
+    #this_run: Tick;
+
+    constructor(last_run: Tick, this_run: Tick) {
+        this.#last_run = last_run;
+        this.#this_run = this_run;
+    }
+
+    last_run() {
+        return this.#last_run
+    }
+
+    this_run() {
+        return this.#this_run;
+    }
+}
+
+type PRet<Previous extends any[], Current> = ParamBuilder<[...Previous, Current]>;
+
 export class ParamBuilder<P extends any[] = []> {
     #w: World;
-    #params: P
-    constructor(world: World) {
+    #system_meta: SystemMeta
+    #params: P;
+    #name: string;
+    constructor(world: World, system_meta: SystemMeta, name: string) {
         this.#w = world;
+        this.#system_meta = system_meta;
         this.#params = [] as unknown as P;
+        this.#name = name;
     }
 
-    world(): ParamBuilder<[...P, World]> {
+    world(): PRet<P, World> {
         this.#params.push(this.#w);
-        return this as unknown as ParamBuilder<[...P, World]>;
+        return this as unknown as PRet<P, World>;
     }
 
-    last_change_tick(): ParamBuilder<[...P, Local<Tick>]> {
+    array<T>(array: T[]): PRet<P, T[]> {
+        this.#params.push(array);
+        return this as unknown as PRet<P, T[]>;
+    }
+
+    system_change_tick(): PRet<P, SystemChangeTick> {
+        this.#params.push(new SystemChangeTick(this.#system_meta.last_run, this.#w.change_tick()))
+        return this as unknown as PRet<P, SystemChangeTick>;
+    }
+
+    last_change_tick(): PRet<P, Local<Tick>> {
         const tick = this.#w.last_change_tick();
         const local = new Local(tick);
         this.#params.push(local);
-        return this as unknown as ParamBuilder<[...P, Local<Tick>]>;
+        return this as unknown as PRet<P, Local<Tick>>;
     }
 
-    local<T>(value: T): ParamBuilder<[...P, Local<T>]> {
+    local<T>(value: T): PRet<P, Local<T>> {
         this.#params.push(new Local(value))
-        return this as unknown as ParamBuilder<[...P, Local<T>]>;
+        return this as unknown as PRet<P, Local<T>>;
     }
 
-    commands(): ParamBuilder<[...P, InstanceType<typeof Commands>]> {
+    commands(): PRet<P, InstanceType<typeof Commands>> {
         this.#params.push(new Commands(this.#w));
-        return this as unknown as ParamBuilder<[...P, InstanceType<typeof Commands>]>;
+        return this as unknown as PRet<P, InstanceType<typeof Commands>>;
     }
 
-    res<T extends Resource>(resource: T) {
-        const res = this.#w.resource(resource);
+    res<T extends Resource>(resource: T): PRet<P, Res<T>> {
+        const res = this.#get_res(resource);
+        if (!res) {
+            throw new Error(`Resource ${resource.name} requested by ${this.#name} does not exist.`)
+        }
         this.#params.push(res);
-        return this as unknown as ParamBuilder<[...P, InstanceType<T>]>;
+        return this as unknown as PRet<P, Res<T>>;
     }
 
-    res_mut<T extends Resource>(resource: T) {
-        const res = this.#w.resource_mut(resource);
+    res_mut<T extends Resource>(resource: T): PRet<P, ResMut<T>> {
+        const res = this.#get_res_mut(resource);
+        if (!res) {
+            throw new Error(`Resource ${resource.name} requested by ${this.#name} does not exist.`)
+        }
         this.#params.push(res);
-        return this as unknown as ParamBuilder<[...P, InstanceType<T>]>;
+        return this as unknown as PRet<P, ResMut<T>>
     }
 
-    res_opt<T extends Resource>(resource: T) {
-        const res = this.#w.get_resource(resource);
-        this.#params.push(res);
-        return this as unknown as ParamBuilder<[...P, Option<InstanceType<T>>]>;
+    res_opt<T extends Resource>(resource: T): PRet<P, Option<Res<T>>> {
+        this.#params.push(this.#get_res(resource));
+        return this as unknown as PRet<P, Option<Res<T>>>;
     }
 
-    res_mut_opt<T extends Resource>(resource: T) {
-        const res = this.#w.get_resource_mut(resource);
-        this.#params.push(res);
-        return this as unknown as ParamBuilder<[...P, Option<InstanceType<T>>]>;
+    res_mut_opt<T extends Resource>(resource: T): PRet<P, ResMut<T>> {
+        this.#params.push(this.#get_res_mut(resource));
+        return this as unknown as PRet<P, ResMut<T>>
     }
 
-    // @ts-expect-error
-    query<const D extends readonly any[]>(query: D): ParamBuilder<[...P, Query<ExcludeMetadata<D>, []>]> {
+    query<const D extends readonly any[]>(query: D): PRet<P, Query<ExcludeMetadata<D>, []>> {
         const q = this.#w.query(query)
         this.#params.push(q);
-        // @ts-expect-error
-        return this as unknown as ParamBuilder<[...P, Query<ExcludeMetadata<D>, []>]>;
+        return this as unknown as PRet<P, Query<ExcludeMetadata<D>, []>>;
     }
 
-    // @ts-expect-error
-    query_filtered<const D extends readonly any[], const F extends readonly any[]>(data: D, filter: F): ParamBuilder<[...P, Query<ExcludeMetadata<D>, F>]> {
+    query_filtered<const D extends readonly any[], const F extends readonly any[]>(data: D, filter: F): PRet<P, Query<ExcludeMetadata<D>, F>> {
         const q = this.#w.query_filtered(data, filter);
         this.#params.push(q);
-        // @ts-expect-error
-        return this as unknown as ParamBuilder<[...P, Query<ExcludeMetadata<D>, F>]>;
+        return this as unknown as PRet<P, Query<ExcludeMetadata<D>, F>>;
     }
 
-    events<E extends Event>(type: E): ParamBuilder<[...P, Events<E>]> {
+    events<E extends Event>(type: E): PRet<P, Events<E>> {
         const event = this.#get_events(type);
         this.#params.push(event);
-        return this as unknown as ParamBuilder<[...P, Events<E>]>;
+        return this as unknown as PRet<P, Events<E>>;
     }
 
-    reader<E extends Event>(type: E): ParamBuilder<[...P, EventReader<E>]> {
+    reader<E extends Event>(type: E): PRet<P, EventReader<E>> {
         const event = this.#get_events(type);
         const reader = new EventReader(event.get_cursor(), event)
         this.#params.push(reader);
-        return this as unknown as ParamBuilder<[...P, EventReader<E>]>;
+        return this as unknown as PRet<P, EventReader<E>>;
     }
 
-    writer<E extends Event>(type: E): ParamBuilder<[...P, EventWriter<E>]> {
+    writer<E extends Event>(type: E): PRet<P, EventWriter<E>> {
         const event = this.#get_events(type);
         const writer = new EventWriter(event as any);
         this.#params.push(writer);
-        return this as unknown as ParamBuilder<[...P, EventWriter<E>]>;
+        return this as unknown as PRet<P, EventWriter<E>>;
     }
 
-
+    // @ts-expect-error
     private params() {
         return this.#params;
     }
 
     #get_events<E extends Event>(type: E): Events<E> {
+        // @ts-expect-error
         return this.#w.resource(type.ECS_EVENTS_TYPE);
+    }
+
+    #get_res<T extends Resource>(resource: T) {
+        const component_id = this.#w.components().get_resource_id(resource);
+        if (typeof component_id !== 'number') {
+            return;
+        } else {
+            const data = this.#w.get_resource_with_ticks(component_id);
+            if (!data) {
+                return
+            } else {
+                const [ptr, ticks] = data;
+                return new Res(ptr, new Ticks(
+                    ticks.added,
+                    ticks.changed,
+                    this.#system_meta.last_run,
+                    this.#w.change_tick(),
+                ))
+            }
+        }
+    }
+
+    #get_res_mut<T extends Resource>(resource: T) {
+        const component_id = this.#w.components().get_resource_id(resource);
+        if (typeof component_id !== 'number') {
+            return;
+        } else {
+            const res = this.#w.get_resource_mut_by_id(component_id)!;
+            return new ResMut(res.deref_mut(), new TicksMut(
+                res.ticks.added,
+                res.ticks.changed,
+                this.#system_meta.last_run,
+                this.#w.change_tick()
+            ));
+        }
     }
 }
 
 export type SystemParamItem<P extends SystemParam<any, any>> = ReturnType<P['param_get_param']>;
-
-export function init_query_param<D extends QueryData, F extends QueryFilter>(world: World, system_meta: SystemMeta, state: QueryState<D, F>) {
-
-    assert_component_access_compatibility
-    // @ts-expect-error
-    system_meta.__component_access_set.add(state.__component_access.clone());
-
-}
-
-export function assert_component_access_compatibility(system_name: string, query_type: string, filter_type: string, system_access: FilteredAccessSet<ComponentId>, current: FilteredAccess<ComponentId>, world: World) {
-    const conflicts = system_access.get_conflicts_single(current);
-    if (conflicts.is_empty()) {
-        return;
-    }
-
-    // const accesses = conflicts.format_conflict_list(world);
-    throw new Error(`Query in system ${system_name} accesses component(s) accesses in a way that conflicts with a previous system parameter. Consider using "Without<T>" to create disjoint Queries or merging conflicting Queries into a "ParamSet"`)
-}

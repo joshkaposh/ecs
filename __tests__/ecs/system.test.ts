@@ -9,40 +9,13 @@ const CompC = define_component(class CompC { });
 
 const MyEvent = define_event(class MyEvent { constructor(public value = 'event instance!') { } })
 
-test('param_builder', () => {
-
-    const w = new World();
-    w.init_resource(Counter);
-    // @ts-expect-error
-    w.init_resource(MyEvent.ECS_EVENTS_TYPE);
-    const builder1 = new ParamBuilder(w);
-    const b1 = builder1
-        .local(5)
-        .local('')
-        .res(Counter)
-        .query([CompA, CompB, CompC]);
-
-    const [events] = new ParamBuilder(w).events(MyEvent)
-        // @ts-expect-error
-        .params();
-    const [reader] = new ParamBuilder(w).reader(MyEvent)
-        // @ts-expect-error
-        .params();
-    const [writer] = new ParamBuilder(w).writer(MyEvent)
-        // @ts-expect-error
-        .params();
-
-    writer.send(new MyEvent());
-})
-
-
 test('run_system_once', () => {
     const Test = define_resource(class Test { constructor(public value = 0) { } });
 
     const w = new World();
 
     const system = define_system((b) => b.res(Test), (t) => {
-        expect(t).toEqual(new Test(0))
+        expect(t.v).toEqual(new Test(0))
     });
 
     w.init_resource(Test);

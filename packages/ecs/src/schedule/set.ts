@@ -61,7 +61,11 @@ export class AnonymousSet implements SystemSet {
 
 
     process_config(schedule_graph: ScheduleGraph, config: NodeConfig<InternedSystemSet>): NodeId {
-        return schedule_graph.configure_set_inner(config) as NodeId;
+        const id = schedule_graph.configure_set_inner(config);
+        if (!(id instanceof NodeId)) {
+            throw id
+        }
+        return id;
     }
 
     system_type(): Option<UUID> {
@@ -98,12 +102,11 @@ function get_hash_of_systems(s: any) {
 }
 
 export function set<const S extends readonly (System<any, any> | SystemSet)[]>(...system_sets: S): SystemSet & SystemSetConfigs {
-
     const hash = get_hash_of_systems(system_sets);
 
     const set = SetRegistry.get(hash);
     if (set) {
-        return set as any;
+        return set as SystemSet & SystemSetConfigs;
     }
 
     class SystemSetImpl implements SystemSet {
@@ -130,6 +133,7 @@ export function set<const S extends readonly (System<any, any> | SystemSet)[]>(.
 
         into_configs(): SystemSetConfigs {
             return new Configs(
+                this,
                 // @ts-expect-error
                 this.#sets.map(s => s.into_configs()),
                 [],
@@ -147,12 +151,12 @@ export function set<const S extends readonly (System<any, any> | SystemSet)[]>(.
             return this.into_configs().chain();
         }
 
-        before(set: SystemSet) {
-            return this.into_configs().before(set as any);
+        before<M>(set: IntoSystemSet<M>) {
+            return this.into_configs().before(set);
         }
 
-        after(set: SystemSet) {
-            return this.into_configs().after(set as any);
+        after<M>(set: IntoSystemSet<M>) {
+            return this.into_configs().after(set);
         }
 
         in_set(set: SystemSet) {
@@ -162,8 +166,7 @@ export function set<const S extends readonly (System<any, any> | SystemSet)[]>(.
 
     define_type(SystemSetImpl);
 
-    const system_set = new SystemSetImpl(system_sets as any, hash);
-
-    SetRegistry.set(hash, system_set as any);
-    return system_set as any;
+    const system_set = new SystemSetImpl(system_sets as unknown as SystemSet[], hash) as unknown as SystemSet & SystemSetConfigs;
+    SetRegistry.set(hash, system_set);
+    return system_set;
 }

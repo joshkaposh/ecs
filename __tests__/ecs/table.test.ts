@@ -25,8 +25,8 @@ test('move_to_superset', () => {
     const components = new Components();
     const storages = new Storages();
 
-    const aid = components.init_component(TestA, storages);
-    const bid = components.init_component(TestB, storages);
+    const aid = components.register_component(TestA);
+    const bid = components.register_component(TestB);
 
     const table_a_ids = [aid];
     const table_ab_ids = [aid, bid];
@@ -58,9 +58,8 @@ function alloc(table: Table, entity: Entity, component_id: number, value: any) {
 
 test('Table', () => {
     const components = new Components();
-    const storages = new Storages();
 
-    const component_id = components.init_component(W as any, storages)
+    const component_id = components.register_component(W);
 
     const columns = [component_id];
 

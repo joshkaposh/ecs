@@ -50,6 +50,10 @@ export class NodeConfig<T extends ProcessNodeConfig> implements IntoSystemConfig
         return this as unknown as SystemConfigs;
     }
 
+    into_config_type() {
+        return this.node;
+    }
+
     in_set_inner(set: InternedSystemSet) {
         this.graph_info.hierarchy.push(set)
     }
@@ -131,28 +135,25 @@ export class NodeConfig<T extends ProcessNodeConfig> implements IntoSystemConfig
     }
 }
 
-// export type SystemConfig = NodeConfig<ScheduleSystem>;
-// export type SystemConfigs = NodeConfigs<ScheduleSystem>;
-export type SystemConfig = NodeConfig<ProcessNodeConfig>;
-export type SystemConfigs = NodeConfigs<ProcessNodeConfig>;
+export type SystemConfig = NodeConfig<ScheduleSystem>;
+export type SystemConfigs = NodeConfigs<ScheduleSystem>;
 
 export class Configs<T extends ProcessNodeConfig> implements IntoSystemSetConfigs<any> {
+    configs: readonly NodeConfigs<T>[];
+    collective_conditions: Condition<any, any>[];
+    chained: Chain;
+    set: InternedSystemSet;
     constructor(
-        public configs: readonly NodeConfigs<T>[],
-        public collective_conditions: Condition<any>[],
-        public chained: Chain
+        set: InternedSystemSet,
+        configs: readonly NodeConfigs<T>[],
+        collective_conditions: Condition<any>[],
+        chained: Chain
     ) {
+        this.set = set;
+        this.configs = configs;
+        this.collective_conditions = collective_conditions;
+        this.chained = chained;
     }
-    process_config(schedule_graph: ScheduleGraph) {
-        // console.log('Configs process_config()');
-
-        const configs = this.configs;
-        for (let i = 0; i < configs.length; i++) {
-            configs[i].process_config(schedule_graph);
-        }
-        // return this.node.process_config(schedule_graph, this as unknown as NodeConfig<ProcessNodeConfig>)
-    }
-
 
     into_configs(): SystemSetConfigs {
         return this as unknown as SystemSetConfigs;
@@ -298,10 +299,6 @@ export const NodeConfigs = {
     },
 }
 
-
-export type SystemSetConfig = NodeConfig<ProcessNodeConfig>;
-export type SystemSetConfigs = Configs<ProcessNodeConfig>;
-
-// export type SystemSetConfig = NodeConfig<InternedSystemSet>;
-// export type SystemSetConfigs = Configs<InternedSystemSet>;
+export type SystemSetConfig = NodeConfig<InternedSystemSet>;
+export type SystemSetConfigs = Configs<InternedSystemSet>;
 

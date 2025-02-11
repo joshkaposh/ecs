@@ -203,8 +203,8 @@ export class App {
         return this.#sub_apps.iter().any(s => s.is_building_plugins())
     }
 
-    add_systems(schedule: ScheduleLabel, ...systems: (IntoSystemConfigs<any> | IntoSystemSetConfigs<any>)[]) {
-        this.main().add_systems(schedule, ...systems);
+    add_systems(schedule: ScheduleLabel, systems: IntoSystemConfigs<any> | IntoSystemSetConfigs<any>) {
+        this.main().add_systems(schedule, systems);
         return this;
     }
 
@@ -246,7 +246,7 @@ export class App {
 
     add_plugin(plugin: Plugin): Result<this, ErrorExt<AppError>> {
         if (plugin.is_unique() && this.main().__plugin_names.has(plugin.name())) {
-            return new ErrorExt(AppError.DuplicatePlugin(plugin.name()))
+            return AppError.DuplicatePlugin(plugin.name())
         }
 
         const index = this.main().__plugin_registry.length;
@@ -297,7 +297,7 @@ export class App {
         return this;
     }
 
-    register_required_components_with(c: Component, ctor: () => Component) {
+    register_required_components_with<T extends Component>(c: T, ctor: new () => InstanceType<T>) {
         this.world().register_required_components_with(c, ctor);
         return this;
     }

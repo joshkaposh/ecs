@@ -3,7 +3,7 @@ import type { Prettify } from 'joshkaposh-iterator/src/util'
 import type { World, Event } from 'ecs';
 import { Events } from 'ecs/src/event/collections';
 
-type Class<Static = {}, Inst = {}> = (new (...args: any[]) => Inst) & Static;
+export type Class<Static = {}, Inst = {}> = (new (...args: any[]) => Inst) & Static;
 export type TypeId = { readonly type_id: UUID }
 
 type StorageType = 0 | 1;

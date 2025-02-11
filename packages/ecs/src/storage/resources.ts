@@ -3,7 +3,7 @@ import { Option, is_some } from "joshkaposh-option";
 import { Component, ComponentId, Components, ComponentTicks, Resource, Tick } from "../component";
 import { SparseSet } from "./sparse-set";
 import { ArchetypeComponentId } from "../archetype";
-import { $read_and_write, $readonly, Ticks, TicksMut } from "../change_detection";
+import { $read_and_write, $readonly, Mut, Ticks, TicksMut } from "../change_detection";
 import { World } from "../world";
 
 class ResourceData {
@@ -33,24 +33,31 @@ class ResourceData {
         return this.#id;
     }
 
-    get(): Option<InstanceType<Resource>> {
-        if (is_some(this.#data)) {
-            return $readonly(this.#data);
+    get_data(): Option<{}> {
+        if (this.is_present()) {
+            return this.#data
         }
-    }
-
-    get_mut(last_run: Tick, this_run: Tick): Option<InstanceType<Resource>> {
-        const data = this.get_with_ticks();
-        return data ? $read_and_write(data[0], TicksMut.from_tick_cells(data[1], last_run, this_run)) : undefined
+        return
     }
 
     get_ticks() {
         return this.is_present() ? new ComponentTicks(this.#added_ticks, this.#changed_ticks) : undefined;
     }
 
-    get_with_ticks(): Option<[InstanceType<Resource>, ComponentTicks]> {
+    get_mut<R extends Resource>(last_run: Tick, this_run: Tick): Option<Mut<R>> {
+        const data = this.get_with_ticks();
+        if (data) {
+            const [ptr, tick_cells] = data;
+            const ticks_mut = TicksMut.from_tick_cells(tick_cells, last_run, this_run);
+            return new Mut<R>($read_and_write(ptr, ticks_mut) as any, ticks_mut)
+        }
+        return;
+    }
+
+
+    get_with_ticks<R extends Resource>(): Option<[InstanceType<R>, ComponentTicks]> {
         if (this.is_present()) {
-            return [this.#data, new ComponentTicks(this.#added_ticks, this.#changed_ticks)]
+            return [this.#data as InstanceType<R>, new ComponentTicks(this.#added_ticks, this.#changed_ticks)]
         }
         return;
     }
@@ -76,13 +83,18 @@ class ResourceData {
             return;
         }
 
-        const res = this.#data;
+        const res = this.#data as InstanceType<T>;
         this.#data = null;
         return [res, new ComponentTicks(this.#added_ticks, this.#changed_ticks)];
     }
 
     remove_and_drop() {
         this.#data = null;
+    }
+
+    check_change_ticks(change_tick: Tick) {
+        this.#added_ticks.check_tick(change_tick)
+        this.#changed_ticks.check_tick(change_tick)
     }
 }
 
@@ -93,7 +105,7 @@ export class Resources {
     }
 
     check_change_ticks(change_tick: Tick) {
-        // this.#resources.check_change_ticks(change_tick);
+        this.#resources.values().for_each(info => info.check_change_ticks(change_tick))
     }
 
     clear() {

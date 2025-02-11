@@ -10,14 +10,14 @@ test('resource init_then_get', () => {
     w.init_resource(MyRes);
     const res1 = w.resource_mut(MyRes);
     const res1_id = w.resource_id(MyRes);
-    res1.value += 1;
-    expect(res1).toEqual(new MyRes(1));
+    res1.v.value += 1;
+    expect(res1.v).toEqual(new MyRes(1));
     const res2 = w.resource_mut(MyRes);
     const res2_id = w.resource_id(MyRes);
-    expect(res1).toEqual(res2);
+    expect(res1.v).toEqual(res2.v);
     assert(res1_id === res2_id);
 
-    res1.value += 1;
-    assert(res1.value === res2.value);
-    expect(res1).toEqual(res2);
+    res1.v.value += 1;
+    assert(res1.v === res2.v);
+    expect(res1.v).toEqual(res2.v);
 })

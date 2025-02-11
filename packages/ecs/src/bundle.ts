@@ -46,7 +46,7 @@ function ComponentBundle(type: Component | InstanceType<Component>): Bundle {
     return {
         component_ids(components, storages, ids) {
             const ty = type.type_id ? type : type.constructor;
-            ids(components.init_component(ty, storages));
+            ids(components.register_component(ty));
         },
         from_components(ctx, func) {
             return func(ctx);
@@ -120,6 +120,7 @@ export class BundleInfo {
     // and must be in the same order as the source bundle type writes its components in.
     constructor(
         bundle_type_name: string,
+        storages: Storages,
         components: Components,
         component_ids: ComponentId[],
         id: BundleId
@@ -137,6 +138,15 @@ export class BundleInfo {
 
             const names = dups.map(id => components.get_info(id)!.name()).join(', ');
             throw new Error(`Bundle ${bundle_type_name} has duplicate components: ${names}`)
+        }
+
+        // handle explicit components
+
+        const explicit_components_len = component_ids.length;
+        for (let i = 0; i < component_ids.length; i++) {
+            const component_id = component_ids[i];
+            const info = components.get_info(component_id)!;
+            storages.prepare_component(info)
         }
 
         this.#id = id;
@@ -878,7 +888,7 @@ export class Bundles {
             const component_ids: number[] = [];
             bundle.component_ids(components, storages, id => component_ids.push(id))
             let _id = bundle_infos.length;
-            const bundle_info = new BundleInfo(bundle.name, components, component_ids, _id)
+            const bundle_info = new BundleInfo(bundle.name, storages, components, component_ids, _id)
             bundle_infos.push(bundle_info)
             this.#bundle_ids.set(bundle.hash, _id);
             id = _id;
@@ -909,7 +919,7 @@ export class Bundles {
         const hash = bundle_hash(ids);
         const id = entry(this.#bundle_ids, hash, () => {
             const id = bundle_infos.length;
-            const bundle_info = new BundleInfo(bundle.constructor?.name ?? '<bundle>', components, ids, id)
+            const bundle_info = new BundleInfo(bundle.constructor?.name ?? '<bundle>', storages, components, ids, id)
             bundle_infos.push(bundle_info);
             this.#bundle_ids.set(hash, id);
             return id;
@@ -925,11 +935,11 @@ export class Bundles {
      * 
      * @throws If any of the provided [`ComponentId`]s do not exist in the provided `Components`.
      */
-    __init_dynamic_info(components: Components, component_ids: ComponentId[]): BundleId {
+    __init_dynamic_info(components: Components, storages: Storages, component_ids: ComponentId[]): BundleId {
         const bundle_infos = this.#bundle_infos;
         const bundle_id = entry(this.#dynamic_bundle_ids, bundle_hash(component_ids), () => {
-            const [id, storages] = initialize_dynamic_bundle(bundle_infos, components, component_ids)
-            this.#dynamic_bundle_storages.set(id, storages)
+            const [id, storage_types] = initialize_dynamic_bundle(bundle_infos, storages, components, component_ids)
+            this.#dynamic_bundle_storages.set(id, storage_types)
             return id;
         })
         return bundle_id;
@@ -953,7 +963,7 @@ export class Bundles {
 
 // Asserts that all components are part of of `Components`
 // and initializes a `BundleInfo`.
-function initialize_dynamic_bundle(bundle_infos: BundleInfo[], components: Components, component_ids: ComponentId[]): [BundleId, StorageType[]] {
+function initialize_dynamic_bundle(bundle_infos: BundleInfo[], storages: Storages, components: Components, component_ids: ComponentId[]): [BundleId, StorageType[]] {
     const storages_types = component_ids.map(id => {
         const info = components.get_info(id);
         if (!info) {
@@ -962,7 +972,7 @@ function initialize_dynamic_bundle(bundle_infos: BundleInfo[], components: Compo
         return info.storage_type();
     })
     const id = bundle_infos.length;
-    const bundle_info = new BundleInfo('<dynamic bundle>', components, component_ids, id);
+    const bundle_info = new BundleInfo('<dynamic bundle>', storages, components, component_ids, id);
     bundle_infos.push(bundle_info);
     return [id, storages_types];
 }
@@ -970,7 +980,7 @@ function initialize_dynamic_bundle(bundle_infos: BundleInfo[], components: Compo
 function sorted_remove<T extends Ord>(source: T[], remove: T[]) {
     let remove_index = 0;
     retain(source, (value) => {
-        while (remove_index < remove.length && value > remove[remove_index]) {
+        while (remove_index < remove.length && value! > remove[remove_index]!) {
             remove_index += 1;
         }
 
