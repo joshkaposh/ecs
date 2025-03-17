@@ -1,16 +1,13 @@
+import { v4 } from "uuid";
 import { NodeId } from "../schedule/graph";
 import { World } from "../world";
 import { Access } from "../query";
-import { ArchetypeComponentId, ComponentId, Condition, FunctionSystem, ScheduleGraph, SystemInput, SystemParamFunction, Tick } from "..";
+import { Condition, ScheduleGraph, Tick } from "..";
 import { unit } from "../util";
 import { ErrorExt, Option } from "joshkaposh-option";
 import { InternedSystemSet, IntoSystemSet, SystemSet, SystemTypeSet } from "../schedule/set";
-import { v4 } from "uuid";
 import { IntoSystemConfigs, NodeConfig, NodeConfigs, SystemConfig, SystemConfigs } from "../schedule/config";
 import { TODO } from "joshkaposh-iterator/src/util";
-
-// export type SystemFn<In extends any[] = any[], Out extends boolean | void = boolean | void> = (...args: In) => Out;
-// export type ConditionFn<In extends any[] = any[]> = (...args: In) => boolean;
 
 export type SystemIn<T> = any;
 
@@ -30,8 +27,8 @@ export abstract class System<In, Out> implements IntoSystemConfigs<unit> {
     abstract name(): string;
     abstract initialize(world: World): void;
 
-    abstract component_access(): Access<ComponentId>;
-    abstract archetype_component_access(): Access<ArchetypeComponentId>;
+    abstract component_access(): Access;
+    abstract archetype_component_access(): Access;
 
     abstract run_unsafe(input: SystemIn<System<In, Out>>, world: World): Out;
     abstract validate_param_unsafe(world: World): boolean
@@ -207,11 +204,11 @@ export class ApplyDeferred extends System<unit, unit> {
         return 'joshkaposh-ecs: apply_deferred';
     }
 
-    component_access(): Access<ComponentId> {
+    component_access(): Access {
         return TODO('class ApplyDeferred.component_access()')
     }
 
-    archetype_component_access(): Access<ArchetypeComponentId> {
+    archetype_component_access(): Access {
         return TODO('class ApplyDeferred.archetype_component_access()')
     }
 

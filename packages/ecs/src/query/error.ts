@@ -2,16 +2,16 @@ import { Err, ErrorExt } from "joshkaposh-option";
 import { Entity } from "../entity";
 import { World } from "../../../../src";
 
-export type QueryEntityError = {
+export type QueryEntityError = ErrorExt<{
     readonly type: 0;
     readonly entity: Entity;
-} | {
+}> | ErrorExt<{
     readonly type: 1;
     readonly entity: Entity;
-} | {
+}> | ErrorExt<{
     readonly type: 2;
     readonly entity: Entity;
-};
+}>;
 export const QueryEntityError = {
     QueryDoesNotMatch(entity: Entity, world: World) {
         return new ErrorExt({ type: 0, entity } as const, `The components of entity ${entity} do not match the query from world id${world.id()}`)
@@ -21,6 +21,9 @@ export const QueryEntityError = {
     },
     AliasedMutability(entity: Entity) {
         return new ErrorExt({ type: 2, entity } as const, `The entity ${entity} was requested mutably more than once`)
+    },
+    [Symbol.hasInstance](instance: any) {
+        return instance instanceof ErrorExt
     }
 } as const
 
@@ -40,14 +43,14 @@ export const QueryComponentError = {
     }
 } as const;
 
-export type QuerySingleError = Err<0> | Err<1>;
+export type QuerySingleError = Err<{ name: string; type: 0 }> | Err<{ name: string; type: 1 }>;
 export const QuerySingleError = {
-    get NoEntities() {
-        return new ErrorExt<0>(0, `No entities fit the query`)
+    NoEntities(name: string) {
+        return new ErrorExt({ name, type: 0 } as const, `No entities fit the query`)
     },
 
-    get MultipleEntities() {
-        return new ErrorExt<1>(1, `Multiple entities fit the query`)
+    MultipleEntities(name: string) {
+        return new ErrorExt({ name, type: 1 } as const, `Multiple entities fit the query`)
     }
 } as const
 

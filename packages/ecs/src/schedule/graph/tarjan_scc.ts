@@ -1,8 +1,7 @@
 import { DiGraph } from "./graphmap";
 import { NodeId } from "./node";
-import { Option, is_some } from "joshkaposh-option";
+import { type Option, u32 } from "joshkaposh-option";
 import { done, item, iter, Iterator } from "joshkaposh-iterator";
-import { u32 } from "intrinsics";
 
 type NodeData<N extends Iterator<NodeId>> = {
     root_index: number | undefined // NonZeroUsize;
@@ -99,7 +98,7 @@ class TarjanScc<AllNodes extends Iterator<NodeId>, Neighbors extends Iterator<No
         const index_adjustment = this.#index_adjustment;
         this.#index_adjustment = undefined;
 
-        if (is_some(start) && is_some(index_adjustment)) {
+        if (start != null && index_adjustment != null) {
             this.#stack.length = start;
             this.#index -= index_adjustment;
             this.#component_count -= 1;
@@ -111,12 +110,13 @@ class TarjanScc<AllNodes extends Iterator<NodeId>, Neighbors extends Iterator<No
              * the node at the bottom of the stack yet.
              * Must visit all nodes in the stack from top to bottom before visiting the next node.
              */
+            const vstack = this.#visitation_stack;
             let n: [NodeId, boolean];
-            while (n = this.#visitation_stack.pop()!) {
+            while (n = vstack.pop()!) {
                 const [v, v_is_local_root] = n;
                 const start = this.visit_once(v, v_is_local_root);
                 // If this visitation finds a complete SCC, return it.
-                if (is_some(start)) {
+                if (start != null) {
                     return item(this.#stack.slice(start) as [NodeId, NodeId, NodeId, NodeId]);
                 }
             }
@@ -127,9 +127,9 @@ class TarjanScc<AllNodes extends Iterator<NodeId>, Neighbors extends Iterator<No
                 return done()
             }
 
-            const visited = is_some(this.#nodes[this.#graph.to_index(node.value)].root_index);
+            const visited = this.#nodes[this.#graph.to_index(node.value)].root_index != null;
             if (!visited) {
-                this.#visitation_stack.push([node.value, true]);
+                vstack.push([node.value, true]);
             }
         }
     }
@@ -191,7 +191,7 @@ class TarjanScc<AllNodes extends Iterator<NodeId>, Neighbors extends Iterator<No
                     return false
                 }
             })
-        const start = is_some(i) ? i + 1 : 0;
+        const start = i != null ? i + 1 : 0;
         nodes[this.#graph.to_index(v)].root_index = c;
         this.#stack.push(v);
         this.#start = start;

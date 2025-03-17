@@ -12,7 +12,8 @@ import { SystemInput } from "ecs";
 
 type States = any;
 
-export class AppExit {
+export type AppExit = InstanceType<typeof AppExit>;
+export const AppExit = define_event(class AppExit {
     #ty: 0 | 1;
     #err?: number;
     constructor(ty: 0 | 1, err?: number) {
@@ -47,8 +48,7 @@ export class AppExit {
         }
     }
 
-}
-define_event(AppExit);
+});
 
 export type AppLabel = string;
 
@@ -59,7 +59,7 @@ export const AppError = {
     }
 }
 
-function run_once(app: App): AppExit {
+function run_once_start(app: App): AppExit {
     app.finish();
     app.cleanup();
 
@@ -67,6 +67,12 @@ function run_once(app: App): AppExit {
 
     return app.should_exit() ?? AppExit.Success();
 }
+
+function run_once(app: App): AppExit {
+    app.update();
+    return app.should_exit() ?? AppExit.Success();
+}
+
 type RunnerFn = (app: App) => AppExit;
 
 export class App {
@@ -109,7 +115,7 @@ export class App {
     static empty() {
         return new App(
             new SubApps(new SubApp(), new Map()),
-            run_once
+            run_once_start
         )
     }
 
@@ -126,7 +132,6 @@ export class App {
             throw new Error('App.run() was called while a plugin was building.')
         }
 
-
         // const runner = this.#runner;
         // this.#runner = run_once;
 
@@ -138,8 +143,8 @@ export class App {
 
 
         this.#runner(this);
+        this.#runner = run_once;
         // return (runner)(app);
-        // return this.#runner(this);
     }
 
     set_runner(runner: (app: App) => AppExit) {
@@ -223,10 +228,12 @@ export class App {
     }
 
     get_event<E extends Event>(type: E): Option<Events<E>> {
+        // @ts-expect-error
         return this.world().get_resource(type.ECS_EVENTS_TYPE);
     }
 
     event<E extends Event>(type: E): Events<E> {
+        // @ts-expect-error
         const event = this.world().get_resource(type.ECS_EVENTS_TYPE);
         if (!event) {
             throw new Error(`Expecting event ${type.name} to exist in World, but it does not. Did you forget to initialize this Resource? Resources are also implicitly added by App.add_event()`)
@@ -366,7 +373,8 @@ export class App {
     }
 
     should_exit(): Option<AppExit> {
-        const reader = new EventCursor()
+        const reader = new EventCursor();
+        // @ts-expect-error
         const _events = this.world().get_resource(AppExit.ECS_EVENTS_TYPE);
 
         if (!_events) {
@@ -375,7 +383,7 @@ export class App {
         }
         const events = reader.read(_events);
         if (events.len() !== 0) {
-            return events.find(exit => exit.is_error()) ?? AppExit.Success()
+            return events.find(exit => exit.is_error()) ?? AppExit.Success();
         }
 
         return;

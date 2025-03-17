@@ -1,87 +1,150 @@
 import { assert, expect, test } from "vitest";
-import { clamp_unchecked, lerp, u8, u16, u32 } from 'intrinsics';
+import { clamp_unchecked, lerp, u8, u16, u32, u64, clampu64_unchecked, clamp, clampu64, uint } from 'joshkaposh-option';
 
-test('size', () => {
-
-    max(u8.MAX, 255)
-    max(u16.MAX, 65535);
-    max(u32.MAX, 4294967295);
-
-    function max(expected: number, actual: number) {
-        assert(expected === actual, `Expected ${expected} to equal ${actual}`)
-    }
-})
-
-test('clamp', () => {
+test('clamp_unchecked', () => {
     assert(clamp_unchecked(100, 0, 50) === 50);
     assert(clamp_unchecked(-100, 0, 50) === 0);
     assert(clamp_unchecked(-5, 0, -25) === -25);
+
+    assert(clampu64_unchecked(100n, 0n, 50n) === 50n);
+    assert(clampu64_unchecked(-100n, 0n, 50n) === 0n);
+    assert(clampu64_unchecked(-5n, 0n, -25n) === -25n);
+
+})
+
+test('clamp', () => {
+    assert(clamp(100, 0, 50) === 50);
+    assert(clamp(-100, 0, 50) === 0);
+    assert(clamp(-5, 0, -25) === -5);
+
+    assert(clampu64(100n, 0n, 50n) === 50n);
+    assert(clampu64(-100n, 0n, 50n) === 0n);
+    assert(clampu64(-5n, 0n, -25n) === -5n);
+
 })
 
 test('lerp', () => {
-    expect(Math.floor(lerp(0, 100, 0.0))).toBe(0)
-    expect(Math.floor(lerp(0, 100, 0.1))).toBe(10)
-    expect(Math.floor(lerp(0, 100, 0.2))).toBe(20)
-    expect(Math.floor(lerp(0, 100, 0.3))).toBe(30)
-    expect(Math.floor(lerp(0, 100, 0.4))).toBe(40)
-    expect(Math.floor(lerp(0, 100, 0.5))).toBe(50)
-    expect(Math.floor(lerp(0, 100, 0.6))).toBe(60)
-    expect(Math.floor(lerp(0, 100, 0.7))).toBe(70)
-    expect(Math.floor(lerp(0, 100, 0.8))).toBe(80)
-    expect(Math.floor(lerp(0, 100, 0.9))).toBe(90)
-    expect(lerp(0, 100, 1)).toBe(100);
+    assert(lerp(0, 100, 0.0) === 0)
+    assert(lerp(0, 100, 0.1) === 10)
+    assert(lerp(0, 100, 0.2) === 20)
+    assert(lerp(0, 100, 0.3) === 30)
+    assert(lerp(0, 100, 0.4) === 40)
+    assert(lerp(0, 100, 0.5) === 50)
+    assert(lerp(0, 100, 0.6) === 60)
+    assert(lerp(0, 100, 0.7) === 70)
+    assert(lerp(0, 100, 0.8) === 80)
+    assert(lerp(0, 100, 0.9) === 90)
+    assert(lerp(0, 100, 1) === 100)
 
-    expect(lerp(100, 200, 0.0)).toBe(100);
-    expect(lerp(100, 200, 0.1)).toBe(110);
-    expect(lerp(100, 200, 0.2)).toBe(120);
-    expect(lerp(100, 200, 0.3)).toBe(130);
-    expect(lerp(100, 200, 0.4)).toBe(140);
-    expect(lerp(100, 200, 0.5)).toBe(150);
-    expect(lerp(100, 200, 0.6)).toBe(160);
-    expect(lerp(100, 200, 0.7)).toBe(170);
-    expect(lerp(100, 200, 0.8)).toBe(180);
-    expect(lerp(100, 200, 0.9)).toBe(190);
-    expect(lerp(100, 200, 1)).toBe(200);
+    assert(lerp(100, 200, 0.0) === 100)
+    assert(lerp(100, 200, 0.1) === 110);
+    assert(lerp(100, 200, 0.2) === 120);
+    assert(lerp(100, 200, 0.3) === 130);
+    assert(lerp(100, 200, 0.4) === 140);
+    assert(lerp(100, 200, 0.5) === 150);
+    assert(lerp(100, 200, 0.6) === 160);
+    assert(lerp(100, 200, 0.7) === 170);
+    assert(lerp(100, 200, 0.8) === 180);
+    assert(lerp(100, 200, 0.9) === 190);
+    assert(lerp(100, 200, 1) === 200);
 })
 
-test('wrapping', () => {
-    assert(u8.wrapping_add(255, 1) === 0)
-    assert(u8.wrapping_add(0, 255) === 255);
-    assert(u8.wrapping_add(255, 255) === 254);
+function uint_wrapping(BITS: any) {
+    const type = uint[BITS];
+    if (type.BITS !== 64) {
+        const max = type.MAX;
+        assert(type.wrapping_add(max, 1) === 0)
+        assert(type.wrapping_add(0, max) === max);
+        assert(type.wrapping_add(max, max) === max - 1);
 
-    assert(u8.wrapping_sub(0, 1) === 0);
-    assert(u8.wrapping_sub(0, 255) === 254);
+        assert(type.wrapping_sub(0, 1) === 0);
+        assert(type.wrapping_sub(0, max) === max - 1);
 
-    assert(u8.wrapping_mul(10, 12) === 120);
-    assert(u8.wrapping_mul(25, 12) === 44);
+        assert(type.wrapping_mul(max, 2) === max - 1);
 
-    assert(u8.wrapping_div(100.9, 10) === 10);
 
-})
+    } else {
+        const max = type.MAX;
+        assert(type.wrapping_add(max, 1n) === 0n)
+        assert(type.wrapping_add(0n, max) === max);
+        assert(type.wrapping_add(max, max) === max - 1n);
 
-test('checked', () => {
+        assert(type.wrapping_sub(0n, 1n) === 0n);
+        assert(type.wrapping_sub(0n, max) === max - 1n);
 
-    assert(u8.checked_add(255, 1) === null);
-    assert(u8.checked_add(254, 1) === 255);
+        assert(type.wrapping_mul(max, 2n) === max - 1n);
+    }
+}
 
-    assert(u8.checked_sub(0, 1) === null);
-    assert(u8.checked_sub(255, 256) === null);
-    assert(u8.checked_sub(255, 255) === 0);
+function uint_checked(BITS: any) {
+    const type = uint[BITS];
+    if (type.BITS !== 64) {
+        const max = type.MAX;
+        assert(type.checked_add(max, 1) == null);
+        assert(type.checked_add(max - 1, 1) === max);
 
-    assert(u8.checked_mul(10, 12) === 120);
-    assert(u8.checked_mul(25, 12) === null);
+        assert(type.checked_sub(0, 1) == null);
+        assert(type.checked_sub(max, max + 1) == null);
+        assert(type.checked_sub(max, max) == 0);
 
-    assert(u8.checked_div(100, 10) === 10);
-})
+        assert(type.checked_mul(Math.floor(max / 3), 5) == null)
 
-test('saturating', () => {
-    assert(u8.saturating_add(255, 255) === 255);
-    assert(u8.saturating_add(123, 27) === 150);
+        assert(type.checked_div(max, max) === 1);
+    } else {
+        const max = type.MAX;
+        assert(type.checked_add(max, 1n) == null);
+        assert(type.checked_add(max - 1n, 1n) === max);
 
-    assert(u8.saturating_sub(255, 1000) === 0);
-    assert(u8.saturating_sub(0, 1000000) === 0);
+        assert(type.checked_sub(0n, 1n) == null);
+        assert(type.checked_sub(max, max + 1n) == null);
+        assert(type.checked_sub(max, max) == 0n);
 
-    assert(u8.saturating_mul(100, 100) === 255);
+        assert(type.checked_mul(max / 3n, 5n) == null)
 
-    assert(u8.saturating_div(100, 10) === 10)
+        assert(type.checked_div(max, max) == 1n);
+    }
+}
+
+function uint_saturating(BITS: any) {
+    const type = uint[BITS];
+
+    if (type.BITS !== 64) {
+        const max = type.MAX;
+        assert(type.saturating_add(max, max) === max);
+        assert(type.saturating_add(max, 1) === max);
+
+        assert(type.saturating_sub(max, max * 2) === 0);
+
+        assert(type.saturating_mul(max, 5) === max);
+
+        assert(type.saturating_div(100, 10) === 10)
+
+    } else {
+        const max = type.MAX;
+        assert(type.saturating_add(max, max) === max);
+        assert(type.saturating_add(max, 1n) === max);
+
+        assert(type.saturating_sub(max, max * 2n) === 0n);
+
+        assert(type.saturating_mul(max, 5n) === max);
+
+        assert(type.saturating_div(100n, 10n) === 10n)
+    }
+}
+
+test('operations', () => {
+    uint_wrapping('u8')
+    uint_wrapping('u16')
+    uint_wrapping('u32')
+    uint_wrapping('u64');
+
+    uint_checked('u8')
+    uint_checked('u16')
+    uint_checked('u32')
+    uint_checked('u64');
+
+    uint_saturating('u8')
+    uint_saturating('u16')
+    uint_saturating('u32')
+    uint_saturating('u64');
 })

@@ -1,16 +1,20 @@
 import { iter, Iterator } from "joshkaposh-iterator";
-import { type Option, is_some, ErrorExt } from "joshkaposh-option";
+import { type Option, ErrorExt } from "joshkaposh-option";
 import { StorageType, Storages } from "../storage";
 import { type Component } from "../component";
 import { ON_REMOVE, ON_REPLACE, World } from "./world";
-import { Entities, Entity, EntityLocation } from "../entity";
+import { Entities, Entity, EntityLocation, index } from "../entity";
 import { BundleId, BundleInfo, BundleInserter, Bundles, InsertMode, type Bundle, type DynamicBundle } from "../bundle";
 import { Archetype, ArchetypeId, Archetypes, ComponentId, Components, ComponentTicks, RemapToInstance } from "..";
 import { unsafe_entity_cell_components, unsafe_entity_cell_get, unsafe_entity_cell_get_change_ticks, unsafe_entity_cell_get_components, unsafe_entity_cell_get_ref, unsafe_entity_cell_archetype, UnsafeEntityCell, unsafe_entity_cell_get_by_id, unsafe_entity_cell_contains_type_id, unsafe_entity_cell_get_change_ticks_by_id, unsafe_entity_cell_get_mut, unsafe_entity_cell_get_mut_by_id, unsafe_entity_cell_contains_id } from "./unsafe-world-cell";
-// import { RemovedComponentEvents } from "./removal-detection";
 import { RemovedComponentEvents } from '../removal-detection'
-import { Enum } from "../util";
-import { Ref } from "../change_detection";
+import { Mut, Ref } from "../change_detection";
+import { EntityCloner, EntityClonerBuilder } from "../entity/clone_entities";
+import { TODO } from "joshkaposh-iterator/src/util";
+
+// import { Enum } from "../util";
+
+export type BundleInput = (Bundle | InstanceType<Component>)[]
 
 export class EntityRef {
     #world: World;
@@ -144,7 +148,7 @@ export class EntityMut {
         return unsafe_entity_cell_get_ref(this.#world, this.#entity, this.#location, component);
     }
 
-    get_mut<T extends Component>(component: T): Option<InstanceType<T>> {
+    get_mut<T extends Component>(component: T): Option<Mut<T>> {
         return unsafe_entity_cell_get_mut(this.#world, this.#entity, this.#location, component);
     }
 
@@ -164,7 +168,7 @@ export class EntityMut {
         return unsafe_entity_cell_get_by_id(this.#world, this.#entity, this.#location, component_id);
     }
 
-    get_mut_by_id<T extends Component>(component_id: ComponentId): Option<InstanceType<T>> {
+    get_mut_by_id<T extends Component>(component_id: ComponentId): Option<Mut<T>> {
         return unsafe_entity_cell_get_mut_by_id(this.#world, this.#entity, this.#location, component_id);
     }
 }
@@ -200,7 +204,7 @@ export class EntityWorldMut {
             const swapped_location = entities.get(swapped_entity)!;
 
             // @ts-expect-error
-            entities.__set(swapped_entity.index(), {
+            entities.__set(index(swapped_entity), {
                 archetype_id: swapped_location.archetype_id,
                 archetype_row: old_location.archetype_row,
                 table_id: swapped_location.table_id,
@@ -230,7 +234,7 @@ export class EntityWorldMut {
                 const { swapped_entity } = move_result
                 const swapped_location = entities.get(swapped_entity)!;
                 // @ts-expect-error
-                entities.__set(swapped_entity.index(), {
+                entities.__set(index(swapped_entity), {
                     archetype_id: swapped_location.archetype_id,
                     archetype_row: swapped_location.archetype_row,
                     table_id: swapped_location.table_id,
@@ -248,7 +252,7 @@ export class EntityWorldMut {
         self_location.table_row = new_location.table_row;
 
         // @ts-expect-error
-        entities.__set(entity.index(), new_location);
+        entities.__set(index(entity), new_location);
     }
 
     #error_despawned() {
@@ -325,8 +329,8 @@ export class EntityWorldMut {
         return unsafe_entity_cell_get_by_id(this.#world, this.#entity, this.#location, component_id);
     }
 
-    get_mut_by_id(component_id: ComponentId) {
-        return unsafe_entity_cell_get_mut_by_id(this.#world, this.#entity, this.#location, component_id);
+    get_mut_by_id<T extends Component>(component_id: ComponentId) {
+        return unsafe_entity_cell_get_mut_by_id<T>(this.#world, this.#entity, this.#location, component_id);
     }
 
     /**
@@ -334,29 +338,33 @@ export class EntityWorldMut {
      * 
      * This will overwrite any previous value(s) of the same component type.
      */
-    insert(bundle: InstanceType<Component>[] | (Bundle & DynamicBundle)) {
-        return this.insert_with_caller(
-            bundle,
-            InsertMode.Replace
-        )
+    insert(bundle: (InstanceType<Component> | Bundle)[], mode: InsertMode = InsertMode.Replace) {
+        return this.#insert(mode, bundle)
     }
 
-    insert_if_new(bundle: InstanceType<Component>[] | (Bundle & DynamicBundle)) {
-        return this.insert_with_caller(
-            bundle,
-            InsertMode.Keep
-        )
+    insert_if_new(bundle: (InstanceType<Component> | Bundle)[]) {
+        return this.#insert(InsertMode.Keep, bundle)
     }
 
-    insert_with_caller(bundle: InstanceType<Component>[] | (Bundle & DynamicBundle), mode: InsertMode) {
+    #insert(mode: InsertMode, bundle: (InstanceType<Component> | Bundle)[]) {
         this.#assert_not_despawned();
-        if (Array.isArray(bundle)) {
-            bundle = Bundles.dynamic_bundle(bundle, this.#world);
-        }
-        const change_tick = this.#world.change_tick();
-        const bundle_inserter = BundleInserter.new(bundle, this.#world, this.#location.archetype_id, change_tick)
-        this.#location = bundle_inserter.insert(this.#entity, this.#location, bundle, mode)
-        this.#world.flush();
+        bundle = Bundles.dynamic_bundle(this.#world, bundle) as any;
+
+        const world = this.#world;
+        const change_tick = world.change_tick();
+        const bundle_inserter = BundleInserter.new(
+            bundle as unknown as Bundle,
+            world,
+            this.#location.archetype_id,
+            change_tick
+        )
+        this.#location = bundle_inserter.insert(
+            this.#entity,
+            this.#location,
+            bundle as unknown as Bundle,
+            mode
+        )
+        world.flush();
         this.update_location();
         return this;
     }
@@ -415,9 +423,10 @@ export class EntityWorldMut {
         const world = this.#world;
         const change_tick = world.change_tick();
         const bundle_id = world.bundles().__init_dynamic_info(world.components(), world.storages(), component_ids);
-
-        const storage_types = world.bundles().get_storages_unchecked(bundle_id);
-        world.bundles().set_storages_unchecked(bundle_id, []);
+        const bundles = world.bundles();
+        const storage_types_old = bundles.get_storages_unchecked(bundle_id);
+        const storage_types = storage_types_old.slice();
+        storage_types_old.length = 0;
 
         const bundle_inserter = BundleInserter.new_with_id(
             world,
@@ -433,13 +442,75 @@ export class EntityWorldMut {
             iter(storage_types),
         )
 
-        world.bundles().set_storages_unchecked(bundle_id, storage_types);
+        bundles.set_storages_unchecked(bundle_id, storage_types.slice());
+        storage_types.length = 0;
         world.flush();
         this.update_location();
         return this;
     }
 
-    take(bundle: Bundle & DynamicBundle) {
+    clone_with(target: Entity, config: (builder: EntityClonerBuilder) => void) {
+        const builder = EntityCloner.build(this.#world);
+        config(builder);
+        builder.clone_entity(this.#entity, target);
+        this.#world.flush();
+        this.update_location();
+        return this;
+    }
+
+    clone_and_spawn() {
+        return this.clone_and_spawn_with(() => { });
+    }
+
+    clone_and_spawn_with(config: (builder: EntityClonerBuilder) => void): Entity {
+        this.#assert_not_despawned();
+
+        const world = this.#world;
+        // const entity_clone = world.entities().reserve_entity();
+        // world.flush();
+
+        // const builder = EntityCloner.build(this.#world);
+        // config(builder);
+        // builder.clone_entity(this.#entity, entity_clone);
+
+        world.flush();
+        this.update_location();
+        return TODO('EntityWorldMut.clone_and_spawn_with()', config);
+        // return entity_clone;
+    }
+
+    clone_components(target: Entity, components: BundleInput) {
+        this.#assert_not_despawned();
+
+        TODO('EntityWorldMut.clone_components', target, components)
+        // EntityCloner
+        //     .build(this.#world)
+        //     .deny_all()
+        //     .allow(components)
+        //     .clone_entity(this.#entity, target);
+
+        this.#world.flush();
+        this.update_location();
+        return this;
+    }
+
+    move_components(target: Entity, components: BundleInput) {
+        this.#assert_not_despawned();
+
+        const world = this.#world;
+        TODO('EntityWorldMut.move_components', target, components)
+        // EntityCloner
+        //     .build(world)
+        //     .allow(components)
+        //     .move_components(true)
+        //     .clone_entity(this.#entity, world)
+
+        world.flush();
+        this.update_location();
+        return this;
+    }
+
+    take(bundle: Bundle) {
         this.#assert_not_despawned();
         const world = this.#world;
         let archetypes = world.archetypes();
@@ -521,7 +592,8 @@ export class EntityWorldMut {
             location.archetype_id,
             true
         )
-        if (!is_some(new_archetype_id)) throw new Error('Intersections should always return a result')
+
+        if (new_archetype_id == null) throw new Error('Intersections should always return a result')
 
         if (new_archetype_id === location.archetype_id) {
             return location;
@@ -536,7 +608,7 @@ export class EntityWorldMut {
             bundle_info
         )
 
-        for (const component_id of bundle_info.iter_components()) {
+        for (const component_id of bundle_info.iter_explicit_components()) {
             if (old_archetype.contains(component_id)) {
                 world.removed_components().send(component_id, entity)
             }
@@ -562,24 +634,39 @@ export class EntityWorldMut {
         return new_location
     }
 
-    remove(bundle: InstanceType<Component>[]): this {
+    remove(bundle: BundleInput): this {
         this.#assert_not_despawned()
         const storages = this.#world.storages();
         const components = this.#world.components();
-        const bundle_id = this.#world.bundles().register_info(Bundles.dynamic_bundle(bundle, this.#world), components, storages);
+        const bundle_id = this.#world.bundles().register_info(Bundles.dynamic_bundle(this.#world, bundle), components, storages);
         this.#location = this.#remove_bundle(bundle_id);
         this.#world.flush();
         this.update_location();
         return this
     }
 
-    retain(bundle: Bundle): this {
+    remove_with_requires(bundle: BundleInput): this {
+        TODO('EntityWorldMut.remove_with_requires', bundle);
+        return this;
+    }
+
+    /**
+     * Removes any components expect those in the Bundle (and its Required Components) from the entity.
+     * 
+     * Throws an error if the entity has been despawned while this EntityWorldMut is still alive.
+     */
+    retain(bundle: BundleInput): this {
         const world = this.#world;
+        if (Array.isArray(bundle)) {
+            // @ts-expect-error
+            bundle = Bundles.dynamic_bundle(world, bundle)
+        }
+
         const archetypes = world.archetypes();
         const storages = world.storages();
         const components = world.components();
 
-        const retained_bundle = world.bundles().register_info(bundle, components, storages)
+        const retained_bundle = world.bundles().register_info(bundle as unknown as Bundle, components, storages)
         const retained_bundle_info = world.bundles().get(retained_bundle)!;
 
         const old_location = this.#location;
@@ -613,7 +700,12 @@ export class EntityWorldMut {
         this.#assert_not_despawned();
         const world = this.#world;
         const components = world.components();
-        const bundle_id = world.bundles().__init_dynamic_info(components, world.storages(), component_ids)
+
+        const bundle_id = world.bundles().__init_dynamic_info(
+            components,
+            world.storages(),
+            component_ids
+        )
         this.#remove_bundle(bundle_id);
 
         world.flush();
@@ -648,8 +740,9 @@ export class EntityWorldMut {
         }
         world.trigger_on_remove(archetype, this.#entity, archetype.components())
 
-        for (const component_id of archetype.components()) {
-            world.removed_components().send(component_id, this.#entity)
+        const components = archetype.__components_array();
+        for (let i = 0; i < components.length; i++) {
+            world.removed_components().send(components[i], this.#entity)
         }
 
         world.__flush_entities();
@@ -665,7 +758,7 @@ export class EntityWorldMut {
             const { swapped_entity } = remove_result
             const swapped_location = world.entities().get(swapped_entity)!;
             // @ts-expect-error
-            world.entities().__set(swapped_entity.index(), {
+            world.entities().__set(index(swapped_entity), {
                 archetype_id: swapped_location.archetype_id,
                 archetype_row: location.archetype_row,
                 table_id: swapped_location.table_id,
@@ -691,7 +784,7 @@ export class EntityWorldMut {
         if (moved_entity) {
             const moved_location = world.entities().get(moved_entity)!;
             // @ts-expect-error
-            world.entities().__set(moved_entity.index(), {
+            world.entities().__set(index(moved_entity), {
                 archetype_id: moved_location.archetype_id,
                 archetype_row: moved_location.archetype_row,
                 table_id: moved_location.table_id,
@@ -714,6 +807,15 @@ export class EntityWorldMut {
         return this.#world;
     }
 
+    /**
+     * Gives mutable access to this entity's `World` in a temporary scope. This is a safe alternative to `EntityWorldMut.world_mut()`
+     */
+    world_scope<U>(scope: (world: World) => U): U {
+        const u = scope(this.#world);
+        this.update_location();
+        return u;
+    }
+
     update_location() {
         this.#location = this.#world.entities().get(this.#entity) ?? EntityLocation.INVALID;
     }
@@ -724,28 +826,30 @@ export class EntityWorldMut {
 }
 
 function trigger_on_replace_and_on_remove_hooks_and_observers(world: World, archetype: Archetype, entity: Entity, bundle_info: BundleInfo) {
-    if (archetype.has_replace_observer()) {
-        world.trigger_observers(ON_REPLACE, entity, bundle_info.iter_components());
-    }
+    world;
+    archetype;
+    entity;
+    bundle_info;
+    // if (archetype.has_replace_observer()) {
+    //     world.trigger_observers(ON_REPLACE, entity, bundle_info.iter_contributed_components());
+    // }
 
-    world.trigger_on_replace(archetype, entity, bundle_info.iter_components())
+    // world.trigger_on_replace(archetype, entity, bundle_info.iter_contributed_components())
 
-    if (archetype.has_remove_observer()) {
-        world.trigger_observers(ON_REMOVE, entity, bundle_info.iter_components());
-    }
+    // if (archetype.has_remove_observer()) {
+    //     world.trigger_observers(ON_REMOVE, entity, bundle_info.iter_contributed_components());
+    // }
 
-    world.trigger_on_remove(archetype, entity, bundle_info.iter_components())
-
-
+    // world.trigger_on_remove(archetype, entity, bundle_info.iter_contributed_components())
 }
 
-export type TryFromFilteredError = Enum<typeof TryFromFilteredError>;
+export type TryFromFilteredError = ErrorExt<'MissingReadAllAccess'> | ErrorExt<'MissingWriteAllAccess'>;
 export const TryFromFilteredError = {
     get MissingReadAllAccess() {
-        return new ErrorExt<0>(0, 'Conversion failed, filtered entity ref does not have read access to all components')
+        return new ErrorExt('MissingReadAllAccess' as const, 'Conversion failed, filtered entity ref does not have read access to all components')
     },
     get MissingWriteAllAccess() {
-        return new ErrorExt<1>(1, 'Conversion failed, filtered entity ref does not have write access to all components')
+        return new ErrorExt('MissingWriteAllAccess' as const, 'Conversion failed, filtered entity ref does not have write access to all components')
     }
 } as const;
 
@@ -756,19 +860,6 @@ function insert_dynamic_bundle(
     components: Iterator<InstanceType<Component>>,
     storage_types: Iterator<StorageType>
 ) {
-    // class DynamicInsertBundle implements DynamicBundle {
-
-    //     #components: Iterator<[StorageType, object]>;
-
-    //     constructor(components: Iterator<[StorageType, object]>) {
-    //         this.#components = components;
-    //     }
-
-    //     get_components(func: (storage_type: StorageType, ptr: {}) => void): void {
-    //         this.#components.for_each(([t, ptr]) => func(t, ptr))
-    //     }
-    // }
-
     const it = storage_types.zip(components);
     const bundle: DynamicBundle = {
         get_components(func) {

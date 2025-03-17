@@ -3,7 +3,7 @@ import { Component, ComponentId, Tick } from "./component";
 import { Entity } from "./entity";
 import { SparseSet } from "./storage/sparse-set";
 import { EventCursor, EventId, Events } from "./event";
-import { SystemMeta, SystemParam } from "./system";
+import { SystemMeta } from "./system";
 import { unit } from "./util";
 import { World } from "./world";
 import { iter, Iterator } from "joshkaposh-iterator";
@@ -26,7 +26,7 @@ class RemovedComponentEntity {
 }
 define_event(RemovedComponentEntity)
 
-export class RemovedComponentEvents implements SystemParam<unit, RemovedComponentEvents> {
+export class RemovedComponentEvents {
     State!: unit;
     Item!: RemovedComponentEvents;
     #events_sets: SparseSet<ComponentId, Events<typeof RemovedComponentEntity>>;
@@ -55,25 +55,25 @@ export class RemovedComponentEvents implements SystemParam<unit, RemovedComponen
             .send(new RemovedComponentEntity(entity));
     }
 
-    param_init_state(_world: World, _system_meta: SystemMeta): unit { return unit }
+    static init_state(_world: World, _system_meta: SystemMeta): unit { return unit }
 
-    param_get_param(_state: unit, _system_meta: SystemMeta, world: World, _change_tick: Tick): RemovedComponentEvents {
+    static get_param(_state: unit, _system_meta: SystemMeta, world: World, _change_tick: Tick): RemovedComponentEvents {
         return world.removed_components()
     }
 
-    param_apply(_state: typeof unit, _system_meta: SystemMeta, _world: World): void {
+    static apply(_state: typeof unit, _system_meta: SystemMeta, _world: World): void {
 
     }
 
-    param_new_archetype(_state: typeof unit, _archetype: Archetype, _system_meta: SystemMeta): void {
+    static new_archetype(_state: typeof unit, _archetype: Archetype, _system_meta: SystemMeta): void {
 
     }
 
-    param_queue(_state: typeof unit, _system_meta: SystemMeta, _world: World): void {
+    static queue(_state: typeof unit, _system_meta: SystemMeta, _world: World): void {
 
     }
 
-    param_validate_param(_state: typeof unit, _system_meta: SystemMeta, _world: World): boolean {
+    static validate_param(_state: typeof unit, _system_meta: SystemMeta, _world: World): boolean {
         return true;
     }
 }
@@ -86,7 +86,7 @@ export class RemovedComponentReader<T extends Component> {
         return new RemovedComponentReader<T>(new EventCursor())
     }
 }
-export class RemovedComponents<T extends Component> implements SystemParam<any, any> {
+export class RemovedComponents<T extends Component> {
     State!: any;
     Item!: any;
     #component_id: ComponentId;
@@ -101,27 +101,27 @@ export class RemovedComponents<T extends Component> implements SystemParam<any, 
 
     //* SystemParam methods
 
-    param_init_state(_world: World, _system_meta: SystemMeta) {
+    static init_state(_world: World, _system_meta: SystemMeta) {
 
     }
 
-    param_get_param(_state: any, _system_meta: SystemMeta, _world: World, _change_tick: Tick) {
+    static get_param(_state: any, _system_meta: SystemMeta, _world: World, _change_tick: Tick) {
         return this;
     }
 
-    param_apply(_state: any, _system_meta: SystemMeta, _world: World): void {
+    static apply(_state: any, _system_meta: SystemMeta, _world: World): void {
 
     }
 
-    param_new_archetype(_state: any, _archetype: Archetype, _system_meta: SystemMeta): void {
+    static new_archetype(_state: any, _archetype: Archetype, _system_meta: SystemMeta): void {
 
     }
 
-    param_queue(_state: any, _system_meta: SystemMeta, _world: World): void {
+    static queue(_state: any, _system_meta: SystemMeta, _world: World): void {
 
     }
 
-    param_validate_param(_state: any, _system_meta: SystemMeta, _world: World): boolean {
+    static validate_param(_state: any, _system_meta: SystemMeta, _world: World): boolean {
         return true;
     }
 

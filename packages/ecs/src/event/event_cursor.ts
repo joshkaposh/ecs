@@ -1,4 +1,4 @@
-import { u32 } from "intrinsics";
+import { u32 } from "joshkaposh-option";
 import { Event } from "./base";
 import { Events } from './collections'
 import { EventIteratorWithId } from "./iterators";

@@ -1,23 +1,21 @@
 import { iter } from "joshkaposh-iterator";
-import { is_none, type Option } from 'joshkaposh-option';
+import { type Option, is_none, u32 } from 'joshkaposh-option';
 import { Class, TypeId } from "define";
 import { StorageType } from "./storage";
-import { World } from "./world";
-import { u32 } from "../../intrinsics/src";
+import { FromWorld } from "./world";
 import { MAX_CHANGE_AGE } from "./change_detection";
 import { Prettify, TODO } from "joshkaposh-iterator/src/util";
 import { Table, TableRow } from "./storage/table";
 import { SparseSets } from "./storage/sparse-set";
 import { Entity } from "./entity";
-import { entry, Instance } from "./util";
+import { entry } from "./util";
 
 export type ComponentId = number;
 export type ComponentMetadata = TypeId & { readonly storage_type: StorageType };
 export type Component<T extends Class = Class> = T & Prettify<ComponentMetadata>;
 
 export type ResourceId = number;
-export type ResourceMetadata<R = new (...args: any[]) => any> = { from_world(world: World): Instance<R> };
-export type Resource<R = Component> = R extends Class ? R & ComponentMetadata & ResourceMetadata<R> : never;
+export type Resource<R = Component> = R extends Class ? R & ComponentMetadata & FromWorld<R> : never;
 
 export function is_component(ty: any): ty is Component {
     return ty && typeof ty === 'object' && ty.type_id
@@ -144,6 +142,10 @@ export class ComponentInfo {
 
     id(): ComponentId {
         return this.#id
+    }
+
+    type_id(): Option<UUID> {
+        return this.descriptor.type.type_id;
     }
 }
 

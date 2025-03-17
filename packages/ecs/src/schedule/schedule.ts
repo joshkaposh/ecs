@@ -1,24 +1,23 @@
 import { Iterator, drain, iter } from "joshkaposh-iterator";
 import { ErrorExt, type Option, type Result } from 'joshkaposh-option'
+import { FixedBitSet } from "fixed-bit-set";
 import BTree from "sorted-btree";
+import { define_resource } from "define";
 import type { System } from "../system/system";
 import { World } from "../world";
-import { insert_set } from "../util";
+import { insert_set, debug_assert } from "../util";
 import { Component, Components, Resource, Tick, type ComponentId } from '../component'
 import { ExecutorKind, is_apply_deferred, SystemExecutor, SystemSchedule } from "../executor";
 import { DiGraph, UnGraph, Outgoing, Incoming, GraphInfo, DependencyKind, check_graph, index, Ambiguity } from './graph'
 import { Configs, IntoSystemConfigs, IntoSystemSetConfigs, NodeConfig, NodeConfigs, SystemConfig, SystemSetConfig } from "./config";
-import { FixedBitSet } from "fixed-bit-set";
 import { NodeId } from "./graph/node";
 import { CheckGraphResults, simple_cycles_in_component } from "./graph";
 import { SingleThreadedExecutor } from "../executor/single-threaded";
 import { AnonymousSet, InternedSystemSet, IntoSystemSet, SystemSet } from "./set";
 import { Condition } from "./condition";
-import { assert } from "joshkaposh-iterator/src/util";
 import { ScheduleBuildPassObj } from "./pass";
 import { $is_system } from "../system";
 import { StorageType } from "../storage";
-import { define_resource } from "define";
 
 type BTreeSet<T> = BTree<T, undefined>;
 
@@ -566,7 +565,7 @@ export class ScheduleGraph {
                     config.in_set_inner(set);
                 }
 
-                assert(!(!!set.system_type()), 'Configuring system type sets is not allowed');
+                debug_assert(!(!!set.system_type()), 'Configuring system type sets is not allowed');
 
                 const set_config = new NodeConfigs.NodeConfig(set, {
                     hierarchy: [],

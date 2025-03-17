@@ -1,11 +1,16 @@
 import { test, assert } from 'vitest'
 import { iter, range } from 'joshkaposh-iterator';
-import { Entity, Components, Storages, Tick } from 'ecs'
+import { EntityOld, Components, Storages, Tick, id, Entity } from 'ecs'
 import { Table, TableBuilder, TableId, TableRow, Tables } from 'ecs/src/storage/table';
 import { define_component } from 'define';
 
-class W {
-    constructor(public table_row: TableRow) { }
+const W = define_component(class W { constructor(public table_row: TableRow) { } })
+
+function alloc(table: Table, entity: Entity, component_id: number, value: any) {
+    // @ts-expect-error
+    const row = table.__allocate(entity);
+    // @ts-expect-error
+    table.get_column(component_id)!.__initialize(row, value, new Tick(0))
 }
 
 test('only_one_empty_table', () => {
@@ -39,7 +44,7 @@ test('move_to_superset', () => {
     const table_a = tables.get(table_a_id)!;
     const table_ab = tables.get(table_ab_id)!;
 
-    alloc(table_a, Entity.from_raw(0), aid, new TestA());
+    alloc(table_a, id(0), aid, new TestA());
 
     // @ts-expect-error
     table_a.__move_to_superset_unchecked(0, table_ab);
@@ -48,15 +53,7 @@ test('move_to_superset', () => {
     assert(!!table_ab.get_component(aid, 0))
 })
 
-function alloc(table: Table, entity: Entity, component_id: number, value: any) {
-    // @ts-expect-error
-    const row = table.__allocate(entity);
-    // @ts-expect-error
-    table.get_column(component_id)!.__initialize(row, value, new Tick(0))
-
-}
-
-test('Table', () => {
+test('table', () => {
     const components = new Components();
 
     const component_id = components.register_component(W);
@@ -67,7 +64,7 @@ test('Table', () => {
         .add_column(components.get_info(component_id!)!)
         .build();
 
-    const entities = iter(range(0, 200)).map(i => Entity.from_raw(i)).collect()
+    const entities = iter(range(0, 200)).map(i => id(i)).collect()
 
     for (const entity of entities) {
         // @ts-expect-error

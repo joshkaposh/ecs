@@ -1,17 +1,17 @@
+import type { Option } from "joshkaposh-option";
 import { is_dense, WorldQuery } from "./world-query";
 import { Entity } from "../entity";
 import { Archetype, Component, ComponentId, Components, FilteredAccess, StorageSwitch, StorageType, Tick, World } from "ecs";
 import { Table, TableRow } from "../storage/table";
-import { Option } from "joshkaposh-option";
 import { unit } from "../util";
 import { ComponentSparseSet } from "../storage/sparse-set";
 
-export abstract class QueryFilter<Item = unit, Fetch = unit, State = unit> extends WorldQuery<Item, Fetch, State> {
+export abstract class QueryFilter<Item = any, Fetch = any, State = any> extends WorldQuery<Item, Fetch, State> {
     abstract readonly IS_ARCHETYPAL: boolean;
     abstract filter_fetch(fetch: Fetch, entity: Entity, table_row: number): boolean;
 }
 
-type FilterFetch<T extends WorldQuery<any, any, any>> = {
+interface FilterFetch<T extends WorldQuery<any, any, any>> {
     fetch: T;
     matches: boolean;
 }
@@ -28,11 +28,10 @@ function is_dense_arch(filter: QueryFilter[]) {
     return [Boolean(is_dense), Boolean(is_archetypal)] as const;
 }
 
-type ChangedFetch<T extends Component> = {
+interface ChangedFetch<T extends Component> {
     ticks: StorageSwitch<T, Option<Tick[]>, ComponentSparseSet>
     last_run: Tick;
     this_run: Tick;
-
 }
 
 class _Changed<T extends Component> extends QueryFilter<boolean, ChangedFetch<T>, ComponentId> {
@@ -49,7 +48,8 @@ class _Changed<T extends Component> extends QueryFilter<boolean, ChangedFetch<T>
 
     init_fetch(world: World, id: number, last_run: Tick, this_run: Tick) {
         const f = {
-            ticks: StorageSwitch.new(this.#ty,
+            ticks: new StorageSwitch(
+                this.#ty,
                 () => undefined,
                 () => world.storages().sparse_sets.get(id)
             ),
@@ -109,7 +109,7 @@ class _Changed<T extends Component> extends QueryFilter<boolean, ChangedFetch<T>
         return this.fetch(fetch, entity, table_row);
     }
 }
-type AddedFetch<T extends Component> = {
+interface AddedFetch<T extends Component> {
     ticks: StorageSwitch<T, Option<T>, ComponentSparseSet>;
     last_run: Tick;
     this_run: Tick;
@@ -129,7 +129,7 @@ class _Added<T extends Component> extends QueryFilter<boolean, AddedFetch<T>, Co
 
     init_fetch(world: World, component_id: ComponentId, last_run: Tick, this_run: Tick) {
         const fetch = {
-            ticks: StorageSwitch.new(
+            ticks: new StorageSwitch(
                 this.#ty,
                 () => undefined,
                 () => world.storages().sparse_sets.get(component_id)

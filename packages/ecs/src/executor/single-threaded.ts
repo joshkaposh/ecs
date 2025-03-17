@@ -29,12 +29,7 @@ export class SingleThreadedExecutor implements SystemExecutor {
     }
 
     static default(): SingleThreadedExecutor {
-        return new SingleThreadedExecutor(
-            new FixedBitSet(),
-            new FixedBitSet(),
-            new FixedBitSet(),
-            true
-        )
+        return new SingleThreadedExecutor(FixedBitSet.default(), FixedBitSet.default(), FixedBitSet.default(), true)
     }
 
     kind(): ExecutorKind {

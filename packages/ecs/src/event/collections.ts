@@ -1,14 +1,10 @@
-import { done, DoubleEndedIterator, drain, ExactSizeIterator, item, iter, Iterator, range } from "joshkaposh-iterator";
+import { done, DoubleEndedIterator, drain, ExactSizeIterator, item, iter, Iterator } from "joshkaposh-iterator";
 import { extend } from "../array-helpers";
 import { Event, EventId, EventInstance } from "./base";
-import { u32 } from "intrinsics";
-import type { Option } from "joshkaposh-option";
+import { type Option, u32 } from "joshkaposh-option";
 import { EventCursor } from "./event_cursor";
 import { Instance } from "../util";
 import { Default } from "../default";
-import { World } from "../world";
-// import { Resource, StorageType, World } from "../../../../src";
-// import { v4 } from "uuid";
 
 export class Events<E extends Event> {
     __events_a: EventSequence<E>;

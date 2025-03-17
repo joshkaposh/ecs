@@ -1,5 +1,7 @@
 import { iter, Primitive } from "joshkaposh-iterator";
 import { is_none, None, Option } from "joshkaposh-option";
+import { Component, ComponentMetadata } from "./component";
+import { Prettify } from "joshkaposh-iterator/src/util";
 
 export type Some<T> = T extends None ? never : T;
 
@@ -11,6 +13,8 @@ type Hint = 'string' | 'number' | 'default';
 export type Class<Static extends {} = {}, Inst extends {} = {}> = (new (...args: any[]) => Inst) & Static
 
 export type Instance<T> = T extends new (...args: any[]) => any ? InstanceType<T> : T;
+
+export type PrettifyComponent<T extends Component> = Prettify<Omit<T, keyof ComponentMetadata>>;
 
 export function is_primitive(value: unknown): value is Primitive {
     const ty = typeof value;
@@ -51,6 +55,13 @@ export function recursively_flatten_nested_arrays<T1, T2>(arrays: readonly T1[] 
 }
 
 export function debug_assert(is_true: boolean, msg?: string) {
+    // if (is_true) {
+    //     let message = 'Assertion failed'
+    //     if (msg) {
+    //         message += `: ${msg}`;
+    //     }
+    //     throw new Error(message += msg ?? '')
+    // }
     console.assert(is_true, msg)
 }
 
@@ -142,14 +153,14 @@ export type DeepReadonly<T> = Readonly<{
     : DeepReadonly<T[K]>;
 }>
 
-export type Enum<T> = {
-    [P in keyof T]: T[P] extends (...args: any[]) => any ? ReturnType<T[P]> : T[P]
-}[keyof T];
-
 export type Trait<Required, Provided> = {
     required: Required
     provided: Provided;
 };
+
+export type MutOrReadonlyArray<T> =
+    T extends Array<infer Inner> ? MutOrReadonlyArray<Inner> :
+    T[] | readonly T[];
 
 export function eq<T>(a: T, b: T, hint: Hint = 'number') {
     if (hint === 'number') {
@@ -163,10 +174,6 @@ export function eq<T>(a: T, b: T, hint: Hint = 'number') {
 
 export function get_short_name(str: string) {
     return str;
-}
-
-export function writeln(str: string): string {
-    return `\n${str}`
 }
 
 export function for_each_array(array: any[], fn: (array: any[]) => void) {

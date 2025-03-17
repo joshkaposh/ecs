@@ -1,7 +1,7 @@
-import { Event } from "./base";
-import { Events } from "./collections";
-import { EventCursor } from "./event_cursor";
-import { EventIterator, EventIteratorWithId } from "./iterators";
+import type { Event } from "./base";
+import type { Events } from "./collections";
+import type { EventCursor } from "./event_cursor";
+import type { EventIterator, EventIteratorWithId } from "./iterators";
 
 
 // TODO: use Res<Events<E>>

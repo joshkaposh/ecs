@@ -1,10 +1,9 @@
 import { iter } from "joshkaposh-iterator";
-import { Option, is_some } from 'joshkaposh-option'
+import { Option, is_some, u32 } from 'joshkaposh-option'
 import { capacity, reserve, swap, swap_remove, split_at } from "../../array-helpers";
 import { ComponentId, ComponentInfo, Components, Tick } from "../../component";
 import { SparseSet } from "../sparse-set";
 import { Entity } from "../../entity";
-import { u32 } from "../../../../intrinsics/src";
 import { debug_assert, entry } from "../../util";
 import { Column } from "./column";
 
@@ -36,8 +35,9 @@ export class Table {
 
     check_change_ticks(change_tick: Tick) {
         const len = this.entity_count();
-        for (const col of this.#columns.values()) {
-            col.check_change_ticks(len, change_tick)
+        const array = this.#columns.__values_array();
+        for (let i = 0; i < array.length; i++) {
+            array[i].check_change_ticks(len, change_tick);
         }
     }
 
@@ -110,8 +110,9 @@ export class Table {
 
     clear() {
         this.#entities.length = 0;
-        for (const column of this.#columns.values()) {
-            column.clear();
+        const values = this.#columns.__values_array();
+        for (let i = 0; i < values.length; i++) {
+            values[i].clear();
         }
     }
 
@@ -119,12 +120,15 @@ export class Table {
         // this.#entities.capacity() - this.#entities.length < additional
         if (capacity(this.#entities.length) - this.#entities.length < additional) {
             // this.entities.reserve(additional);
-            reserve(this.#entities, additional)
+            reserve(this.#entities, additional);
+            // this.#entities.length = Math.min(this.#entities.length, additional);
 
             // use entities vector capacity as driving capacity for all related allocations
             let new_capacity = capacity(this.#entities.length);
 
-            for (const column of this.#columns.values()) {
+            const values = this.#columns.__values_array();
+            for (let i = 0; i < values.length; i++) {
+                const column = values[i]
                 // @ts-expect-error
                 column.__reserve_exact(new_capacity - column.len());
             }
@@ -140,10 +144,11 @@ export class Table {
         const index = this.#entities.length;
         this.#entities.push(entity);
 
-        for (const column of this.#columns.values()) {
-            column.data.length = this.#entities.length;
-        }
+        const values = this.#columns.__values_array()
+        for (let i = 0; i < values.length; i++) {
+            values[i].data.length = this.#entities.length;
 
+        }
         return index;
     }
 
@@ -153,22 +158,24 @@ export class Table {
     /// # Safety
     /// `row` must be in-bounds
 
+    // @ts-ignore
     private __swap_remove_unchecked(row: TableRow) {
         debug_assert(row < this.entity_count());
         const last_element_index = this.entity_count() - 1;
 
+        const values = this.#columns.__values_array();
         if (row !== last_element_index) {
-            for (const column of this.#columns.values()) {
+            for (let i = 0; i < values.length; i++) {
                 // @ts-expect-error
                 column.__swap_remove_and_drop_unchecked_nonoverlapping(last_element_index, row)
             }
         } else {
-            for (const col of this.#columns.values()) {
+            for (let i = 0; i < values.length; i++) {
                 // @ts-expect-error
-                col.__drop_last_component(last_element_index);
+                column.__drop_last_component(last_element_index)
             }
-        }
 
+        }
 
         const is_last = row === last_element_index;
         // swap_remove(this.#entities, row);
@@ -186,11 +193,13 @@ export class Table {
     ///
     /// # Safety
     /// Row must be in-bounds
+    // @ts-ignore
     private __move_to_and_forget_missing_unchecked(row: TableRow, new_table: Table): TableMoveResult {
         const last_element_index = this.#entities.length - 1
         const is_last = row === last_element_index;
-        const new_row = new_table.__allocate(swap_remove(this.#entities, row)!)
-        for (const [component_id, column] of this.#columns.iter()) {
+        const new_row = new_table.__allocate(swap_remove(this.#entities, row)!);
+
+        this.#columns.for_each((component_id, column) => {
             let new_column = new_table.get_column(component_id);
             if (is_some(new_column)) {
                 // @ts-expect-error
@@ -199,7 +208,8 @@ export class Table {
                 // @ts-expect-error
                 column.__swap_remove_unchecked(row)
             }
-        }
+        })
+
         return {
             new_row,
             swapped_entity: is_last ? null : this.#entities[row]
@@ -212,11 +222,13 @@ export class Table {
     ///
     /// # Safety
     /// row must be in-bounds
+    // @ts-ignore
     private __move_to_and_drop_missing_unchecked(row: TableRow, new_table: Table): TableMoveResult {
         const last_element_index = this.#entities.length - 1
         const is_last = row === last_element_index;
-        const new_row = new_table.__allocate(swap_remove(this.#entities, row as number)!)
-        for (const [component_id, column] of this.#columns.iter()) {
+        const new_row = new_table.__allocate(swap_remove(this.#entities, row as number)!);
+
+        this.#columns.for_each((component_id, column) => {
             const new_column = new_table.get_column(component_id)
             if (new_column) {
                 // @ts-expect-error
@@ -225,7 +237,8 @@ export class Table {
                 // @ts-expect-error
                 column.__swap_remove_unchecked(row)
             }
-        }
+        })
+
         return {
             new_row,
             swapped_entity: is_last ? null : this.#entities[row]
@@ -238,20 +251,15 @@ export class Table {
     ///
     /// # Safety
     /// `row` must be in-bounds. `new_table` must contain every component this table has
+    // @ts-ignore
     private __move_to_superset_unchecked(row: TableRow, new_table: Table): TableMoveResult {
         debug_assert(row < this.entity_count());
         const last_element_index = this.entity_count() - 1;
         const is_last = row === last_element_index;
         const new_row = new_table.__allocate(swap_remove(this.#entities, row)!)
 
-
-        for (const [component_id, column] of this.#columns.iter()) {
-
-            new_table
-                .get_column(component_id)!
-                // @ts-expect-error
-                .__initialize_from_unchecked(column, last_element_index, row, new_row)
-        }
+        // @ts-expect-error
+        this.#columns.for_each((component_id, column) => new_table.get_column(component_id)!.__initialize_from_unchecked(column, last_element_index, row, new_row))
 
         return {
             new_row,
@@ -364,8 +372,9 @@ export class Tables {
     }
 
     clear() {
-        for (const table of this.#tables) {
-            table.clear();
+        const tables = this.#tables;
+        for (let i = 0; i < tables.length; i++) {
+            tables[i].clear();
         }
     }
 }

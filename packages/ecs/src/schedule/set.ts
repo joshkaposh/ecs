@@ -1,8 +1,8 @@
-import { is_some, Option } from "joshkaposh-option";
-import { Chain, ProcessNodeConfig, ScheduleGraph } from "./schedule";
-import { Configs, NodeConfig, SystemSetConfig, SystemSetConfigs } from "./config";
+import { Option } from "joshkaposh-option";
+import { Chain, ScheduleGraph } from "./schedule";
+import { Configs, NodeConfig, SystemSetConfigs } from "./config";
 import { NodeId } from "./graph";
-import { define_type, TypeId } from "define";
+import { define_type } from "define";
 import { $is_system, System } from "../system";
 
 export const $is_system_set = Symbol('SYSTEM SET');

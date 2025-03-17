@@ -1,6 +1,6 @@
 import { test, assert } from 'vitest'
 import { is_some, } from 'joshkaposh-option';
-import { Archetype, Archetypes, Component, Components, StorageType, Storages, Entity } from 'ecs';
+import { Archetypes, Components, StorageType, Storages } from 'ecs';
 import { define_component, define_marker } from 'define';
 
 const A = define_component(class A { constructor(public value = 'A') { } });

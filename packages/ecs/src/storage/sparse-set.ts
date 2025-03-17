@@ -1,9 +1,10 @@
 import { Iterator, iter } from "joshkaposh-iterator";
-import { Option, is_some } from 'joshkaposh-option'
-import { Component, ComponentId, ComponentInfo, ComponentTicks, Tick, TickCells } from "../component";
-import { Entity, EntityId } from "../entity";
-import { Column, TableRow } from "./table";
+import type { Option } from 'joshkaposh-option';
+import { type Component, type ComponentId, type ComponentInfo, ComponentTicks, type Tick, TickCells } from "../component";
+import { index, type Entity, type EntityId } from "../entity";
+import { Column, type TableRow } from "./table";
 import { swap_remove } from "../array-helpers";
+import type { Instance } from "../util";
 
 type EntityIndex = EntityId;
 
@@ -20,7 +21,7 @@ export class SparseArray<I extends number, V extends any> {
     }
 
     contains(index: I): boolean {
-        return is_some(this.#values[index])
+        return this.#values[index] != null
     }
 
     get(index: I): Option<V> {
@@ -80,16 +81,16 @@ export class ComponentSparseSet {
 
     // @ts-ignore
     private __insert(entity: Entity, value: {}, change_tick: Tick) {
-        const dense_index = this.#sparse.get(entity.index());
-        if (is_some(dense_index)) {
+        const dense_index = this.#sparse.get(index(entity));
+        if (dense_index != null) {
             // @ts-expect-error
             this.#dense.__replace(dense_index, value, change_tick);
         } else {
             const dense_index = this.#dense.len();
             // @ts-expect-error
             this.#dense.__push(value, ComponentTicks.new(change_tick));
-            this.#sparse.insert(entity.index(), dense_index);
-            this.#entities.push(entity.index());
+            this.#sparse.insert(index(entity), dense_index);
+            this.#entities.push(index(entity));
         }
     }
 
@@ -97,57 +98,50 @@ export class ComponentSparseSet {
      * Returns true if `ComponentSparseSet` contains the given entity.
      */
     contains(entity: Entity): boolean {
-        return this.#sparse.contains(entity.index())
+        return this.#sparse.contains(index(entity))
     }
 
     // returns a reference to the entity's component value,
     // or none if entity doesn not have a component in the sparse set
     get(entity: Entity): Option<{}> {
-        const dense_index = this.#sparse.get(entity.index());
-        if (is_some(dense_index)) {
-            return this.#dense.get_data_unchecked(dense_index);
-        } else {
-            return
-        }
+        const dense_index = this.#sparse.get(index(entity));
+        return dense_index != null ? this.#dense.get_data_unchecked(dense_index) : undefined
     }
 
     get_with_ticks<T extends Component>(entity: Entity): Option<[InstanceType<T>, TickCells]> {
-        const dense_index = this.#sparse.get(entity.index());
-        if (!is_some(dense_index)) {
-            return
+        const dense_index = this.#sparse.get(index(entity));
+        if (dense_index == null) {
+            return;
         }
-
+        const dense = this.#dense;
         return [
-            this.#dense.get_data_unchecked(dense_index) as InstanceType<T>,
-            new TickCells(
-                this.#dense.get_added_tick(dense_index)!,
-                this.#dense.get_changed_tick(dense_index)!
-            )
+            dense.get_data_unchecked(dense_index) as InstanceType<T>,
+            new TickCells(dense.get_added_tick(dense_index)!, dense.get_changed_tick(dense_index)!)
         ]
     }
 
     get_added_tick(entity: Entity) {
-        const dense_index = this.#sparse.get(entity.index());
-        if (!is_some(dense_index)) {
+        const dense_index = this.#sparse.get(index(entity));
+        if (dense_index == null) {
             return
         }
 
-        return this.#dense.get_added_tick(entity.index());
+        return this.#dense.get_added_tick(index(entity));
     }
 
 
     get_changed_tick(entity: Entity) {
-        const dense_index = this.#sparse.get(entity.index());
-        if (!is_some(dense_index)) {
+        const dense_index = this.#sparse.get(index(entity));
+        if (dense_index == null) {
             return
         }
 
-        return this.#dense.get_changed_tick(entity.index());
+        return this.#dense.get_changed_tick(index(entity));
     }
 
     get_ticks(entity: Entity) {
-        const dense_index = this.#sparse.get(entity.index());
-        if (!is_some(dense_index)) {
+        const dense_index = this.#sparse.get(index(entity));
+        if (dense_index == null) {
             return
         }
         return this.#dense.get_ticks_unchecked(dense_index);
@@ -155,44 +149,43 @@ export class ComponentSparseSet {
 
     // @ts-ignore
     private __remove_and_forget(entity: Entity) {
-        const dense_index = this.#sparse.remove(entity.index())
-        if (is_some(dense_index)) {
-            swap_remove(this.#entities, dense_index);
-            const is_last = dense_index === this.#dense.len() - 1;
+        const dense_index = this.#sparse.remove(index(entity))
+        if (dense_index == null) {
+            return
 
-            // @ts-expect-error
-            const [value] = this.#dense.__swap_remove_unchecked(dense_index) as any
-            if (!is_last) {
-                const index = this.#entities[dense_index];
-                this.#sparse.insert(index, dense_index)
-            }
-
-            return value;
-        } else {
-            return null;
         }
+        swap_remove(this.#entities, dense_index);
+        const is_last = dense_index === this.#dense.len() - 1;
+        // @ts-expect-error
+        const [value] = this.#dense.__swap_remove_unchecked(dense_index) as any
+        if (!is_last) {
+            const index = this.#entities[dense_index];
+            this.#sparse.insert(index, dense_index)
+        }
+
+        return value;
     }
 
     // @ts-ignore
     private __remove(entity: Entity) {
-        const dense_index = this.#sparse.remove(entity.index());
+        const dense_index = this.#sparse.remove(index(entity));
 
-        if (is_some(dense_index)) {
-            swap_remove(this.#entities, dense_index)
-            const is_last = dense_index === this.#dense.len() - 1;
-
-            // @ts-expect-error
-            this.#dense.__swap_remove_unchecked(dense_index);
-
-            if (!is_last) {
-                const index = this.#entities[dense_index];
-                this.#sparse.insert(index, dense_index);
-            }
-
-            return true;
-        } else {
+        if (dense_index == null) {
             return false
         }
+
+        swap_remove(this.#entities, dense_index)
+        const is_last = dense_index === this.#dense.len() - 1;
+
+        // @ts-expect-error
+        this.#dense.__swap_remove_unchecked(dense_index);
+
+        if (!is_last) {
+            const index = this.#entities[dense_index];
+            this.#sparse.insert(index, dense_index);
+        }
+
+        return true;
     }
 }
 
@@ -213,7 +206,7 @@ export class SparseSet<I extends number, V> {
     // @ts-ignore
     static with_capacity<I extends number, V>(capacity: number) {
         // TODO: create with capacity to increase performance (reduce array resizes)
-        return new SparseSet<I, V>([], [], new SparseArray())
+        return new SparseSet<I, V>([], [], new SparseArray());
         // return new SparseSet(new Array(capacity), new Array(capacity), new SparseArray())
     }
 
@@ -227,7 +220,7 @@ export class SparseSet<I extends number, V> {
 
     insert(index: I, value: V) {
         const dense_index = this.#sparse.get(index);
-        if (is_some(dense_index)) {
+        if (dense_index != null) {
             this.#dense[dense_index] = value
         } else {
             this.#sparse.insert(index, this.#dense.length)
@@ -236,25 +229,21 @@ export class SparseSet<I extends number, V> {
         }
     }
 
-    get_or_insert_with(index: I, func: () => V) {
+    get_or_insert_with(index: I, func: () => V): Instance<V> {
         const dense_index = this.#sparse.get(index);
-        if (is_some(dense_index)) {
-            return this.#dense[dense_index];
+        if (dense_index != null) {
+            return this.#dense[dense_index] as Instance<V>;
         } else {
-            let value = func();
+            const value = func();
             const dense_index = this.#dense.length
             this.#sparse.insert(index, dense_index);
             this.#indices.push(index)
             this.#dense.push(value);
-            return this.#dense[dense_index];
+            return this.#dense[dense_index] as Instance<V>;
         }
     }
 
-    debug_len() {
-        return this.#indices.length;
-    }
-
-    len(): number {
+    get length(): number {
         return this.#dense.length;
     }
 
@@ -264,17 +253,14 @@ export class SparseSet<I extends number, V> {
 
     remove(index: I): Option<V> {
         const dense_index = this.#sparse.remove(index)
-        if (is_some(dense_index)) {
+        if (dense_index != null) {
             const index = dense_index;
             const is_last = index === this.#dense.length - 1;
             const value = swap_remove(this.#dense, index);
             swap_remove(this.#indices, index);
             if (!is_last) {
                 const swapped_index = this.#indices[index];
-                // this.#sparse.get_mut(swapped_index) = dense_index
                 this.#sparse.insert(swapped_index, dense_index)
-                // let mut = this.#sparse.get(swapped_index);
-                // mut = dense_index;
             }
             return value;
         } else {
@@ -294,12 +280,12 @@ export class SparseSet<I extends number, V> {
 
     get(index: I): Option<V> {
         const dense_index = this.#sparse.get(index);
-        return is_some(dense_index) ? this.#dense[dense_index] : null
+        return dense_index != null ? this.#dense[dense_index] : null
     }
 
     get_mut(index: I): Option<V> {
         const dense_index = this.#sparse.get(index);
-        return is_some(dense_index) ? this.#dense[dense_index] : null
+        return dense_index != null ? this.#dense[dense_index] : null
     }
 
 
@@ -307,13 +293,30 @@ export class SparseSet<I extends number, V> {
     indices(): Iterator<I> {
         return iter(this.#indices);
     }
+
+    __indices_array() {
+        return this.#indices
+    }
+
     // returns an iterator of values in arbitrary order
     values(): Iterator<V> {
         return iter(this.#dense)
     }
 
+    __values_array() {
+        return this.#dense;
+    }
+
     iter(): Iterator<[I, V]> {
         return iter(this.#indices).zip(this.#dense);
+    }
+
+    for_each(callback: (index: I, value: V) => void) {
+        const indices = this.#indices;
+        const dense = this.#dense;
+        for (let i = 0; i < indices.length; i++) {
+            callback(indices[i], dense[i])
+        }
     }
 }
 
@@ -331,8 +334,8 @@ export class SparseSets {
         this.#sets.values().for_each((s) => s.check_change_ticks(change_tick));
     }
 
-    len(): number {
-        return this.#sets.len()
+    get length(): number {
+        return this.#sets.length;
     }
 
     is_empty(): boolean {
@@ -361,8 +364,9 @@ export class SparseSets {
     }
 
     __clear_entities() {
-        for (const set of this.#sets.values()) {
-            set.clear()
+        const values = this.#sets.__values_array();
+        for (let i = 0; i < values.length; i++) {
+            values[i].clear();
         }
     }
 }

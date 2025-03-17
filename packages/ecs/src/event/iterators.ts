@@ -1,8 +1,7 @@
 import { iter, item, done, Iterator, ExactSizeIterator } from "joshkaposh-iterator";
-import { Event, EventInstance, Events, EventCursor } from ".";
-import { u32 } from "intrinsics";
-import { is_some, Option } from "joshkaposh-option";
-import { Instance } from "../util";
+import { type Event, type EventInstance, Events, EventCursor } from ".";
+import { type Option, u32 } from "joshkaposh-option";
+import { type Instance } from "../util";
 
 export class EventIterator<E extends Event> extends ExactSizeIterator<Instance<E>> {
     #iter: EventIteratorWithId<E>;
@@ -32,7 +31,7 @@ export class EventIterator<E extends Event> extends ExactSizeIterator<Instance<E
 
     last() {
         const l = this.#iter.last();
-        return is_some(l) ? l[0] : undefined
+        return l != null ? l[0] : undefined
     }
 
     nth(n: number): IteratorResult<Instance<E>> {
@@ -93,7 +92,7 @@ export class EventIteratorWithId<E extends Event> extends ExactSizeIterator<[Ins
 
     last(): Option<[Instance<E>, number]> {
         const n = this.#chain.last();
-        if (!is_some(n)) {
+        if (n == null) {
             return
         }
         const { event_id, event } = n;

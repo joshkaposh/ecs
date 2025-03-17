@@ -1,4 +1,4 @@
-import type { Resource } from "../";
+import type { Resource } from "..";
 
 export type Event<T = new (...args: any[]) => any> = Resource<T>
 // @ts-ignore

@@ -1,14 +1,12 @@
-import { TODO } from "joshkaposh-iterator/src/util";
 import { IdKind } from './kinds';
-import { u32 } from "../../../intrinsics/src";
-import { carrot_left, shift_left } from "../bit";
+import { u32 } from "joshkaposh-option";
 
 export const HIGH_MASK = 0x7FFF_FFFF;
 
-type U64 = number;
+// type U64 = bigint;
 type U32 = number;
 
-function extract_kind_from_high_entity(value: U32): IdKindType {
+function extract_kind_from_high_entity(value: U32): IdKind {
     // The negated HIGH_MASK will extract just the bit we need for kind.
     let kind_mask = HIGH_MASK + 1;
     let bit = value & kind_mask;

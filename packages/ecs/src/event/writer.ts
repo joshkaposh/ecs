@@ -1,7 +1,6 @@
-import { ResMut } from "../change_detection";
-import { Events, SendBatchIds } from "./collections";
+import type { Events, SendBatchIds } from "./collections";
 import type { Event, EventId } from "./base";
-import { Iterator } from "joshkaposh-iterator";
+import type { Iterator } from "joshkaposh-iterator";
 
 // TODO: use ResMut<Events<E>>
 export class EventWriter<E extends Event> {
@@ -19,7 +18,7 @@ export class EventWriter<E extends Event> {
         return this.#events.send_batch(events);
     }
 
-    send_default<T extends E extends { default(): InstanceType<E> } ? T : never>(): EventId<T> {
+    send_default<T extends E extends { default(): InstanceType<E> } ? E : never>(): EventId<T> {
         return this.#events.send_default();
     }
 }

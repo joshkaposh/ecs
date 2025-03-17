@@ -1,13 +1,14 @@
 import { Access } from '../query';
-import { Archetype, ArchetypeComponentId } from '../archetype';
+import { Archetype } from '../archetype';
 import { System, SystemMeta } from '.'
 import { World } from '../world';
-import { ComponentId, is_component, Tick } from '../component';
+import { is_component, Tick } from '../component';
 import { define_type } from 'define';
 import { assert } from 'joshkaposh-iterator/src/util';
-import { SystemState } from './function-system';
+import { FunctionSystemState, SystemState } from './function-system';
 import { Option } from 'joshkaposh-option';
-import { ParamBuilder, SystemParam } from './system-param';
+import { SystemParam } from './system-param';
+import { ParamBuilder } from './param-builder';
 import { unit } from '../util';
 import { And, AndMarker, Condition, Nand, NandMarker, Nor, NorMarker, Or, OrMarker, Xnor, XnorMarker, Xor, XorMarker } from '../schedule/condition';
 import { CombinatorSystem } from './combinator';
@@ -19,13 +20,14 @@ import { NodeConfigs, SystemConfig, SystemConfigs, SystemSetConfigs } from '../s
 import { NodeId } from '../schedule/graph';
 
 export * from './system-param';
+export { ParamBuilder } from './param-builder'
 export * from './input';
 export * from './system';
 export * from './function-system';
-export * from './schedule_system';
+export * from './query';
 
 export function define_params<P extends readonly any[]>(...params: P) {
-    class ParamImpl implements SystemParam<any, any> {
+    class ParamImpl {
         State: any;
         Item: any;
         #param: P;
@@ -39,7 +41,7 @@ export function define_params<P extends readonly any[]>(...params: P) {
             if (is_component(c)) {
                 const id = world.register_component(c)
                 const set = system_meta.__component_access_set;
-                assert(!set.combined_access().has_any_component_read(id))
+                assert(!set.combined_access().has_any_component_read())
                 set.combined_access().add_component_read(id)
             }
         }
@@ -227,8 +229,8 @@ export interface SystemDefinitionImpl<P, Fn extends SystemFn<P, false>> {
     get_last_run(): Tick;
     set_last_run(tick: Tick): void;
     check_change_tick(tick: Tick): void;
-    component_access(): Access<ComponentId>;
-    archetype_component_access(): Access<ArchetypeComponentId>;
+    component_access(): Access;
+    archetype_component_access(): Access;
     apply_deferred(world: World): void;
     queue_deferred(world: World): void;
     update_archetype_component_access(world: World): void;
@@ -309,9 +311,12 @@ function define_system_base<P, Fallible extends boolean, Fn extends SystemFn<P, 
         } else {
             const builder = new ParamBuilder(world, system_meta, system_name);
             // @ts-expect-error
-            const p = params(builder).params() as any;
-            system_params = p;
-            state = SystemState.new(world, p)
+            const p = params(builder).params() as any[];
+            // console.log('system initialize', p);
+            // const states = p.map(([type, ...extra]) => type.init_state(world, system_meta, ...extra))
+
+            // system_params = param_set;
+            state = new FunctionSystemState(world, p)
         }
 
         system_meta.last_run = world.change_tick().relative_to(Tick.MAX);
@@ -357,7 +362,10 @@ function define_system_base<P, Fallible extends boolean, Fn extends SystemFn<P, 
         if (!state) {
             throw new Error(`System's state was not found. Did you forget to initialize this system before running it?`)
         }
+
         const param_state = state.get(world);
+        console.log('System.run_unsafe', param_state);
+
         const system_params = input === unit ? param_state : [input, ...param_state];
         return system.call(this, ...system_params) as ReturnType<Fn>;
 
@@ -641,11 +649,11 @@ export function define_condition<P>(
         check_change_tick(change_tick: Tick): void {
         }
 
-        component_access(): Access<ComponentId> {
+        component_access(): Access {
             return this.#system_meta.__component_access_set.combined_access();
         }
 
-        archetype_component_access(): Access<ArchetypeComponentId> {
+        archetype_component_access(): Access {
             return this.#system_meta.__archetype_component_access;
         }
 

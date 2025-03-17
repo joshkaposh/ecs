@@ -1,4 +1,4 @@
-import { Res } from '../ecs/change_detection'
+import { Res } from 'ecs';
 import { ButtonInput } from './button_input';
 
 export function input_toggle_active<T>(default_value: boolean, input: T) {

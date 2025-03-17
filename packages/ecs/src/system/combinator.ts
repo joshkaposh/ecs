@@ -1,4 +1,4 @@
-import { ArchetypeComponentId, ComponentId, Tick, World } from "..";
+import { Tick, World } from "..";
 import { Access } from "../query";
 import { And, AndMarker, Condition, Nand, NandMarker, Nor, NorMarker, Or, OrMarker, Xnor, XnorMarker, Xor, XorMarker } from "../schedule/condition";
 import { SystemInput } from "./input";
@@ -16,8 +16,8 @@ export class CombinatorSystem<Marker extends Combine<A, B>, A extends System<any
     #a: A;
     #b: B;
     #name: string;
-    #component_access: Access<ComponentId>;
-    #archetype_component_access: Access<ArchetypeComponentId>;
+    #component_access: Access;
+    #archetype_component_access: Access;
     #type: Marker;
     #type_id: string;
 

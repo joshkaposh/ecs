@@ -1,8 +1,8 @@
-import { Added, All, Changed, Component, ComponentId, Query, QueryData, QueryDataTuple, QueryFilter, QueryState, Resource, With, Without, World } from "ecs";
+import { Added, Changed, Component, Query, QueryData, QueryFilter, QueryState, With, Without, World } from "ecs";
 import { FilteredAccess } from "./access";
 
 export class QueryBuilder<const D extends any[], const F extends any[]> {
-    #access: FilteredAccess<ComponentId>;
+    #access: FilteredAccess;
     #world: World;
 
     #data!: QueryData<any, any, any>;
@@ -25,7 +25,7 @@ export class QueryBuilder<const D extends any[], const F extends any[]> {
 
         // this.#access = access;
         this.#world = world;
-        this.#access = FilteredAccess.default();
+        this.#access = new FilteredAccess();
         this.#data_components = data;
         this.#filter_components = [] as unknown as F;
         // this.#data = data;
@@ -66,7 +66,7 @@ export class QueryBuilder<const D extends any[], const F extends any[]> {
 
     build() {
         const state = QueryState.new(this.#data_components as any, this.#filter_components as any, this.#world)
-        return new Query(this.#world, state, false)
+        return new Query(this.#world, state, this.#world.last_change_tick(), this.#world.change_tick())
     }
 
 

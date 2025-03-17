@@ -1,96 +1,115 @@
-import { assert, test } from 'vitest'
+import { assert, expect, test } from 'vitest'
 import {
-    World,
     Component,
-    define_system,
-    With,
-    Write,
-    define_condition,
-} from '../../packages/ecs';
+    World,
+} from 'ecs';
 import {
+    Class,
     define_component,
-    define_marker,
-    define_resource,
 } from 'define'
+import { skip_large } from '../constants';
 
 const A = define_component(class A { constructor(public value = 'A') { } })
 const B = define_component(class B { constructor(public value = 'B') { } })
 const C = define_component(class C { constructor(public value = 'C') { } })
+const D = define_component(class D { constructor(public value = 'D') { } })
 
-const Marker = define_marker();
 
-class Counter { }
-define_resource(Counter);
+type ClassStatic<S, T extends Class<S>> = InstanceType<T>;
 
-test('world', () => {
+
+class st2 implements ClassStatic<{ staticProp: 'test' }, typeof st2> {
+    static staticProp = 'test' as const;
+}
+
+function test_spawn_batch(w: World, length: number, batch: () => InstanceType<Component>[]) {
+    const b = Array.from({ length }, batch);
+    console.log(`spawning entities: ${length}`);
+    w.clear_all();
+    console.time('spawn_batch');
+    w.spawn_batch(b)
+    console.timeEnd('spawn_batch');
+}
+
+test.skipIf(skip_large)('spawn_batch (large)', () => {
     const w = new World();
 
-    const id4 = w.register_component(A as Component);
-    const id5 = w.register_component(B as Component);
-    const id6 = w.register_component(C as Component);
-    assert(
-        id4 === 4 &&
-        id5 === 5 &&
-        id6 === 6
-    )
+    test_spawn_batch(w, 100, () => [new A(), new B()]);
+    test_spawn_batch(w, 1000, () => [new A(), new B()]);
+    test_spawn_batch(w, 10_000, () => [new A(), new B()]);
+    test_spawn_batch(w, 100_000, () => [new A(), new B()]);
+    test_spawn_batch(w, 1_000_000, () => [new A(), new B()]);
+
+
+})
+
+test('spawn/spawn_batch', () => {
+    const w = new World();
+
+    const id4 = w.register_component(A);
+    const id5 = w.register_component(B);
+    const id6 = w.register_component(C);
+    assert(id4 === 4 && id5 === 5 && id6 === 6)
 
     for (let i = 0; i < 200; i++) {
         w.spawn([new A(), new B(), new C()])
     }
-    assert(w.entities().total_count() === 200);
+    assert(w.entities().length === 200);
 
     const batch = Array.from({ length: 100 }, () => [new A(), new B(), new C()]);
-    {
-        using _ = w.spawn_batch(batch)
-    }
+    w.spawn_batch(batch);
 
-    assert(w.entities().total_count() === 300);
-
-
-    const q = w.query_filtered([Write(Position), Velocity], [With(Player)])
+    assert(w.entities().length === 300);
 })
 
-const Position = define_component(class Position { constructor(public x: number, public y: number) { } });
-const Velocity = define_component(class Velocity { constructor(public x: number, public y: number) { } });
+test('spawn_nested_bundle', () => {
+    const w = new World();
+    const id = w.spawn(new A('one')).id();
 
-const Player = define_marker();
-const Enemy = define_marker();
-
-
-
-const spawn_player = define_system(builder => builder.commands(), (commands) => {
-    console.log('spawning player!');
-    commands.spawn([new Position(0, 0), new Velocity(5, 5), new Player()]);
+    expect(w.get(id, A)).toEqual(new A('one'))
 })
 
-function randIntFromRange(min: number, max: number) {
-    return Math.floor(Math.random() * (max - min) + min)
-}
+test('entity_mut.insert()', () => {
+    const w = new World();
 
-const spawn_enemies = define_system(b => b.commands(), (commands) => {
-    commands.spawn_batch(Array.from({ length: 50 }, (_, i) => [new Position(randIntFromRange(0, 100), randIntFromRange(0, 100)), new Velocity(5, 5), new Enemy()]))
-});
+    const entity_mut = w.spawn_empty();
+    const id = entity_mut.id();
+    entity_mut.insert([new A('inserted')]);
 
-const move_player = define_system(builder => builder.query_filtered([Write(Position), Velocity], [With(Player)]).res_mut(PlayerTimesCalled), (query, times_called) => {
+    expect(entity_mut.get(A)).toEqual(new A('inserted'));
+    expect(w.get(id, A)).toEqual(new A('inserted'));
 
-    times_called.amount++;
+    entity_mut.insert([new B('inserted-b'), new C('inserted-c')]);
 
-    const [position, velocity] = query.one();
-
-    position.x += velocity.x;
-    position.y += velocity.y;
+    expect(w.get(id, B)).toEqual(new B('inserted-b'));
+    expect(w.get(id, C)).toEqual(new C('inserted-c'));
 })
 
+test('world.insert_batch()', () => {
+    const w = new World();
 
-const randomly_returns_true = define_condition(() => {
-    return Math.random() >= 0.5;
-}, () => []);
+    const id = w.spawn_empty().id();
+    w.insert_batch([[id, [new A('inserted')]]])
+    expect(w.get(id, A)).toEqual(new A('inserted'))
 
-const log_enemies = define_system(b => b.query_filtered([Position, Velocity], [With(Enemy)]).res_mut(LogTimesCalled), (query, times_called) => {
-    times_called.amount++;
+    const entities = Array.from({ length: 5 }, () => w.spawn_empty().id())
+    const batch = entities.map((id, i) => [id, [new A(`inserted-${i}`)]] as const)
 
-});
+    w.insert_batch(batch);
+    batch.forEach(([id, a]) => expect(w.get(id, A)).toEqual(a[0]))
+})
 
+test('world.insert_batch_if_new()', () => {
+    const w = new World();
 
-const PlayerTimesCalled = define_resource(class { constructor(public amount = 0) { } });
-const LogTimesCalled = define_resource(class { constructor(public amount = 0) { } });
+    const entities = w.spawn_batch(Array.from({ length: 5 }, (_, i) => [new A(`spawned-${i}`)]));
+    const batch = entities.map((e, i) => [e, [new A(`inserted-${i}`), new B(`inserted-${i}`)]] as const);
+    w.insert_batch_if_new(batch);
+
+    assert(w.entities().length === 5);
+    entities.forEach((e, i) => {
+        expect(w.get(e, A)).toEqual(new A(`spawned-${i}`));
+        expect(w.get(e, B)).toEqual(new B(`inserted-${i}`));
+    });
+
+})

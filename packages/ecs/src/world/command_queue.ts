@@ -1,8 +1,12 @@
-import { World } from "..";
+import { Option } from 'joshkaposh-option'
+import { SystemMeta, World } from "..";
+import { Command } from "../system/commands";
 
-export type Command = {
-    apply(world: World): void;
+interface CommandMeta {
+    consume_command_and_get_size(value: any, world: Option<World>, cursor: number): number
 }
+
+
 
 export class CommandQueue {
     #bytes: any[]; // u8[]
@@ -74,6 +78,23 @@ export class CommandQueue {
             this.#panic_recovery
         )
     }
+
+    drop() {
+        if (this.#bytes.length !== 0) {
+            console.warn('CommandQueue has un-applied commands being dropped. Did you forget to call SystemState.apply()?')
+        }
+
+        this.get_raw().apply_or_drop_queued(null);
+    }
+
+
+    apply_system_buffer(_system_meta: SystemMeta, world: World) {
+        this.apply(world);
+    }
+
+    queue_system_buffer(_system_meta: SystemMeta, world: World) {
+        world.commands().append(this)
+    }
 }
 
 export class RawCommandQueue {
@@ -87,19 +108,58 @@ export class RawCommandQueue {
         this.#panic_recovery = panic_recovery;
     }
 
-    apply_or_drop_queued(world: World) { }
 
     is_empty() {
         return this.#cursor >= this.#bytes.length
     }
 
     push(command: Command) {
+        const meta: CommandMeta = {
+            consume_command_and_get_size(_value, world, cursor) {
+                cursor++;
+                if (world) {
+                    command.exec(world);
+                    world.flush();
+                }
+                return cursor;
+            },
+        }
 
-        let meta;
-        // const meta = {
-        //     meta: ,
-        //     command,
-        // }
+        this.#bytes.push({ meta, command } as unknown as number);
+    }
+
+    apply_or_drop_queued(world: Option<World>) {
+        const start = this.#cursor;
+        const stop = this.#bytes.length;
+        let local_cursor = start;
+        this.#cursor = stop;
+
+        while (local_cursor < stop) {
+            const meta = this.#bytes[local_cursor];
+            local_cursor += 1;
+
+            // @ts-expect-error
+            const cmd = meta.command;
+            try {
+
+                // @ts-expect-error
+                (meta.meta.consume_command_and_get_size)(cmd, world, local_cursor);
+            } catch (error) {
+                const panic_recovery = this.#panic_recovery;
+                const bytes = this.#bytes;
+                const current_stop = bytes.length;
+                panic_recovery.push(...bytes.slice(local_cursor, current_stop));
+                bytes.length = start;
+                this.#cursor = start;
+
+                if (start === 0) {
+                    bytes.push(...panic_recovery);
+                }
+            }
+        }
+
+        this.#bytes.length = start;
+        this.#cursor = start;
     }
 
     clone() {

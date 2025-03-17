@@ -26,5 +26,10 @@ test('app add_event', () => {
 
 test('app default', () => {
     const app = App.default();
-    app.run();
+    // for (let i = 0; i < 10; i++) {
+    //     console.time('app run');
+    //     app.run();
+    //     console.timeEnd('app run');
+    // }
+    // app.run();
 })

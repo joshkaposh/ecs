@@ -1,5 +1,4 @@
 export * from './world-query';
-export * from './query';
 export * from './fetch';
 export * from './state';
 export * from './filter';

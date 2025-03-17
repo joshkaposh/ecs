@@ -23,7 +23,7 @@ export function define_type<T extends Record<PropertyKey, any>>(type: T & {
 }
 
 export function define_component<T>(ty: T, storage_type: StorageType = 0): T & Prettify<ComponentMetadata> {
-    define_type(ty as any)
+    define_type(ty as TypeId)
     // @ts-expect-error
     ty.storage_type = storage_type;
 
@@ -43,20 +43,20 @@ export function define_resource<R extends Class>(ty: R & Partial<ComponentMetada
         return new ty() as InstanceType<R>;
     }
 
-    return ty as any
+    return ty as Resource<R>
 }
 
 export const ECS_EVENTS_TYPE = 'ECS_EVENTS_TYPE';
 
-export function define_event<E extends Class>(type: E): E {
+export function define_event<E extends Class>(type: E): Event<E> {
     define_resource(type);
-    class EventDefinition extends Events<E> {
+    class EventDefinition extends Events<Event<E>> {
         constructor() {
-            super(type);
+            super(type as unknown as Event<E>);
         }
     }
     // @ts-expect-error
     type[ECS_EVENTS_TYPE] = EventDefinition;
-    type.prototype[ECS_EVENTS_TYPE] = EventDefinition;
+    // type.prototype[ECS_EVENTS_TYPE] = EventDefinition;
     return type as Event<E>;
 }

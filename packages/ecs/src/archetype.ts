@@ -1,5 +1,5 @@
 import { iter, Iterator, Range, range } from "joshkaposh-iterator";
-import { is_none, type Option } from 'joshkaposh-option'
+import { is_none, u32, type Option } from 'joshkaposh-option'
 import { ComponentId } from "./component";
 import { TableId, type TableRow } from "./storage/table";
 import { Entity, EntityLocation } from "./entity";
@@ -7,8 +7,7 @@ import { StorageType } from "./storage";
 import { SparseArray, SparseSet } from "./storage/sparse-set";
 import { reserve, swap_remove, split_at } from "./array-helpers";
 import { type BundleId } from './bundle';
-import { u32 } from "intrinsics";
-import { entry, Enum } from "./util";
+import { entry } from "./util";
 
 export type ArchetypeGeneration = number;
 export const ArchetypeGeneration = {
@@ -24,7 +23,7 @@ export const ArchetypeId = {
 }
 
 
-export type ComponentStatus = Enum<typeof ComponentStatus>
+export type ComponentStatus = 0 | 1;
 export const ComponentStatus = {
     Added: 0,
     Existing: 1,
@@ -215,11 +214,7 @@ export class Archetype {
      * All of the IDs are unique.
      */
     table_components(): Iterator<ComponentId> {
-
-        return this.#components
-            .iter()
-            .filter(([_, component]) => component.storage_type === StorageType.Table)
-            .map(([id]) => id)
+        return this.#components.iter().filter_map(([id, component]) => component.storage_type === StorageType.Table ? id : null)
     }
 
     /**
@@ -229,10 +224,7 @@ export class Archetype {
      * All of the IDs are unique.
      */
     sparse_set_components(): Iterator<ComponentId> {
-        return this.#components
-            .iter()
-            .filter(([_, component]) => component.storage_type == StorageType.SparseSet)
-            .map(([id]) => id)
+        return this.#components.iter().filter_map(([id, component]) => component.storage_type === StorageType.SparseSet ? id : null)
     }
 
     /**
@@ -245,8 +237,12 @@ export class Archetype {
         return this.#components.indices()
     }
 
+    __components_array(): ComponentId[] {
+        return this.#components.__indices_array();
+    }
+
     component_count() {
-        return this.#components.len();
+        return this.#components.length;
     }
 
     __components_with_archetype_component_id() {
@@ -406,7 +402,6 @@ type ArchetypeRecord = {
 type ComponentIndex = Map<ComponentId, Map<ArchetypeId, ArchetypeRecord>>
 
 function hash_by_components(ident: ArchetypeComponents) {
-    console.log('hash_by_components', ident)
     return `Table: ${ident.table_components.join(' ')}, Sparse: ${ident.sparse_set_components.join(' ')}` as const
 }
 

@@ -4,7 +4,7 @@ export type SystemInput = {
     Param: SystemInput;
     Inner: any;
     /**
-     * wraps a SystemInout::Inner into a SystemInput::Param
+     * wraps a SystemInput::Inner into a SystemInput::Param
      */
     wrap(): SystemInput;
 } | unit;

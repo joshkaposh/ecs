@@ -1,9 +1,4 @@
-// export class Mouse {
-//     constructor() { }
-// }
-
-import { Entity, EventReader } from "../../packages/ecs/src";
-import { ResMut } from "../ecs/change_detection";
+import { ResMut, Entity, EventReader } from "ecs";
 import { ButtonInput, ButtonState } from "./button_input";
 
 export type MouseButtonInput = {

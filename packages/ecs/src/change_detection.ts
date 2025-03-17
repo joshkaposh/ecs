@@ -1,7 +1,7 @@
-import { is_some, Option } from "joshkaposh-option";
-import { Component, Resource, Tick } from 'ecs';
-import { u32 } from "intrinsics";
+import { type Option, u32 } from "joshkaposh-option";
+import { Component, ComponentId, Resource, SystemMeta, Tick, World } from 'ecs';
 import { DeepReadonly, Instance } from "./util";
+import { assert } from "joshkaposh-iterator/src/util";
 
 export const CHECK_TICK_THRESHOLD = 518_400_000;
 
@@ -98,7 +98,7 @@ export abstract class DetectChangesMut<T extends any> extends DetectChanges<T> {
 
     filter_map_unchanged<U>(f: (value: T) => Option<U>) {
         const value = f(this.v);
-        if (is_some(value)) {
+        if (value != null) {
             return this.constructor(value, this.ticks)
         }
     }
@@ -199,12 +199,17 @@ export class Ref<T> extends DetectChanges<T> {
 }
 
 export class Mut<T> extends DetectChangesMut<T> {
-    v: Instance<T>;
+    #value: Instance<T>;
     ticks: TicksMut;
     constructor(value: Instance<T>, ticks: TicksMut) {
         super();
-        this.v = value;
+        this.#value = value;
         this.ticks = ticks;
+    }
+
+    get v() {
+        this.set_changed();
+        return this.#value;
     }
 
     has_changed_since(tick: Tick) {
@@ -216,6 +221,10 @@ export class Mut<T> extends DetectChangesMut<T> {
 export class Res<T> extends DetectChanges<T> {
     v: Instance<T>;
     ticks: Ticks;
+
+    static State: ComponentId;
+    static Item: Instance<Resource>
+
     constructor(type: Instance<T>, ticks: Ticks) {
         super()
         this.v = type;
@@ -226,8 +235,79 @@ export class Res<T> extends DetectChanges<T> {
         return new Res(res.v, res.ticks);
     }
 
+    static init_state<T extends Resource>(world: World, system_meta: SystemMeta, resource: T) {
+        const component_id = world.components().register_resource(resource);
+        const archetype_component_id = world.__initialize_resource_internal(component_id).id();
+
+        const combined_access = system_meta.__component_access_set.combined_access();
+
+        assert(!combined_access.has_resource_write(component_id), `Res<${resource.name}> in system ${system_meta.name()} conflicts with a previous ResMut<${resource.name}> access. Consider removing the duplicate access.`)
+
+        system_meta.__component_access_set.__add_unfiltered_resource_read(component_id);
+
+        system_meta.__archetype_component_access.add_resource_read(archetype_component_id);
+        return component_id;
+    }
+
+    static validate_param(component_id: ComponentId, system_meta: SystemMeta, world: World) {
+        const is_valid = world.storages().resources.get(component_id)?.is_present() ?? false;
+        if (!is_valid) {
+            system_meta.try_warn_param(Res)
+            return false;
+        }
+        return true;
+    }
+
+    static get_param<T>(component_id: ComponentId, system_meta: SystemMeta, world: World, change_tick: Tick) {
+        const tuple = world.get_resource_with_ticks(component_id);
+        if (!tuple) {
+            throw new Error(`Resource requested by ${system_meta.name()} does not exist`);
+        }
+
+        const [ptr, ticks] = tuple;
+
+        return new Res<T>(ptr as Instance<T>, new Ticks(ticks.added, ticks.changed, system_meta.last_run, change_tick))
+    }
+
+    static new_archetype() { }
+
+    static queue() { }
+
+
     clone() {
         return new Res(this.v, this.ticks.clone())
+    }
+}
+
+export class OptionRes<T> extends DetectChanges<T> {
+    v: Instance<T>;
+    ticks: Ticks;
+    //! typescript types
+    static State: ComponentId;
+    static Item: Res<Resource>;
+
+    constructor(resource: Instance<T>, ticks: Ticks) {
+        super();
+        this.v = resource;
+        this.ticks = ticks;
+    }
+
+    static init_state<T extends Resource>(world: World, system_meta: SystemMeta, type: T) {
+        return Res.init_state(world, system_meta, type)
+    }
+
+    static get_param<T extends Resource>(component_id: ComponentId, system_meta: SystemMeta, world: World, change_tick: Tick) {
+        const tuple = world.get_resource_with_ticks<T>(component_id);
+        if (!tuple) {
+            return
+        }
+
+        const [ptr, ticks] = tuple;
+        return new Res(ptr, new Ticks(ticks.added, ticks.changed, system_meta.last_run, change_tick));
+    }
+
+    clone() {
+        return new OptionRes(this.v, this.ticks);
     }
 }
 

@@ -1,14 +1,14 @@
 import { is_some, type Option } from "joshkaposh-option";
 import { Archetype, Component, ComponentId, Components, EntityRef, FilteredAccess, StorageType, Tick, World } from "ecs";
-import { DeepReadonly, unit } from "../util";
+import { DeepReadonly, unit, debug_assert } from "../util";
 import { Entity } from "../entity";
 import { Table, TableRow } from "../storage/table";
 import { is_dense, WorldQuery } from "./world-query";
-import { assert } from "joshkaposh-iterator/src/util";
 import { ComponentSparseSet } from "../storage/sparse-set";
 import { TicksMut, Ticks, Ref, $read_and_write, $readonly } from "../change_detection";
 
-export type QueryData<Item = unit, Fetch = unit, State = unit> = WorldQuery<Item, Fetch, State>
+export interface QueryData<Item = any, Fetch = any, State = any> extends WorldQuery<Item, Fetch, State> { }
+export interface ReadonlyQueryData<Item = any, Fetch = any, State = any> extends QueryData<Item, Fetch, State> { }
 
 class QueryEntity extends WorldQuery<Entity, unit, unit> {
     readonly IS_DENSE = true;
@@ -21,11 +21,10 @@ class QueryEntity extends WorldQuery<Entity, unit, unit> {
 
     set_table(_fetch: unit, _state: unit, _table: Table): void { }
 
-    update_component_access(_state: unit, _access: FilteredAccess<ComponentId>): void { }
+    update_component_access(_state: unit, _access: FilteredAccess): void { }
 
 
     init_state(_world: World): unit {
-        this.__state = unit
         return unit;
     }
 
@@ -58,9 +57,9 @@ class QueryEntityRef extends WorldQuery<EntityRef, World, unit> {
         return world.get_entity(entity)!;
     }
 
-    update_component_access(_state: unit, access: FilteredAccess<ComponentId>): void {
+    update_component_access(_state: unit, access: FilteredAccess): void {
 
-        assert(!access.access().has_any_component_write())
+        debug_assert(!access.access().has_any_component_write())
         access.read_all_components();
     }
 
@@ -86,15 +85,10 @@ export class StorageSwitch<
     table!: T
     sparse_set!: S;
 
-    private constructor(C: C) {
+    constructor(C: C, table: () => Option<T>, sparse_set: () => Option<S>) {
         this._marker = C;
-    }
-
-    static new<C extends Component, T extends any, S extends any>(C: C, table: () => Option<T>, sparse_set: () => Option<S>): StorageSwitch<C, T, S> {
-        const sw = new StorageSwitch(C)
-        sw.table = table()!;
-        sw.sparse_set = sparse_set()!
-        return sw as StorageSwitch<C, T, S>;
+        this.table = table()!;
+        this.sparse_set = sparse_set()!;
     }
 
     extract<R>(table: (t: T) => R, sparse_set: (s: S) => R): R {
@@ -120,6 +114,7 @@ type RefFetch<T extends Component> = {
     this_run: Tick;
 }
 
+// @ts-expect-error
 class RefComponent<T extends Component, R extends Ref<T>> extends WorldQuery<InstanceType<T>, RefFetch<T>, ComponentId> {
     #ty: T;
     readonly IS_DENSE: boolean;
@@ -131,7 +126,7 @@ class RefComponent<T extends Component, R extends Ref<T>> extends WorldQuery<Ins
 
     init_fetch(world: World, component_id: number, last_run: Tick, this_run: Tick) {
         const fetch = {
-            components: StorageSwitch.new(this.#ty, () => undefined, () => world.storages().sparse_sets.get(component_id)!),
+            components: new StorageSwitch(this.#ty, () => undefined, () => world.storages().sparse_sets.get(component_id)!),
             last_run,
             this_run,
         } as RefFetch<T>
@@ -160,6 +155,7 @@ class RefComponent<T extends Component, R extends Ref<T>> extends WorldQuery<Ins
         return fetch.components.extract(
             (table) => {
                 const [table_components, added_ticks, changed_ticks] = table!;
+                // @ts-expect-error
                 const component = table_components[table_row];
                 // @ts-expect-error
                 const added = added_ticks[table_row];
@@ -174,19 +170,17 @@ class RefComponent<T extends Component, R extends Ref<T>> extends WorldQuery<Ins
         ) as any
     }
 
-    update_component_access(component_id: number, access: FilteredAccess<ComponentId>): void {
-        assert(!access.access().has_component_write(component_id));
+    update_component_access(component_id: number, access: FilteredAccess): void {
+        debug_assert(!access.access().has_component_write(component_id));
         access.add_component_read(component_id);
     }
 
     init_state(world: World): number {
-        const state = world.init_component(this.#ty);
-        this.__state = state;
-        return state
+        return world.register_component(this.#ty);
     }
 
-    get_state(_components: Components): Option<number> {
-        return this.__state;
+    get_state(components: Components): Option<number> {
+        return components.component_id(this.#ty)
     }
 
     matches_component_set(state: number, set_contains_id: (id: ComponentId) => boolean): boolean {
@@ -200,6 +194,7 @@ type ReadFetch<T extends Component> = {
 
 class ReadComponent<T extends Component> extends WorldQuery<DeepReadonly<T>, ReadFetch<T>, ComponentId> {
     #ty: T;
+    #fetch!: ReadFetch<T>;
     readonly IS_DENSE: boolean;
     constructor(component: T) {
         super()
@@ -208,12 +203,20 @@ class ReadComponent<T extends Component> extends WorldQuery<DeepReadonly<T>, Rea
     }
 
     init_fetch(world: World, component_id: number, _last_run: Tick, _this_run: Tick) {
+        const fetch: ReadFetch<T> = {
+            components: new StorageSwitch(
+                this.#ty,
+                () => undefined,
+                () => world.storages().sparse_sets.get(component_id)!
+            )
+        }
+        this.#fetch = fetch;
 
-        const fetch = {
-            components: StorageSwitch.new(this.#ty, () => undefined, () => world.storages().sparse_sets.get(component_id)!)
-        } as ReadFetch<T>
-        this.__fetch = fetch;
         return fetch
+    }
+
+    update_fetch(world: World, component_id: number, _last_run: Tick, _this_run: Tick) {
+        this.#fetch.components.sparse_set = world.storages().sparse_sets.get(component_id)!
     }
 
     set_archetype(fetch: ReadFetch<T>, component_id: number, _archetype: Archetype, table: Table): void {
@@ -227,35 +230,28 @@ class ReadComponent<T extends Component> extends WorldQuery<DeepReadonly<T>, Rea
         fetch.components.set_table(table_data as any);
     }
 
+    // @ts-expect-error
     fetch(fetch: ReadFetch<T>, entity: Entity, table_row: number): InstanceType<T> {
-        const c = fetch.components.extract(
-            (table) => {
-                return table![table_row]
-            },
-            (sparse_set) => sparse_set.get(entity)
-        ) as InstanceType<T>
-
         return $readonly(fetch.components.extract(
             (table) => {
+                // @ts-expect-error
                 return table![table_row]
             },
             (sparse_set) => sparse_set.get(entity)
         )) as InstanceType<T>;
     }
 
-    update_component_access(component_id: number, access: FilteredAccess<ComponentId>): void {
-        assert(!access.access().has_component_write(component_id));
+    update_component_access(component_id: number, access: FilteredAccess): void {
+        debug_assert(!access.access().has_component_write(component_id));
         access.add_component_read(component_id);
     }
 
     init_state(world: World): number {
-        const state = world.init_component(this.#ty);
-        this.__state = state;
-        return state
+        return world.register_component(this.#ty);
     }
 
-    get_state(_components: Components): Option<number> {
-        return this.__state;
+    get_state(components: Components): Option<number> {
+        return components.component_id(this.#ty);
     }
 
     matches_component_set(state: number, set_contains_id: (id: ComponentId) => boolean): boolean {
@@ -280,7 +276,7 @@ class WriteComponent<T extends Component> extends WorldQuery<InstanceType<T>, Wr
 
     init_fetch(world: World, component_id: number, last_run: Tick, this_run: Tick): WriteFetch<T> {
         return {
-            components: StorageSwitch.new(this.#ty, () => undefined, () => world.storages().sparse_sets.get(component_id)!),
+            components: new StorageSwitch(this.#ty, () => undefined, () => world.storages().sparse_sets.get(component_id)!),
             last_run,
             this_run
         }
@@ -325,15 +321,13 @@ class WriteComponent<T extends Component> extends WorldQuery<InstanceType<T>, Wr
         }) as InstanceType<T>;
     }
 
-    update_component_access(component_id: number, access: FilteredAccess<ComponentId>): void {
-        assert(!access.access().has_component_read(component_id))
+    update_component_access(component_id: number, access: FilteredAccess): void {
+        debug_assert(!access.access().has_component_read(component_id))
         access.add_component_write(component_id);
     }
 
     init_state(world: World) {
-        const s = world.register_component(this.#ty);
-        this.__state = s;
-        return s;
+        return world.register_component(this.#ty);
     }
 
     get_state(components: Components): Option<number> {
@@ -388,7 +382,7 @@ class OptionComponent<T extends Component> extends WorldQuery<Option<InstanceTyp
         }
     }
 
-    update_component_access(state: number, access: FilteredAccess<ComponentId>): void {
+    update_component_access(state: number, access: FilteredAccess): void {
         const intermediate = access.clone();
         this.#T.update_component_access(state, intermediate);
         access.extend_access(intermediate);
@@ -413,6 +407,10 @@ export class QueryDataTuple extends WorldQuery<any, any, any> {
         super()
         this.#queries = queries;
         this.IS_DENSE = queries.every(q => q.IS_DENSE);
+    }
+
+    get debug_queries() {
+        return this.#queries;
     }
 
     static from_data(data: any[] | readonly any[]) {
@@ -450,7 +448,7 @@ export class QueryDataTuple extends WorldQuery<any, any, any> {
         return f;
     }
 
-    update_component_access(state: any, access: FilteredAccess<ComponentId>): void {
+    update_component_access(state: any, access: FilteredAccess): void {
         const _new_access = FilteredAccess.matches_nothing();
 
         for (let i = 0; i < state.length; i++) {
@@ -464,13 +462,15 @@ export class QueryDataTuple extends WorldQuery<any, any, any> {
     }
 
     init_state(world: World): any {
-        const state = Array.from({ length: this.#queries.length }, (_, i) => this.#queries[i].init_state(world))
-        this.__state = state as any;
-        return state;
+        return Array.from({ length: this.#queries.length }, (_, i) => this.#queries[i].init_state(world))
     }
 
     get_state(components: Components): Option<any> {
         return Array.from({ length: this.#queries.length }, (_, i) => this.#queries[i].get_state(components))
+    }
+
+    debug_get_state(components: Components) {
+        return this.#queries.map((_, i, q) => q[i].get_state(components))
     }
 
     matches_component_set(state: any[], set_contains_id: (id: ComponentId) => boolean): boolean {

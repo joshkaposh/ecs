@@ -1,10 +1,9 @@
 import { Option } from "joshkaposh-option";
-import { Table, TableRow } from ".";
-import { ComponentTicks, Tick } from "../..";
+import { TableRow } from ".";
+import { ComponentTicks, Tick } from "../../component";
 import { capacity, replace, reserve, swap, swap_remove } from "../../array-helpers";
 import { debug_assert } from "../../util";
 import { TODO } from "joshkaposh-iterator/src/util";
-import { iter } from "joshkaposh-iterator";
 
 function alloc(array: any[], new_capacity: number) {
     TODO('alloc', array, new_capacity)
@@ -119,13 +118,14 @@ export class Column {
         return new ComponentTicks(this.added_ticks[row], this.changed_ticks[row]);
     }
 
-    private __swap_remove_unchecked(row: TableRow) {
-        swap_remove(this.data, row)
-        swap_remove(this.added_ticks, row)
-        swap_remove(this.changed_ticks, row)
+    private __swap_remove_unchecked(row: TableRow): Option<[{}, Tick, Tick]> {
+        const d = swap_remove(this.data, row)
+        const a = swap_remove(this.added_ticks, row)
+        const c = swap_remove(this.changed_ticks, row);
+        return d == null ? undefined : [d, a!, c!];
     }
 
-    private __drop_last_component(last_element_index: number) {
+    private pop(last_element_index: number) {
         this.data.pop();
         this.added_ticks.pop();
         this.changed_ticks.pop();
@@ -148,15 +148,15 @@ export class Column {
      * The caller should make sure their saved capacity is updated to new_capacity after this operation
      */
     private __realloc(current_capacity: number, new_capacity: number) {
-        realloc(this.data, current_capacity, new_capacity)
-        realloc(this.added_ticks, current_capacity, new_capacity)
-        realloc(this.changed_ticks, current_capacity, new_capacity)
+        // realloc(this.data, current_capacity, new_capacity)
+        // realloc(this.added_ticks, current_capacity, new_capacity)
+        // realloc(this.changed_ticks, current_capacity, new_capacity)
     }
 
     private __alloc(new_capacity: number) {
-        alloc(this.data, new_capacity)
-        alloc(this.added_ticks, new_capacity)
-        alloc(this.changed_ticks, new_capacity)
+        // alloc(this.data, new_capacity)
+        // alloc(this.added_ticks, new_capacity)
+        // alloc(this.changed_ticks, new_capacity)
     }
 
     /**

@@ -1,6 +1,6 @@
 import { type Option } from "joshkaposh-option";
 import { unit } from "../util";
-import { Archetype } from "../../../../src/ecs/archetype";
+import { Archetype } from "../archetype";
 import { Entity } from "../entity";
 import { Table, type TableRow } from "../storage/table";
 import { World } from "../world";
@@ -12,7 +12,7 @@ export function is_dense(ty: Component) {
     return ty.storage_type === StorageType.Table
 }
 
-export abstract class WorldQuery<Item, Fetch = unit, State = unit> {
+export abstract class WorldQuery<Item, Fetch = any, State = any> {
     __item!: Item;
     __fetch!: Fetch;
     __state!: State;

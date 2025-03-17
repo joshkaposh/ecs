@@ -1,17 +1,17 @@
 import { assert } from "joshkaposh-iterator/src/util";
-import { ArchetypeComponentId, ArchetypeGeneration } from "../archetype";
-import { ComponentId, Tick } from "../component";
+import { ArchetypeGeneration } from "../archetype";
+import { Tick } from "../component";
 import { Access, FilteredAccessSet } from "../query";
 import { World, WorldId } from "../world";
 import { SystemParam, SystemParamItem } from "./system-param";
 import { Option } from "joshkaposh-option";
 import { SystemInput } from "./input";
-// import { System } from "./system";
 import { SystemTypeSet } from "../schedule/set";
+import { ParamBuilder } from "./param-builder";
 
 export class SystemMeta {
-    __component_access_set: FilteredAccessSet<ComponentId>;
-    __archetype_component_access: Access<ArchetypeComponentId>;
+    __component_access_set: FilteredAccessSet;
+    __archetype_component_access: Access;
     __param_warn_policy: ParamWarnPolicy
     #name: string;
     #is_send: boolean;
@@ -21,7 +21,7 @@ export class SystemMeta {
     private constructor(
         name: string,
         archetype_component_access: Access,
-        component_access_set: FilteredAccessSet<ComponentId>,
+        component_access_set: FilteredAccessSet,
         is_send: boolean,
         has_deferred: boolean,
         last_run: Tick,
@@ -40,8 +40,8 @@ export class SystemMeta {
         const name = type.name;
         return new SystemMeta(
             name,
-            Access.default(),
-            FilteredAccessSet.default(),
+            new Access(),
+            new FilteredAccessSet(),
             true,
             false,
             new Tick(0),
@@ -138,14 +138,14 @@ class ParamWarnPolicy {
 export class SystemState<Param extends SystemParam<any, any>> {
     #meta: SystemMeta;
     #param: Param;
-    #param_state: ReturnType<Param['param_init_state']>
+    #param_state: Param['State']
     #world_id: WorldId;
     #archetype_generation: ArchetypeGeneration;
 
     private constructor(
         meta: SystemMeta,
         param: Param,
-        param_state: ReturnType<Param['param_init_state']>,
+        param_state: Param['State'],
         world_id: WorldId,
         archetype_generation: ArchetypeGeneration
     ) {
@@ -161,18 +161,20 @@ export class SystemState<Param extends SystemParam<any, any>> {
         const meta = SystemMeta.new(param);
         meta.last_run = world.change_tick().relative_to(Tick.MAX);
 
-        // const param_state = param.param_init_state(world, meta);
-        // TODO: re-implement
+        console.log('SystemState.new()', param);
+
+        const param_state = param.init_state(world, meta);
+
         return new SystemState(
             meta,
             param,
-            param as any,
+            param_state,
             world.id(),
             ArchetypeGeneration.initial()
         )
     }
 
-    static from_builder<Param extends SystemParam<any, any>>(world: World, param: Param, builder: SystemParamBuilder) {
+    static from_builder<Param extends SystemParam<any, any>>(world: World, builder: ParamBuilder<any[]>, param: Param) {
         const meta = SystemMeta.new(param);
         meta.last_run = world.change_tick().relative_to(Tick.MAX);
         const param_state = builder.build(world, meta, param)
@@ -187,6 +189,16 @@ export class SystemState<Param extends SystemParam<any, any>> {
 
     static from_world<Param extends SystemParam<any, any>>(world: World, param: Param) {
         return SystemState.new(world, param)
+    }
+
+    build_any_system<Marker, Fn extends SystemParamFunction<Marker, Param>>(marker: Marker, fn: Fn) {
+        return new FunctionSystem(
+            marker,
+            fn,
+            new FunctionSystemState(this.#param_state, this.#world_id),
+            this.#meta,
+            this.#archetype_generation,
+        )
     }
 
     meta(): SystemMeta {
@@ -209,12 +221,12 @@ export class SystemState<Param extends SystemParam<any, any>> {
         return this.get_unchecked_manual(world);
     }
 
-    param_apply(world: World) {
-        this.#param.param_apply(this.#param_state, this.#meta, world);
+    apply(world: World) {
+        this.#param.apply(this.#param_state, this.#meta, world);
     }
 
-    param_validate_param(world: World) {
-        return this.#param.param_validate_param(this.#param_state, this.#meta, world);
+    validate_param(world: World) {
+        return this.#param.validate_param(this.#param_state, this.#meta, world);
     }
 
     matches_world(world_id: WorldId) {
@@ -228,17 +240,13 @@ export class SystemState<Param extends SystemParam<any, any>> {
     }
 
     update_archetypes(world: World) {
-        this.update_archetypes_unsafe_world_cell(world)
-    }
-
-    update_archetypes_unsafe_world_cell(world: World) {
         assert(this.#world_id === world.id())
         const archetypes = world.archetypes();
         const old_generation = this.#archetype_generation;
         this.#archetype_generation = archetypes.generation();
 
         // for (const archetype of archetypes.iter_range(old_generation)) {
-        //     this.#param.param_new_archetype(this.#param_state, archetype, this.#meta)
+        //     this.#param.new_archetype(this.#param_state, archetype, this.#meta)
         // }
     }
 
@@ -262,14 +270,13 @@ export class SystemState<Param extends SystemParam<any, any>> {
     }
 
     fetch(world: World, change_tick: Tick) {
-        // const param = this.#param.param_get_param(this.#param_state, this.#meta, world, change_tick);
-        this.#meta.last_run = change_tick;
-        // return param;
-        return this.#param;
+        const param = this.#param.get_param(this.#param_state, this.#meta, world, change_tick);
+        this.#meta.last_run.set(change_tick.get());
+        return param;
     }
 }
 
-export class FunctionSystem<Marker, F extends SystemParamFunction<any>> {
+export class FunctionSystem<Marker, F extends SystemParamFunction<any, any>> {
     #func: F;
     #state: Option<FunctionSystemState<F['Param']>>;
     #system_meta: SystemMeta;
@@ -346,7 +353,7 @@ export class FunctionSystem<Marker, F extends SystemParamFunction<any>> {
         }
 
         const param_state = this.#state.param;
-        const params = this.#func.Param.param_get_param(param_state, this.#system_meta, world, change_tick);
+        const params = this.#func.Param.get_param(param_state, this.#system_meta, world, change_tick);
         const out = this.#func.run(input, params);
         this.#system_meta.last_run = change_tick;
         return out;
@@ -358,7 +365,7 @@ export class FunctionSystem<Marker, F extends SystemParamFunction<any>> {
         }
 
         const param_state = this.#state.param;
-        this.#func.Param.param_apply(param_state, this.#system_meta, world);
+        this.#func.Param.apply(param_state, this.#system_meta, world);
     }
 
     queue_deferred(world: World) {
@@ -367,7 +374,7 @@ export class FunctionSystem<Marker, F extends SystemParamFunction<any>> {
         }
 
         const param_state = this.#state.param;
-        this.#func.Param.param_queue(param_state, this.#system_meta, world)
+        this.#func.Param.queue(param_state, this.#system_meta, world)
     }
 
     validate_param_unsafe(world: World) {
@@ -376,7 +383,7 @@ export class FunctionSystem<Marker, F extends SystemParamFunction<any>> {
         }
         const param_state = this.#state.param;
 
-        const is_valid = this.#func.Param.param_validate_param(param_state, this.#system_meta, world);
+        const is_valid = this.#func.Param.validate_param(param_state, this.#system_meta, world);
         if (!is_valid) {
             this.#system_meta.advance_param_warn_policy();
         }
@@ -388,12 +395,11 @@ export class FunctionSystem<Marker, F extends SystemParamFunction<any>> {
     }
 
     initialize(world: World) {
-
         if (this.#state) {
             assert(this.#state.world_id === world.id(), 'System build with a different world than the one it was added to');
         } else {
             this.#state = new FunctionSystemState(
-                this.#func.Param.param_init_state(world, this.#system_meta),
+                this.#func.Param.init_state(world, this.#system_meta),
                 world.id()
             )
         }
@@ -410,7 +416,7 @@ export class FunctionSystem<Marker, F extends SystemParamFunction<any>> {
         const old_generation = this.#archetype_generation;
         this.#archetype_generation = archetypes.generation();
         for (const archetype of archetypes.iter_range(old_generation)) {
-            this.#func.Param.param_new_archetype(state.param, archetype, this.#system_meta)
+            this.#func.Param.new_archetype(state.param, archetype, this.#system_meta)
         }
     }
 
@@ -423,7 +429,7 @@ export class FunctionSystem<Marker, F extends SystemParamFunction<any>> {
     }
 
     default_system_sets() {
-        const set = new SystemTypeSet(this);
+        const set = new SystemTypeSet(this as any);
         // const set = SystemTypeSet::<Self>::new()
         return [set];
     }
@@ -437,7 +443,7 @@ export class FunctionSystem<Marker, F extends SystemParamFunction<any>> {
     }
 }
 
-export abstract class SystemParamFunction<Marker> {
+export abstract class SystemParamFunction<Marker, Param> {
     In!: SystemInput;
     Out!: any;
     Param!: SystemParam<any, any>;
@@ -450,9 +456,9 @@ export abstract class SystemParamFunction<Marker> {
         this.marker = marker;
     }
 
-    abstract run(input: SystemParamFunction<any>['In']['Inner'], param_value: SystemParamItem<SystemParamFunction<Marker>['Param']>): SystemParamFunction<Marker>['Out'];
+    abstract run(input: SystemParamFunction<any, any>['In']['Inner'], param_value: SystemParamItem<SystemParamFunction<Marker>['Param']>): SystemParamFunction<Marker>['Out'];
 
-    into_system(func: SystemParamFunction<any>) {
+    into_system(func: SystemParamFunction<any, any>) {
         return new FunctionSystem(
             func.marker,
             func,

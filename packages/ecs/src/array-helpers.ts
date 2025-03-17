@@ -1,12 +1,11 @@
-import { is_some, type Option } from "joshkaposh-option";
-import { assert, unused } from "joshkaposh-iterator/src/util";
+import { type Option, assert_eq } from "joshkaposh-option";
 
 export function truncate(array: any[], len: number) {
     array.length = Math.min(array.length, len);
 }
 
 export function retain<T>(data: T[], f: (element: T) => boolean) {
-    for (let i = 0; i < data.length; i++) {
+    for (let i = data.length - 1; i >= 0; i--) {
         if (f(data[i])) {
             continue
         }
@@ -44,12 +43,13 @@ export function swap_remove_unchecked<T>(array: T[], i: number): Option<T> {
 }
 
 export function replace(array: any[], index: number, value: any) {
-    assert(index < array.length);
+    assert_eq(index < array.length, true);
     array[index] = value;
 }
 
+// @ts-ignore;
 export function reserve(array: any[], additional: number) {
-    unused(array, additional);
+    // unused(array, additional);
 }
 
 export function extend<T>(target: T[] | Set<T>, src: Iterable<T>, default_value?: Option<T>) {
@@ -63,7 +63,7 @@ export function extend<T>(target: T[] | Set<T>, src: Iterable<T>, default_value?
 }
 
 export function extend_array<T>(target: T[], src: Iterable<T>, default_value?: Option<T>): void {
-    if (is_some(default_value)) {
+    if (default_value != null) {
         target.push(...Array.from(src, () => default_value))
     } else {
         target.push(...src)
