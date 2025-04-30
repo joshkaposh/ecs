@@ -5,7 +5,7 @@ import { Mut } from "../change_detection";
 import { Event } from "./base";
 import { v4 } from "uuid";
 
-type RegisteredEvent = {
+interface RegisteredEvent {
     component_id: ComponentId;
     /**
      * Required to flush the secondary buffer and drop events even if left unchanged.
@@ -30,39 +30,37 @@ export class EventRegistry {
         this.event_updates = [];
     }
 
-    static register_event<T extends Event>(type: T, world: World) {
-        // @ts-expect-error
-        const component_id = world.init_resource(type.ECS_EVENTS_TYPE);
-        const registry = world.get_resource_or_init(EventRegistry)
+    static registerEvent<T extends Event>(type: T, world: World) {
+        const component_id = world.initResource(type);
+        const registry = world.getResourceOrInit(EventRegistry)
         registry.v.event_updates.push({
             component_id,
             previously_updated: false,
             // @ts-expect-error
-            update: (ptr: Mut<Events<T>>) => ptr.bypass_change_detection().update()
+            update: (ptr: Mut<Events<T>>) => ptr.bypassChangeDetection().update()
         })
     }
 
-    run_updates(world: World, last_change_tick: Tick) {
+    static deregisterEvents(type: Event, world: World) {
+        const component_id = world.initResource(type);
+        const registry = world.getResourceOrInit(EventRegistry).bypassChangeDetection() as unknown as InstanceType<typeof EventRegistry>;
+        registry.event_updates = registry.event_updates.filter(e => e.component_id === component_id);
+        world.removeResource(type);
+    }
+
+    runUpdates(world: World, last_change_tick: Tick) {
         const event_updates = this.event_updates;
         for (let i = 0; i < event_updates.length; i++) {
             const registered_event = event_updates[i];
-            const events = world.get_resource_mut_by_id(registered_event.component_id);
+            const events = world.getResourceMutById(registered_event.component_id);
             if (events) {
-                const has_changed = events.has_changed_since(last_change_tick);
+                const has_changed = events.hasChangedSince(last_change_tick);
                 if (registered_event.previously_updated || has_changed) {
                     registered_event.update(events);
                     registered_event.previously_updated = has_changed || !registered_event.previously_updated;
                 }
             }
         }
-    }
-
-    static deregister_events(type: Event, world: World) {
-        const events_type = type;
-        const component_id = world.init_resource(events_type as any);
-        const registry = world.get_resource_or_init(EventRegistry);
-        registry.v.event_updates = registry.v.event_updates.filter(e => e.component_id === component_id);
-        world.remove_resource(events_type);
     }
 }
 // @ts-expect-error

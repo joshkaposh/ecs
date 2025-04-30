@@ -1,202 +1,7 @@
 import { type Option, is_none } from "joshkaposh-option";
-import { Archetype, Component, ComponentId, ComponentTicks, Entity, EntityLocation, QueryDataTuple, RemapToInstance, StorageType, Tick, TickCells, World } from "..";
-import { $read_and_write, $readonly, Mut, Ref, Ticks, TicksMut } from "../change_detection";
-import { fetch_table, fetch_sparse_set } from "./world";
-
-export class UnsafeEntityCell {
-    #world: World;
-    #entity: Entity;
-    #location: EntityLocation;
-    constructor(
-        world: World, // ReadonlyUnsafeWorldCell
-        entity: Entity,
-        location: EntityLocation
-    ) {
-        this.#world = world;
-        this.#entity = entity;
-        this.#location = location;
-    }
-
-    clone(): UnsafeEntityCell {
-        return new UnsafeEntityCell(this.#world, this.#entity, structuredClone(this.#location))
-    }
-
-    __internal_set_location(new_location: EntityLocation) {
-        this.#location = new_location;
-    }
-
-    id(): Entity {
-        return this.#entity
-    }
-
-    location(): EntityLocation {
-        return this.#location;
-    }
-
-    archetype(): Archetype {
-        return this.#world.archetypes().get(this.#location.archetype_id)!;
-    }
-
-    world() {
-        return this.#world
-    }
-
-    contains(type: Component): boolean {
-        return this.contains_type_id(type.type_id);
-    }
-
-    contains_id(component_id: ComponentId): boolean {
-        return this.archetype().contains(component_id);
-    }
-
-    contains_type_id(type_id: UUID): boolean {
-        const id = this.#world.components().get_id_type_id(type_id);
-        if (id == null) {
-            return false;
-        }
-
-        return this.contains_id(id);
-    }
-
-    get_change_ticks(type: Component): Option<ComponentTicks> {
-        const component_id = this.#world.components().get_id(type)!;
-
-        return get_ticks_inner(this.#world, component_id, type.storage_type, this.#entity, this.#location);
-    }
-
-    get_change_ticks_by_id(component_id: ComponentId): Option<ComponentTicks> {
-        const info = this.#world.components().get_info(component_id)!;
-        return get_ticks_inner(this.#world, component_id, info.storage_type(), this.#entity, this.#location);
-    }
-
-
-    get<T extends Component>(type: T): Option<InstanceType<T>> {
-        const component_id = this.#world.components().get_id(type);
-        if (component_id == null) {
-            return;
-        }
-
-        const component = get_component_inner(
-            this.#world,
-            component_id,
-            type.storage_type,
-            this.#entity,
-            this.#location
-        )
-
-        if (!component) {
-            return
-        }
-
-        return $readonly(component as Component) as InstanceType<T>;
-    }
-
-    get_mut<T extends Component>(type: T): Option<InstanceType<T>> {
-        const world = this.#world;
-        const component_id = world.components().get_id(type);
-        if (typeof component_id !== 'number') {
-            return;
-        }
-        const last_change_tick = world.last_change_tick();
-        const change_tick = world.change_tick();
-
-        const tup = get_component_and_ticks_inner(
-            world,
-            component_id,
-            type.storage_type,
-            this.#entity,
-            this.#location
-        )
-        if (!tup) {
-            return
-        }
-        const [value, cells] = tup;
-
-        return $read_and_write(value,
-            new TicksMut(
-                cells.added,
-                cells.changed,
-                last_change_tick,
-                change_tick
-            )) as InstanceType<T>;
-    }
-
-    get_by_id<T extends Component>(component_id: ComponentId): Option<InstanceType<T>> {
-        const info = this.#world.components().get_info(component_id);
-        if (!info) {
-            return null;
-        }
-
-        return get_component_inner(
-            this.#world,
-            component_id,
-            info.storage_type(),
-            this.#entity,
-            this.#location
-        ) as InstanceType<T>;
-    }
-
-    get_mut_by_id<T extends Component>(component_id: ComponentId): Option<InstanceType<T>> {
-        const info = this.#world.components().get_info(component_id);
-        if (!info) {
-            return null;
-        }
-
-        return get_component_inner(
-            this.#world,
-            component_id,
-            info.storage_type(),
-            this.#entity,
-            this.#location
-        )
-    }
-
-    get_components<Q extends readonly any[]>(query: Q): Option<RemapToInstance<Q>> {
-        const world = this.#world;
-        const q = QueryDataTuple.from_data(query)
-        const state = q.get_state(world.components());
-
-        const location = this.#location;
-        const archetype = world.archetypes().get(location.archetype_id)!;
-
-        if (q.matches_component_set(state, id => archetype.contains(id))) {
-            const fetch = q.init_fetch(
-                world,
-                state,
-                world.last_change_tick(),
-                world.change_tick()
-            );
-
-            const table = world
-                .storages()
-                .tables
-                .get(location.table_id)!;
-
-            q.set_archetype(fetch, state, archetype, table);
-
-            return q.fetch(fetch, this.#entity, location.table_row) as RemapToInstance<Q>;
-        }
-        return
-    }
-
-    get_ref<T extends Component>(type: T): Option<Ref<InstanceType<T>>> {
-        const world = this.#world;
-        const last_change_tick = world.last_change_tick();
-        const change_tick = world.change_tick();
-        const component_id = world.components().get_id(type);
-        if (is_none(component_id)) {
-            return
-        }
-
-        const tuple = get_component_and_ticks_inner(world, component_id, type.storage_type, this.#entity, this.#location);
-        if (!tuple) {
-            return
-        }
-        const [value, cells] = tuple;
-
-        return new Ref(value as InstanceType<T>, Ticks.from_tick_cells(cells, last_change_tick, change_tick));
-    }
-}
+import { type World, type Component, type ComponentId, type Entity, type EntityLocation, type RemapQueryTupleToQueryData, type Tick, ComponentTicks, QueryDataTuple, StorageType, RemapToQueryItem } from "..";
+import { $readonly, Mut, Ref, Ticks, TicksMut } from "../change_detection";
+import { fetchTable, fetchSparseSet } from "./world";
 
 export function get_mut_using_ticks<T extends Component>(
     world: World,
@@ -206,7 +11,7 @@ export function get_mut_using_ticks<T extends Component>(
     last_change_tick: Tick,
     change_tick: Tick
 ): Option<Mut<T>> {
-    const component_id = world.components().get_id(type);
+    const component_id = world.components.getId(type);
     if (typeof component_id !== 'number') {
         return
     }
@@ -215,11 +20,11 @@ export function get_mut_using_ticks<T extends Component>(
         return
     }
     const [value, cells] = tuple;
-    return new Mut(value, TicksMut.from_tick_cells(cells, last_change_tick, change_tick))
+    return new Mut(value, TicksMut.fromTickCells(cells, last_change_tick, change_tick))
 }
 
 export function unsafe_entity_cell_get_mut_by_id<T extends Component>(world: World, entity: Entity, location: EntityLocation, component_id: ComponentId): Option<Mut<T>> {
-    const info = world.components().get_info(component_id);
+    const info = world.components.getInfo(component_id);
     if (!info) {
         return null
     }
@@ -227,7 +32,7 @@ export function unsafe_entity_cell_get_mut_by_id<T extends Component>(world: Wor
     const tuple = get_component_and_ticks_inner<T>(
         world,
         component_id,
-        info.storage_type(),
+        info.storageType,
         entity,
         location
     );
@@ -236,17 +41,17 @@ export function unsafe_entity_cell_get_mut_by_id<T extends Component>(world: Wor
     }
 
     const [value, cells] = tuple;
-    return new Mut(value, TicksMut.from_tick_cells(cells, world.last_change_tick(), world.change_tick()))
+    return new Mut(value, TicksMut.fromTickCells(cells, world.lastChangeTick, world.changeTick))
 }
 
 export function unsafe_entity_cell_get_change_ticks_by_id(world: World, entity: Entity, loc: EntityLocation, component_id: ComponentId): Option<ComponentTicks> {
-    const info = world.components().get_info(component_id)!;
-    return get_ticks_inner(world, component_id, info.storage_type(), entity, loc);
+    const info = world.components.getInfo(component_id)!;
+    return get_ticks_inner(world, component_id, info.storageType, entity, loc);
 
 }
 
 export function unsafe_entity_cell_contains_type_id(world: World, loc: EntityLocation, type_id: UUID): boolean {
-    const id = world.components().get_id_type_id(type_id);
+    const id = world.components.getIdTypeId(type_id);
     if (id == null) {
         return false;
     }
@@ -263,26 +68,26 @@ export function unsafe_entity_cell_contains_id(
     loc: EntityLocation,
     component_id: ComponentId
 ): boolean {
-    return unsafe_entity_cell_archetype(world, loc).contains(component_id);
+    return unsafe_entity_cell_archetype(world, loc).has(component_id);
 
 }
 
 export function unsafe_entity_cell_archetype(world: World, loc: EntityLocation) {
-    return world.archetypes().get(loc.archetype_id)!;
+    return world.archetypes.get(loc.archetype_id)!;
 
 }
 
 export function unsafe_entity_cell_get_change_ticks(world: World, entity: Entity, loc: EntityLocation, type: Component): Option<ComponentTicks> {
-    const component_id = world.components().get_id(type)!;
+    const component_id = world.components.getId(type)!;
 
     return get_ticks_inner(world, component_id, type.storage_type, entity, loc);
 
 }
 
 export function unsafe_entity_cell_get_ref<T extends Component>(world: World, entity: Entity, loc: EntityLocation, component: T) {
-    const last_change_tick = world.last_change_tick();
-    const change_tick = world.change_tick();
-    const component_id = world.components().get_id(component);
+    const last_change_tick = world.lastChangeTick;
+    const change_tick = world.changeTick;
+    const component_id = world.components.getId(component);
     if (is_none(component_id)) {
         return
     }
@@ -293,45 +98,45 @@ export function unsafe_entity_cell_get_ref<T extends Component>(world: World, en
     }
     const [value, cells] = tuple;
 
-    return new Ref(value as InstanceType<T>, Ticks.from_tick_cells(cells, last_change_tick, change_tick));
+    return new Ref(value as InstanceType<T>, Ticks.fromTickCells(cells, last_change_tick, change_tick));
 }
 
-export function unsafe_entity_cell_components<Q extends readonly any[]>(world: World, entity: Entity, loc: EntityLocation, query: Q): RemapToInstance<Q> {
+export function unsafe_entity_cell_components<Q extends readonly any[]>(world: World, entity: Entity, loc: EntityLocation, query: Q): RemapToQueryItem<Q> {
     const components = unsafe_entity_cell_get_components(world, entity, loc, query);
-    if (!components) throw new Error('Query Mismatch Error')
+    if (!components) throw new Error('Query Mismatch Error');
     return components;
 }
 
-export function unsafe_entity_cell_get_components<Q extends readonly any[]>(world: World, entity: Entity, location: EntityLocation, query: Q): Option<RemapToInstance<Q>> {
-    const q = QueryDataTuple.from_data(query);
+export function unsafe_entity_cell_get_components<Q extends readonly any[]>(world: World, entity: Entity, location: EntityLocation, query: Q): Option<RemapToQueryItem<Q>> {
+    const q = new QueryDataTuple(query);
 
-    const state = q.get_state(world.components());
+    const state = q.get_state(world.components);
 
+    const archetype = world.archetypes.get(location.archetype_id)!;
 
-    const archetype = world.archetypes().get(location.archetype_id)!;
-
-    if (q.matches_component_set(state, id => archetype.contains(id))) {
+    if (q.matches_component_set(state, id => archetype.has(id))) {
         const fetch = q.init_fetch(
             world,
             state,
-            world.last_change_tick(),
-            world.change_tick()
+            world.lastChangeTick,
+            world.changeTick
         );
 
         const table = world
-            .storages()
+            .storages
             .tables
             .get(location.table_id)!;
 
         q.set_archetype(fetch, state, archetype, table);
 
-        return q.fetch(fetch, entity, location.table_row) as RemapToInstance<Q>;
+        return q.fetch(fetch, entity, location.table_row) as RemapToQueryItem<Q>;
     }
     return
 }
 
 export function unsafe_entity_cell_get<T extends Component>(world: World, entity: Entity, loc: EntityLocation, type: T): Option<InstanceType<T>> {
-    const component_id = world.components().get_id(type);
+    const component_id = world.components.getId(type);
+
     if (component_id == null) {
         return;
     }
@@ -352,7 +157,7 @@ export function unsafe_entity_cell_get<T extends Component>(world: World, entity
 }
 
 export function unsafe_entity_cell_get_by_id<T extends Component>(world: World, entity: Entity, loc: EntityLocation, component_id: ComponentId): Option<InstanceType<T>> {
-    const info = world.components().get_info(component_id);
+    const info = world.components.getInfo(component_id);
     if (!info) {
         return null;
     }
@@ -360,19 +165,19 @@ export function unsafe_entity_cell_get_by_id<T extends Component>(world: World, 
     return get_component_inner(
         world,
         component_id,
-        info.storage_type(),
+        info.storageType,
         entity,
         loc
     ) as InstanceType<T>;
 }
 
 export function unsafe_entity_cell_get_mut<T extends Component>(world: World, entity: Entity, loc: EntityLocation, type: T): Option<Mut<T>> {
-    const component_id = world.components().get_id(type);
+    const component_id = world.components.getId(type);
     if (typeof component_id !== 'number') {
         return;
     }
-    const last_change_tick = world.last_change_tick();
-    const change_tick = world.change_tick();
+    const last_change_tick = world.lastChangeTick;
+    const change_tick = world.changeTick;
 
     const tup = get_component_and_ticks_inner<T>(
         world,
@@ -386,7 +191,7 @@ export function unsafe_entity_cell_get_mut<T extends Component>(world: World, en
     }
     const [value, cells] = tup;
 
-    return new Mut(value, TicksMut.from_tick_cells(cells, last_change_tick, change_tick))
+    return new Mut(value, TicksMut.fromTickCells(cells, last_change_tick, change_tick))
     // return $read_and_write(value,
     // new TicksMut(
     //     cells.added,
@@ -404,12 +209,13 @@ function get_component_inner<T extends Component>(
     location: EntityLocation
 ): Option<InstanceType<T>> {
     if (storage_type === StorageType.Table) {
-        return world.storages()
+        return world
+            .storages
             .tables
-            .get(location.table_id)?.get_component(component_id, location.table_row) as Option<InstanceType<T>>
+            .get(location.table_id)?.getComponent(component_id, location.table_row) as Option<InstanceType<T>>
     } else if (storage_type === StorageType.SparseSet) {
         return world
-            .storages()
+            .storages
             .sparse_sets
             .get(component_id)
             ?.get(entity) as Option<InstanceType<T>>;
@@ -426,17 +232,18 @@ function get_ticks_inner(
     location: EntityLocation
 ): Option<ComponentTicks> {
     if (storage_type === StorageType.Table) {
-        return world.storages()
+        return world
+            .storages
             .tables
             .get(location.table_id)
-            ?.get_column(component_id)
-            ?.get_ticks(location.table_row)
+            ?.getColumn(component_id)
+            ?.getTicks(location.table_row)
     } else if (storage_type === StorageType.SparseSet) {
         return world
-            .storages()
+            .storages
             .sparse_sets
             .get(component_id)
-            ?.get_ticks(entity);
+            ?.getTicks(entity);
     } else {
         throw new Error(`Unreachable: ${storage_type} has to be either StorageType::Table - ${StorageType.Table} or StorageType::SparseSet - ${StorageType.SparseSet}`)
     }
@@ -448,23 +255,25 @@ function get_component_and_ticks_inner<T extends Component>(
     storage_type: StorageType,
     entity: Entity,
     location: EntityLocation
-): Option<[InstanceType<T>, TickCells]> {
+): Option<[InstanceType<T>, ComponentTicks]> {
     if (storage_type === StorageType.Table) {
-        const table = fetch_table(world, location);
+        const table = fetchTable(world, location);
         if (!table) {
             return
         }
-        const value = table.get_component(component_id, location.table_row);
+
+        const table_row = location.table_row;
+        const value = table.getComponent(component_id, table_row);
+
         if (!value) {
             return
         }
 
-
-        return [value as InstanceType<T>, new TickCells(
-            table.get_added_tick(component_id, location.table_row)!,
-            table.get_changed_tick(component_id, location.table_row)!
+        return [value as InstanceType<T>, new ComponentTicks(
+            table.getAddedTick(component_id, table_row)!,
+            table.getChangedTick(component_id, table_row)!
         )]
     } else {
-        return fetch_sparse_set(world, component_id)?.get_with_ticks(entity);
+        return fetchSparseSet(world, component_id)?.getWithTicks(entity);
     }
 }

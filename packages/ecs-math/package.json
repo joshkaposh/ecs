@@ -1,0 +1,16 @@
+{
+  "name": "ecs-math",
+  "version": "0.0.1",
+  "description": "math primitives for ecs",
+  "keywords": [
+    "math"
+  ],
+  "license": "MIT",
+  "author": "",
+  "type": "module",
+  "main": "src/index.ts",
+  "scripts": {
+    "test": "vitest"
+  },
+  "devDependencies": {}
+}

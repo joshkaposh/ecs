@@ -1,3 +1,4 @@
+import { TODO } from 'joshkaposh-iterator/src/util'
 import { Archetype } from '../../archetype';
 import { Bundle, InsertMode } from '../../bundle';
 import { Mut } from '../../change_detection';
@@ -5,30 +6,33 @@ import { Component, ComponentId, Resource, Tick } from '../../component';
 import { Entities, Entity, EntityDoesNotExistDetails } from '../../entity';
 import { Event } from '../../event';
 import { ScheduleLabel } from '../../schedule';
+import { SystemIn } from '../system';
 import { Instance, MutOrReadonlyArray } from '../../util';
-import { FromWorld, World } from '../../world';
+import { CommandQueue, DeferredWorld, FromWorld, RawCommandQueue, World } from '../../world';
 import { BundleInput, EntityWorldMut } from '../../world/entity-ref';
 import { SystemMeta } from '../function-system';
-import { SystemId, SystemIn } from '../system';
-import { ParamSet, SystemParam, SystemParamClass } from '../system-param';
-import { Command, HandleError, init_resource, insert_batch, insert_resource, remove_resource, run_schedule, run_system, run_system_cached, run_system_cached_with, run_system_with, send_event, spawn_batch, trigger, trigger_targets, unregister_system, unregister_system_cached } from './command';
-import { clear, clone_components, clone_with, CommandWithEntity, despawn, EntityCommand, insert, insert_by_id, insert_if_new, log_components, move_components, observe, remove, remove_with_requires, retain } from './entity-command';
+import { SystemParam, SystemParamClass, Deferred, SystemBuffer } from '../system-param';
+import {
+    Command, init_resource, insert_batch, insert_resource, remove_resource,
+    run_schedule,
+    // run_system, run_system_cached, run_system_cached_with, run_system_with,
+    send_event, spawn_batch,
+    // trigger, trigger_targets, unregister_system, unregister_system_cached
+} from './command';
+import {
+    clear, despawn, EntityCommand, insert, insert_by_id, insert_if_new, log_components, move_components,
+    // observe,
+    remove, remove_with_requires, retain
+} from './entity-command';
 
 export * from './command';
 export * from './entity-command';
 
-type Deferred<T> = any;
-type CommandQueue = any;
-type RawCommandQueue = any;
+// type InternalQueue = Deferred<CommandQueue> | RawCommandQueue;
 
-type InternalQueue = Deferred<CommandQueue> | RawCommandQueue;
+type InternalQueue = CommandQueue | RawCommandQueue;
 
-
-
-type FieldsAlias = [Deferred<CommandQueue>, Entities];
-type FetchState = {
-    state: SystemParam
-}
+type FetchState = [typeof Deferred, Entities];
 
 export class Commands implements SystemParamClass<typeof Commands> {
     #queue: InternalQueue;
@@ -39,12 +43,17 @@ export class Commands implements SystemParamClass<typeof Commands> {
         this.#entities = entities;
     }
 
-    static new(queue: CommandQueue, world: World) {
-        return Commands.new_from_entities(queue, world.entities());
+    static from_world(world: World) {
+        return new Commands(world.getRawCommandQueue(), world.entities);
     }
 
-    static new_from_entities(queue: CommandQueue, entities: Entities) {
-        return new Commands(Deferred(queue), entities)
+    static new(queue: CommandQueue, world: World) {
+        return Commands.new_from_entities(queue, world.entities);
+    }
+
+    static new_from_entities(queue: CommandQueue, entities: Entities): Commands {
+        return TODO('Commands.new_from_entities()')
+        // return new Commands(Deferred(queue), entities)
     }
 
     static new_raw_from_entities(queue: RawCommandQueue, entities: Entities) {
@@ -52,49 +61,64 @@ export class Commands implements SystemParamClass<typeof Commands> {
     }
 
     //* SystemParam impl
-    static init_state(world: World, system_meta: SystemMeta) {
-        // return {
-        //     state: TODO
-        // }
+    static init_state(world: World, system_meta: SystemMeta): FetchState {
+        return [Deferred.init_state(
+            world,
+            system_meta,
+            Commands as unknown as SystemBuffer
+        ),
+        world.entities
+        ]
     }
 
     static new_archetype(state: FetchState, archetype: Archetype, system_meta: SystemMeta) {
-
+        state[0].new_archetype(state, archetype, system_meta);
+        state[1].new_archetype(state, archetype, system_meta)
     }
 
-    static apply(state: FetchState, system_meta: SystemMeta, world: World) {
-
+    static exec(state: FetchState, system_meta: SystemMeta, world: World) {
+        state[0].exec(state, system_meta, world);
+        state[1].exec(state, system_meta, world);
     }
 
-    static queue() { }
-
-    static validate_param() {
-        return true;
+    static queue(state: FetchState, system_meta: SystemMeta, world: DeferredWorld) {
+        state[0].queue(state[0] as any, system_meta, world);
+        state[1].queue(state[1], system_meta, world);
     }
 
-    static get_param(state: FetchState, system_meta: SystemMeta, world: World, change_tick: Tick) {
-        const [f0, f1] = [TODO, TODO];
-        return new Commands(f0, f1)
+    static validate_param(state: FetchState, system_meta: SystemMeta, world: World) {
+        // @ts-expect-error
+        return state[0].validate_param(state, system_meta, world) ??
+            // @ts-expect-error
+            state[1].validate_param(state, system_meta, world);
+    }
+
+    static get_param(state: FetchState, _system_meta: SystemMeta, _world: World, _change_tick: Tick) {
+        return new Commands(state[0] as any, state[1]);
+    }
+
+
+    get() {
+        return this;
     }
 
     append(other: CommandQueue) {
         const queue = this.#queue;
         if (queue instanceof CommandQueue) {
-            queue.bytes.append(other.bytes);
+            // queue.bytes.append(other.bytes);
+            queue.append(other);
         } else {
-            queue.bytes.as_mut().append(other.bytes);
+            TODO('Commands.append RawCommandQueue branch')
+            // queue.bytes.as_mut().append(other);
         }
     }
 
     spawn_empty() {
-        const entity = this.#entities.reserve_entity();
-        return new EntityCommands(entity, this);
+        return new EntityCommands(this.#entities.reserve_entity(), this);
     }
 
-    spawn(bundle: BundleInput) {
-        const entity = this.spawn_empty();
-        entity.insert(bundle);
-        return entity;
+    spawn(...bundle: BundleInput) {
+        return this.spawn_empty().insert(bundle);
     }
 
     entity(entity: Entity) {
@@ -177,7 +201,7 @@ export class Commands implements SystemParamClass<typeof Commands> {
     }
 
     register_system(system: IntoSystem<any, any>) {
-        const entity = this.spawn_empty().id();
+        const entity = this.spawn_empty().id;
         const registered_system = RegisteredSystem.new(system.into_system());
         this.entity(entity).insert(system);
         return SystemId.from_entity(entity);
@@ -230,7 +254,7 @@ export class EntityCommands {
         this.#commands = commands;
     }
 
-    id() {
+    get id() {
         return this.#entity
     }
 
@@ -238,7 +262,7 @@ export class EntityCommands {
         return new EntityEntryCommands(this, component)
     }
 
-    insert(bundle: BundleInput) {
+    insert(...bundle: BundleInput) {
         return this.queue(insert(bundle));
     }
 
@@ -265,9 +289,9 @@ export class EntityCommands {
         return this.queue(insert_by_id(component_id, value));
     }
 
-    insert_by_id(component_id: ComponentId, value: InstanceType<Component>) {
-        return this.queue_handled(insert_by_id(component_id, value), silent());
-    }
+    // insert_by_id(component_id: ComponentId, value: InstanceType<Component>) {
+    //     return this.queue_handled(insert_by_id(component_id, value), silent());
+    // }
 
     try_insert(bundle: BundleInput) {
         return this.queue_handled(insert(bundle), silent());
@@ -291,7 +315,7 @@ export class EntityCommands {
 
 
     try_insert_if_new(bundle: BundleInput) {
-        return this.queue_handled(insert_if_new(bundle, silent()))
+        return this.queue_handled(insert_if_new(bundle), silent())
     }
 
     remove(bundle: BundleInput) {
@@ -320,12 +344,12 @@ export class EntityCommands {
     }
 
     queue<T, M, C extends EntityCommand<T> & CommandWithEntity<M>>(command: C) {
-        this.#commands.queue(command.with_entity(this.#entity));
+        this.#commands.queue(command.with_entity(this.#entity) as any);
         return this;
     }
 
     queue_handled<T, M, C extends EntityCommand<T> & CommandWithEntity<M>>(command: C, error_handler: (world: World, error: Error) => void) {
-        this.#commands.queue_handled(command.with_entity(this.#entity), error_handler);
+        this.#commands.queue_handled(command.with_entity(this.#entity) as any, error_handler);
         return this;
     }
 
@@ -346,30 +370,30 @@ export class EntityCommands {
         return this;
     }
 
-    observer(observer: IntoObserverSystem<Event, Bundle>) {
-        return this.queue(observe(observer))
-    }
+    // observer(observer: IntoObserverSystem<Event, Bundle>) {
+    //     return this.queue(observe(observer))
+    // }
 
-    clone_with(target: Entity, config: (builder: EntityClonerBuilder) => void) {
-        return this.queue(clone_with(target, config))
-    }
+    // clone_with(target: Entity, config: (builder: EntityClonerBuilder) => void) {
+    //     return this.queue(clone_with(target, config))
+    // }
 
-    clone_and_spawn() {
-        return this.clone_and_spawn_with(() => { });
-    }
+    // clone_and_spawn() {
+    //     return this.clone_and_spawn_with(() => { });
+    // }
 
-    clone_and_spawn_with(config: (builder: EntityClonerBuilder) => void) {
-        const entity_clone = this.#commands.spawn_empty().id();
-        this.clone_with(entity_clone, config);
-        return new EntityCommands(this.#commands, this.#entity)
-    }
+    // clone_and_spawn_with(config: (builder: EntityClonerBuilder) => void) {
+    //     const entity_clone = this.#commands.spawn_empty().id();
+    //     this.clone_with(entity_clone, config);
+    //     return new EntityCommands(this.#commands, this.#entity)
+    // }
 
-    clone_components(target: Entity, bundle: BundleInput) {
-        return this.queue(clone_components(target, bundle))
-    }
+    // clone_components(target: Entity, bundle: BundleInput) {
+    //     return this.queue(clone_components(target, bundle))
+    // }
 
     move_components(entity: Entity, bundle: BundleInput) {
-        return this.queue(move_components(target, bundle))
+        return this.queue(move_components(entity, bundle))
     }
 }
 

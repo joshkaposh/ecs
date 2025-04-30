@@ -45,19 +45,19 @@ type EntityFetchSet<FnType extends 0 | 1 | 2> = FnType extends 0 ?
 
 
 export function fetch_ref_entity(cell: World, entity: Entity): Result<EntityRef, ErrorExt<Entity>> {
-    return cell.get_entity(entity) ?? new ErrorExt(entity);
+    return cell.getEntity(entity) ?? new ErrorExt(entity);
 }
 
 export function fetch_mut_entity(cell: World, entity: Entity): Result<EntityWorldMut, EntityFetchError> {
-    const location = cell.entities().get(entity);
+    const location = cell.entities.get(entity);
     if (!location) {
         return new EntityFetchError({ NoSuchEntity: { entity, details: EntityDoesNotExistDetails } })
     }
-    return new EntityWorldMut(cell, entity, location);
+    return new EntityWorldMut(cell, location, entity);
 }
 
 export function fetch_deferred_mut_entity(cell: World, entity: Entity): Result<EntityMut, EntityFetchError> {
-    const location = cell.entities().get(entity);
+    const location = cell.entities.get(entity);
     if (!location) {
         return new EntityFetchError({ NoSuchEntity: { entity, details: EntityDoesNotExistDetails } })
     }
@@ -106,7 +106,7 @@ export function fetch_ref_set(cell: World, set: EntitySet) {
     const refs = new Map<Entity, EntityRef>();
     try {
         set.forEach(id => {
-            const ecell = cell.get_entity(id);
+            const ecell = cell.getEntity(id);
             if (!ecell) {
                 throw id;
             }
@@ -122,7 +122,7 @@ export function fetch_mut_set(cell: World, set: EntitySet) {
     const refs = new Map<Entity, EntityMut>();
     try {
         set.forEach(id => {
-            const location = cell.entities().get(id);
+            const location = cell.entities.get(id);
             if (!location) {
                 throw new EntityFetchError({ NoSuchEntity: { entity: id, details: EntityDoesNotExistDetails } })
             }

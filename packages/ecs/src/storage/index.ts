@@ -1,7 +1,7 @@
-import { ComponentInfo } from "../component";
-import { Resources } from "./resources";
-import { SparseSets } from "./sparse-set";
-import { Tables } from "./table";
+import { ComponentInfo, ThinComponentInfo } from "../component";
+import { Resources, ThinResources } from "./resources";
+import { SparseSets, ThinSparseSets } from "./sparse-set";
+import { Tables, ThinTables } from "./table";
 
 export type StorageTypeTable = 0;
 export type StorageTypeSparseSet = 1;
@@ -11,6 +11,28 @@ export const StorageType = {
     Table: 0,
     SparseSet: 1
 } as const
+
+export * from './table';
+export * from './sparse-set';
+export * from './resources';
+
+export class ThinStorages {
+    readonly tables: ThinTables;
+    readonly sparse_sets: ThinSparseSets;
+    readonly resources: ThinResources;
+
+    constructor(tables = new ThinTables(), sparse_sets = new ThinSparseSets(), resources = new ThinResources()) {
+        this.tables = tables;
+        this.sparse_sets = sparse_sets;
+        this.resources = resources;
+    }
+
+    prepare_component(component: ThinComponentInfo) {
+        if (component.storageType === StorageType.SparseSet) {
+            this.sparse_sets.getOrSet(component);
+        }
+    }
+}
 
 export class Storages {
     readonly tables: Tables;
@@ -24,8 +46,8 @@ export class Storages {
     }
 
     prepare_component(component: ComponentInfo) {
-        if (component.storage_type() === StorageType.SparseSet) {
-            this.sparse_sets.__get_or_insert(component);
+        if (component.storageType === StorageType.SparseSet) {
+            this.sparse_sets.__getOrSet(component);
         }
     }
 }

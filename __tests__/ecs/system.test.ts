@@ -1,50 +1,56 @@
 import { test, assert, expect } from "vitest";
-import { $is_system, ComponentMetadata, define_system, Local, ParamBuilder, Resource, StorageType, World } from "../../packages/ecs";
-import { define_component, define_event, define_resource } from "define";
+import { Local, World } from "ecs";
+import { defineSystem, defineComponent, defineEvent, defineResource } from "define";
 
-const Counter = define_resource(class Counter { constructor(public count = 0) { } });
-const A = define_component(class A { constructor(public value = 'A') { } });
-const B = define_component(class B { constructor(public value = 'B') { } });
-const C = define_component(class C { constructor(public value = 'C') { } });
+test('', () => { })
 
-const MyEvent = define_event(class MyEvent { constructor(public value = 'event instance!') { } })
+// const Counter = defineResource(class Counter { constructor(public count = 0) { } });
+// const A = defineComponent(class A { constructor(public value = 'A') { } });
+// const B = defineComponent(class B { constructor(public value = 'B') { } });
+// const C = defineComponent(class C { constructor(public value = 'C') { } });
 
-test('run_system_once', () => {
-    const Test = define_resource(class Test { constructor(public value = 0) { } });
+// const MyEvent = defineEvent(class MyEvent { constructor(public value = 'event instance!') { } })
 
-    const w = new World();
+// const MySystem = defineSystem(() => { }, () => { });
 
-    const system = define_system((b) => b.res(Test), (t) => {
-        console.log('running system with parameter', t);
-        // expect(t.v).toEqual(new Test(0))
-    });
+// test('run_system_once', () => {
+//     const Test = defineResource(class Test { constructor(public value = 0) { } });
 
-    // w.init_resource(Test);
-    // w.run_system_once(system);
-})
+//     const w = new World();
 
-test('run_system_once_with', () => {
+//     w.incrementChangeTick();
 
-    // const Test = define_resource(class Test { constructor(public value: number = 0) { } });
-    // const w = new World();
-    // w.init_resource(Test);
+//     const system = defineSystem((b) => b.res(Test), (t) => {
+//         t.v.value += 1;
+//         return t.v;
+//     });
 
-    // const system = define_system((b) => b.local(1),
-    //     function system(input) {
-    //         input.value += 1;
-    //         return input.value;
-    //     },
-    // );
+//     w.initResource(Test);
+//     const times = 5;
+//     for (let i = 1; i <= times; i++) {
+//         expect(w.runSystemOnce(system)).toEqual(new Test(i));
+//     }
+// })
 
-    // let n = w.run_system_once_with(system, new Local(1));
+// test('run_system_once_with', () => {
+//     const w = new World();
 
-    // assert(n === 2);
+//     const system = defineSystem((b) => b.local(1),
+//         function system(input) {
+//             input.value += 1;
+//             return input.value;
+//         },
+//     );
 
-})
+//     let n = w.runSystemOnceWith(system, new Local(1));
+
+//     assert(n === 2);
+
+// })
 
 // test('system with query', () => {
 //     const w = new World();
-//     const system = define_system((b) => b.query([A]), (q) => {
+//     const system = defineSystem((b) => b.query([A]), (q) => {
 //         for (const [a] of q) {
 //             console.log(a);
 

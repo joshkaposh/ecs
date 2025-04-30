@@ -1,6 +1,6 @@
 import { iter, Iterator } from "joshkaposh-iterator";
 import { FixedBitSet } from "fixed-bit-set";
-import type { Option } from "joshkaposh-option";
+import { type Option, type Result, ErrorExt, ErrorType } from "joshkaposh-option";
 import { World } from "../world";
 
 export class Access {
@@ -664,6 +664,27 @@ export class Access {
         return [this.__component_writes.ones(), this.__component_writes_inverted]
     }
 
+    // Result<Iterator<ComponentAccessKind, UnboundedAccessError>>
+    try_iter_component_access(): Result<Iterator<ComponentAccessKind>, UnboundedAccessError> {
+        if (this.__component_read_and_writes_inverted) {
+            return new UnboundedAccessError(this.__component_writes_inverted, this.__component_read_and_writes_inverted)
+        }
+
+        const reads_and_writes = this.__component_read_and_writes.ones().map(index => {
+            return this.__component_writes.contains(index) ? ComponentAccessKind.Exclusive(index) : ComponentAccessKind.Shared(index)
+        });
+
+        const archetypal = this.__archetypal
+            .ones()
+            .filter_map(index => {
+                const filter = !this.__component_writes.contains(index)
+                    && !this.__component_read_and_writes.contains(index);
+                return filter ? ComponentAccessKind.Archetypal(index) : undefined;
+            })
+
+        return reads_and_writes.chain(archetypal);
+    }
+
     [Symbol.toPrimitive]() {
         return `Access {
     
@@ -691,7 +712,64 @@ export class Access {
     [Symbol.toStringTag]() {
         return this[Symbol.toPrimitive]();
     }
+}
 
+export class UnboundedAccessError extends Error implements ErrorType<{
+    writes_inverted: boolean;
+    read_and_writes_inverted: boolean;
+}> {
+    #data: { writes_inverted: boolean; read_and_writes_inverted: boolean; }
+
+    constructor(writes_inverted: boolean, read_and_writes_inverted: boolean) {
+        super(`UnboundedAccessError: ${` writes_inverted: ${writes_inverted}, read_and_writes_inverted: ${read_and_writes_inverted}`}`)
+        this.#data = {
+            writes_inverted,
+            read_and_writes_inverted,
+        };
+    }
+
+    get(): { writes_inverted: boolean; read_and_writes_inverted: boolean; } {
+        return this.#data;
+    }
+}
+
+export class ComponentAccessKind {
+    /**
+     * @returns ArchetypalAccessType. Kind === 2
+     */
+    static Archetypal(value: number) {
+        return new ComponentAccessKind(value, 2);
+    }
+
+    /**
+     * @returns ArchetypalAccessType. Kind === 0
+     */
+    static Shared(value: number) {
+        return new ComponentAccessKind(value, 0);
+    }
+
+    /**
+     * @returns ArchetypalAccessType. Kind === 1
+     */
+    static Exclusive(value: number) {
+        return new ComponentAccessKind(value, 1);
+    }
+
+    #value: number;
+    #ty: 0 | 1 | 2;
+
+    private constructor(value: number, ty: 0 | 1 | 2) {
+        this.#value = value;
+        this.#ty = ty;
+    }
+
+    type() {
+        return this.#ty;
+    }
+
+    index() {
+        return this.#value;
+    }
 }
 
 export class FilteredAccess {
@@ -964,7 +1042,7 @@ export class AccessConflicts {
         if (this.#type === 0) {
             // Individual
             return this.#conflicts!.ones().map(index => {
-                return `${world.components().get_info(index)!.name()}`
+                return `${world.components.get_info(index)!.name()}`
             }).collect().join(', ')
         } else {
             // All

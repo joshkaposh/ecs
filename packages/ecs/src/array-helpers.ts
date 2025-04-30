@@ -1,4 +1,17 @@
-import { type Option, assert_eq } from "joshkaposh-option";
+import { type Option, View, byte_length } from "joshkaposh-option";
+import { unused } from 'joshkaposh-iterator/src/util'
+
+export const view = {
+    Uint8Array: 'u8',
+    Uint16Array: 'u16',
+    Uint32Array: 'u32',
+    Int8Array: 'i8',
+    Int16Array: 'i16',
+    Int32Array: 'i32',
+    // Float16Array: 'f16',
+    Float32Array: 'f32',
+    Float64Array: 'f64'
+} as const
 
 export function truncate(array: any[], len: number) {
     array.length = Math.min(array.length, len);
@@ -21,7 +34,16 @@ export function split_at<T>(array: T[], index: number): Option<[T[], T[]]> {
     return
 }
 
-export function swap<T>(array: T[], from_index: number, to_index: number) {
+export function typed_pop(array: View<ArrayBuffer>): Option<number> {
+    if (array.length === 0) {
+        return
+    }
+    const elt = array[array.length - 1];
+    array.buffer.resize(array.byteLength - array.BYTES_PER_ELEMENT);
+    return elt;
+}
+
+export function swap<T>(array: T[] | View, from_index: number, to_index: number) {
     const temp = array[to_index];
     array[to_index] = array[from_index];
     array[from_index] = temp;
@@ -37,19 +59,30 @@ export function swap_remove<T>(array: T[], i: number): Option<T> {
 }
 
 export function swap_remove_unchecked<T>(array: T[], i: number): Option<T> {
-    swap(array, i, array.length - 1)
-    return array.pop()
+    swap(array, i, array.length - 1);
+    return array.pop();
 
 }
 
-export function replace(array: any[], index: number, value: any) {
-    assert_eq(index < array.length, true);
-    array[index] = value;
+export function swap_remove_typed(array: View<ArrayBuffer>, i: number) {
+    const last_index = array.length - 1;
+    if (array.length > 0 && i !== last_index) {
+        swap(array, i, last_index);
+    }
+
+    return typed_pop(array);
 }
 
-// @ts-ignore;
+export function swap_remove_typed_unchecked(array: View<ArrayBuffer>, i: number) {
+    const last_index = array.length - 1;
+    swap(array, i, last_index);
+    return typed_pop(array);
+}
+
+
+
 export function reserve(array: any[], additional: number) {
-    // unused(array, additional);
+    unused(array, additional);
 }
 
 export function extend<T>(target: T[] | Set<T>, src: Iterable<T>, default_value?: Option<T>) {
@@ -84,9 +117,13 @@ export function extend_map<K, V>(target: Map<K, V>, src: Iterable<[K, V]>) {
 }
 
 export function capacity(len: number): number {
+    if (len === 0) {
+        return 0;
+    }
     if (len < 4) {
         return 4
     }
+
     const cap = 1 << 31 - Math.clz32(len);
     if (cap <= len) {
         return cap << 1;

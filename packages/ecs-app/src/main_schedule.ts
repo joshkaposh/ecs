@@ -2,11 +2,11 @@ import { iter } from "joshkaposh-iterator";
 import { Schedule, ScheduleLabel } from "ecs/src/schedule";
 import { is_some } from "joshkaposh-option";
 import { StorageType, World } from "ecs";
-import { define_system } from 'ecs/src/define'
+import { defineSystem, set } from 'ecs/src/define'
 import { Plugin } from "./plugin";
 import { App } from "./app";
 import { ExecutorKind } from "ecs/src/executor";
-import { define_resource, define_type } from "define";
+import { defineResource, defineType } from "define";
 
 export const $Main = 'Main';
 export const $PreStartup = 'PreStartup';
@@ -84,7 +84,7 @@ class MainScheduleOrder {
         this.startup_labels.splice(index, 0, schedule);
     }
 }
-define_resource(MainScheduleOrder);
+defineResource(MainScheduleOrder);
 
 class FixedMainScheduleOrder {
     static readonly type_id: UUID;
@@ -130,12 +130,12 @@ class FixedMainScheduleOrder {
 
 
 }
-define_resource(FixedMainScheduleOrder)
+defineResource(FixedMainScheduleOrder)
 
 class MainSchedulePlugin extends Plugin {
 
     build(app: App): void {
-        const main_schedule = new Schedule($Main)
+        const main_schedule = new Schedule($Main);
         main_schedule.set_executor_kind(ExecutorKind.SingleThreaded);
         const fixed_main_schedule = new Schedule($FixedMain);
         fixed_main_schedule.set_executor_kind(ExecutorKind.SingleThreaded);
@@ -143,13 +143,19 @@ class MainSchedulePlugin extends Plugin {
         fixed_main_loop_schedule.set_executor_kind(ExecutorKind.SingleThreaded);
 
         app
-            .add_schedule(main_schedule)
-            .add_schedule(fixed_main_schedule)
-            .add_schedule(fixed_main_loop_schedule)
-            .init_resource(MainScheduleOrder)
-            .init_resource(FixedMainScheduleOrder)
-            .add_systems($Main, run_main)
-            .add_systems($FixedMain, run_fixed_main)
+            .addSchedule(main_schedule)
+            .addSchedule(fixed_main_schedule)
+            .addSchedule(fixed_main_loop_schedule)
+            .initResource(MainScheduleOrder)
+            .initResource(FixedMainScheduleOrder)
+            .addSystems($Main, run_main)
+            .addSystems($FixedMain, run_fixed_main)
+        // .configureSets($RunFixedMainLoop, set(
+        //     RunFixedMainLoopSystem.BeforeFixedMainLoop,
+        //     RunFixedMainLoopSystem.FixedMainLoop,
+        //     RunFixedMainLoopSystem.AfterFixedMainLoop
+        // ).chain())
+
         // .configure_sets($RunFixedMainLoop, [
         // RunFixedMainLoopSystem.BeforeFixedMainLoop,
         // RunFixedMainLoopSystem.FixedMainLoop,
@@ -160,39 +166,37 @@ class MainSchedulePlugin extends Plugin {
         // console.log('MainSchedulePlugin build()', app.world().get_resource(MainScheduleOrder), app.world().get_resource(FixedMainScheduleOrder));
     }
 }
-define_type(MainSchedulePlugin)
+defineType(MainSchedulePlugin)
 
 export { MainScheduleOrder, FixedMainScheduleOrder, MainSchedulePlugin }
 
-export const run_main = define_system(b => b.world().local(false), (world, run_at_least_once) => {
-    console.log('run_main() running');
-
+export const run_main = defineSystem(b => b.world().local(false), function run_main(world, run_at_least_once) {
     if (!run_at_least_once.value) {
-        world.resource_scope(MainScheduleOrder, (world, order) => {
+        world.resourceScope(MainScheduleOrder, (world, order) => {
             const startup_labels = order.v.startup_labels;
             for (let i = 0; i < startup_labels.length; i++) {
-                world.try_run_schedule(startup_labels[i]);
+                world.tryRunSchedule(startup_labels[i]);
             }
             run_at_least_once.value = true;
             return order;
         })
     }
 
-    world.resource_scope(MainScheduleOrder, (world, order) => {
+    world.resourceScope(MainScheduleOrder, (world, order) => {
         const labels = order.v.labels;
         for (let i = 0; i < labels.length; i++) {
-            world.try_run_schedule(labels[i]);
+            world.tryRunSchedule(labels[i]);
         }
         return order;
     })
+
 })
 
-export const run_fixed_main = define_system(b => b.world(), (world) => {
-    console.log('run_fixed_main() running');
-    world.resource_scope(FixedMainScheduleOrder, (world, order) => {
+export const run_fixed_main = defineSystem(b => b.world(), function run_fixed_main(world) {
+    world.resourceScope(FixedMainScheduleOrder, (world, order) => {
         const labels = order.v.labels;
         for (let i = 0; i < labels.length; i++) {
-            world.try_run_schedule(labels[i]);
+            world.tryRunSchedule(labels[i]);
         }
         return order;
     })

@@ -1,79 +1,161 @@
-import { test, assert } from 'vitest'
+import { test, assert, expect } from 'vitest'
 import { iter, range } from 'joshkaposh-iterator';
-import { EntityOld, Components, Storages, Tick, id, Entity } from 'ecs'
-import { Table, TableBuilder, TableId, TableRow, Tables } from 'ecs/src/storage/table';
-import { define_component } from 'define';
+import { Components, Storages, id, Entity, ThinComponents, ThinStorages, StorageType, ThinWorld } from 'ecs'
+import { Table, TableBuilder, TableId, TableRow, Tables, ThinTable, ThinTableBuilder } from 'ecs/src/storage/table';
+import { defineComponent, defineComponent2 } from 'define';
+import { TypedArray } from 'joshkaposh-option';
 
-const W = define_component(class W { constructor(public table_row: TableRow) { } })
+test("")
 
-function alloc(table: Table, entity: Entity, component_id: number, value: any) {
-    // @ts-expect-error
-    const row = table.__allocate(entity);
-    // @ts-expect-error
-    table.get_column(component_id)!.__initialize(row, value, new Tick(0))
-}
+// const W = defineComponent(class W { constructor(public table_row: TableRow) { } })
 
-test('only_one_empty_table', () => {
-    const components = new Components();
-    const tables = new Tables();
+// function alloc(table: Table, entity: Entity, component_id: number, value: any) {
+//     const row = table.allocate(entity);
+//     // @ts-expect-error
+//     table.getColumn(component_id)!.__initialize(row, value, 0)
+// }
 
-    const component_ids = [];
-    const table_id = tables.__get_id_or_insert(component_ids, components);
+// function alloc2(table: ThinTable, entity: Entity, component_id: number, value: number[]) {
+//     const row = table.allocate(entity);
+//     table.getColumn(component_id)!.initialize(row, value, 0);
+// }
 
-    assert(table_id === TableId.empty)
-})
+// test('only_one_empty_table', () => {
+//     const components = new Components();
+//     const tables = new Tables();
 
-const TestA = define_component(class TestA { constructor(public value = 'test_a') { } })
-const TestB = define_component(class TestB { constructor(public value = 'test_b') { } })
+//     const component_ids = [];
+//     const table_id = tables.__getIdOrSet(component_ids, components);
 
-test('move_to_superset', () => {
-    const components = new Components();
-    const storages = new Storages();
+//     assert(table_id === TableId.empty);
+// })
 
-    const aid = components.register_component(TestA);
-    const bid = components.register_component(TestB);
+// const TestA = defineComponent(class TestA { constructor(public value = 'test_a') { } })
+// const TestB = defineComponent(class TestB { constructor(public value = 'test_b') { } })
 
-    const table_a_ids = [aid];
-    const table_ab_ids = [aid, bid];
+// const Vect3 = {
+//     x: TypedArray.f32,
+//     y: TypedArray.f32,
+//     z: TypedArray.f32,
+// }
 
-    const tables = storages.tables;
-    tables.__get_id_or_insert(table_a_ids, components)
+// const Pos = defineComponent2(Vect3);
+// const Vel = defineComponent2(Vect3);
 
-    const table_a_id = tables.__get_id_or_insert(table_a_ids, components)
-    const table_ab_id = tables.__get_id_or_insert(table_ab_ids, components)
-    const table_a = tables.get(table_a_id)!;
-    const table_ab = tables.get(table_ab_id)!;
+// const Empty = defineComponent2({});
+// const EmptyMarker = defineComponent2({}, StorageType.SparseSet);
 
-    alloc(table_a, id(0), aid, new TestA());
 
-    // @ts-expect-error
-    table_a.__move_to_superset_unchecked(0, table_ab);
+// test('no fields', () => {
 
-    assert(!table_a.get_component(aid, 0))
-    assert(!!table_ab.get_component(aid, 0))
-})
+//     const w = new ThinWorld();
+//     const empty_id = w.registerComponent(Empty);
+//     const empty_marker_id = w.registerComponent(EmptyMarker);
 
-test('table', () => {
-    const components = new Components();
+//     let entity = w.spawn(Empty());
+//     const table = w.storages.tables.get(entity.archetype.tableId);
 
-    const component_id = components.register_component(W);
+//     expect(w.get(entity.id, Empty as any)).toEqual([]);
+//     assert(w.get(0, Empty as any) == null);
+//     assert(table.length === 1 && table.getColumn(empty_id)?.length === 1)
 
-    const columns = [component_id];
+//     entity = w.spawn(EmptyMarker());
+//     expect(w.get(entity.id, EmptyMarker as any)).toEqual([]);
+//     expect(w.storages.sparse_sets.get(empty_marker_id)!.get(entity.id)).toEqual([])
+//     assert(w.get(0, EmptyMarker as any) == null);
+//     assert(w.storages.sparse_sets.get(empty_marker_id)?.length === 1)
 
-    const table = TableBuilder.with_capacity(0, columns.length)
-        .add_column(components.get_info(component_id!)!)
-        .build();
+// })
 
-    const entities = iter(range(0, 200)).map(i => id(i)).collect()
+// test('move_to_superset', () => {
+//     const components = new Components();
+//     const storages = new Storages();
 
-    for (const entity of entities) {
-        // @ts-expect-error
-        const row = table.__allocate(entity);
-        const value = new W(row);
-        // @ts-expect-error
-        table.get_column(component_id!)!.__initialize(row, value, new Tick(0))
-    }
+//     const aid = components.registerComponent(TestA);
+//     const bid = components.registerComponent(TestB);
 
-    assert(table.entity_capacity() === 256)
-    assert(table.entity_count() === 200);
-})
+//     const table_a_ids = [aid];
+//     const table_ab_ids = [aid, bid];
+
+//     const tables = storages.tables;
+//     tables.__getIdOrSet(table_a_ids, components)
+
+//     const table_a_id = tables.__getIdOrSet(table_a_ids, components)
+//     const table_ab_id = tables.__getIdOrSet(table_ab_ids, components)
+//     const table_a = tables.get(table_a_id)!;
+//     const table_ab = tables.get(table_ab_id)!;
+
+//     alloc(table_a, id(0), aid, new TestA());
+
+//     // @ts-expect-error
+//     table_a.__moveToSupersetUnchecked(0, table_ab);
+
+//     assert(!table_a.getComponent(aid, 0))
+//     assert(!!table_ab.getComponent(aid, 0))
+// })
+
+// test('thin move_to_superset', () => {
+//     const components = new ThinComponents();
+
+//     const aid = components.registerComponent(Pos);
+//     const bid = components.registerComponent(Vel);
+
+//     const table_a_ids = [aid];
+//     const table_ab_ids = [aid, bid];
+
+//     const table_a = ThinTableBuilder.withCapacity(0, table_a_ids.length).addColumn(components.getInfo(aid)!).build();
+//     const table_ab = ThinTableBuilder.withCapacity(0, table_ab_ids.length).addColumn(components.getInfo(aid)!).addColumn(components.getInfo(bid)!).build();
+
+
+//     alloc2(table_a, id(0), aid, [69, 420, 1337]);
+
+//     expect(table_a.getComponent(aid, 0)).toEqual([69, 420, 1337]);
+
+//     table_a.moveToSupersetUnchecked(0, table_ab);
+
+//     assert(table_a.length === 0 && table_ab.length === 1);
+//     assert(table_a.getComponent(aid, 0) == null);
+//     expect(table_ab.getComponent(aid, 0)).toEqual([69, 420, 1337]);
+// })
+
+// test('thin table', () => {
+//     const components = new ThinComponents();
+//     const component_id = components.registerComponent(Pos);
+//     const columns = [component_id];
+
+//     const table = ThinTableBuilder
+//         .withCapacity(0, columns.length)
+//         .addColumn(components.getInfo(component_id)!)
+//         .build();
+
+//     range(0, 200).map(i => {
+//         const e = id(i)
+//         alloc2(table, e, component_id, [1, 3, 5]);
+//         return e
+//     }).for_each(() => { })
+
+//     assert(table.entityCount === 200);
+//     assert(table.capacity === 256);
+// })
+
+// test('table', () => {
+//     const components = new Components();
+//     const component_id = components.registerComponent(W);
+//     const columns = [component_id];
+
+//     const table = TableBuilder.withCapacity(0, columns.length)
+//         .addColumn(components.getInfo(component_id!)!)
+//         .build();
+
+//     const entities = iter(range(0, 200)).map(i => id(i)).collect()
+
+//     for (const entity of entities) {
+//         const row = table.allocate(entity);
+//         const value = new W(row);
+//         // @ts-expect-error
+//         table.getColumn(component_id!)!.__initialize(row, value, 0)
+//     }
+
+//     assert(table.entityCapacity === 256)
+//     assert(table.entityCount === 200);
+// })

@@ -1,6 +1,6 @@
 import { iter } from "joshkaposh-iterator";
-import { Option, is_some, u32 } from 'joshkaposh-option'
-import { capacity, reserve, swap, swap_remove, split_at } from "../../array-helpers";
+import { Option, u32 } from 'joshkaposh-option'
+import { capacity, swap, swap_remove, split_at } from "../../array-helpers";
 import { ComponentId, ComponentInfo, Components, Tick } from "../../component";
 import { SparseSet } from "../sparse-set";
 import { Entity } from "../../entity";
@@ -25,112 +25,106 @@ type TableMoveResult = {
 
 export { Column } from './column';
 
+export * from './thin-column';
+export * from './thin-table';
+
 export class Table {
-    #columns: SparseSet<ComponentId, Column>;
-    #entities: Entity[]
-    constructor(columns: SparseSet<ComponentId, Column>, entities: Entity[]) {
+    #columns: SparseSet<Column>;
+    #entities: Entity[];
+    constructor(columns: SparseSet<Column>, entities: Entity[]) {
         this.#columns = columns;
         this.#entities = entities;
     }
 
-    check_change_ticks(change_tick: Tick) {
-        const len = this.entity_count();
-        const array = this.#columns.__values_array();
-        for (let i = 0; i < array.length; i++) {
-            array[i].check_change_ticks(len, change_tick);
-        }
-    }
-
-    entities() {
-        return this.#entities;
-    }
-
-    get(component_id: ComponentId) {
-        return this.get_column(component_id)?.get(this.entity_count())
-    }
-
-    get_column(component_id: ComponentId): Option<Column> {
-        return this.#columns.get(component_id);
-    }
-
-    get_component(component_id: ComponentId, row: TableRow): Option<{}> {
-        return this.get_column(component_id)?.data[row];
-    }
-
-    get_added_tick(component_id: ComponentId, row: TableRow) {
-        return this.get_column(component_id)?.added_ticks[row];
-    }
-
-    get_changed_tick(component_id: ComponentId, row: TableRow) {
-        return this.get_column(component_id)?.changed_ticks[row];
-    }
-
-
-    get_data_slice_for(component_id: ComponentId) {
-        return this.get_column(component_id)?.get_data_slice(this.entity_count())
-    }
-
-    get_changed_ticks_slice_for(component_id: ComponentId) {
-        return this.get_column(component_id)?.get_changed_ticks_slice(this.entity_count())
-    }
-
-    get_added_ticks_slice_for(component_id: ComponentId) {
-        return this.get_column(component_id)?.get_changed_ticks_slice(this.entity_count())
-    }
-
-    has_column(component_id: ComponentId) {
-        return this.#columns.contains(component_id);
-    }
-
-    entity_count() {
+    get entityCount() {
         return this.#entities.length;
     }
 
-    component_count() {
-        return this.#columns.len();
+    get componentCount() {
+        return this.#columns.length;
     }
 
-    entity_capacity(): number {
+    get entityCapacity(): number {
         // javascript arrays do not have a 'capacity'
-        // return this.#entities.capacity()
+        // return this.#entities.capacity()x
         return capacity(this.#entities.length)
     }
 
-    is_empty() {
+    get isEmpty() {
         return this.#entities.length === 0;
     }
 
-    iter() {
-        return this.#columns.iter();
+    get entities() {
+        return this.#entities;
     }
 
-    iter_columns() {
-        return this.#columns.values();
+    checkChangeTicks(change_tick: Tick) {
+        const len = this.entityCount;
+        const array = this.#columns.inner_values();
+        for (let i = 0; i < array.length; i++) {
+            array[i].checkChangeTicks(len, change_tick);
+        }
+    }
+
+    get(component_id: ComponentId) {
+        return this.getColumn(component_id)?.get(this.entityCount);
+    }
+
+    getColumn(component_id: ComponentId): Option<Column> {
+        return this.#columns.get(component_id);
+    }
+
+    getComponent(component_id: ComponentId, row: TableRow): Option<{}> {
+        return this.getColumn(component_id)?.data[row];
+    }
+
+    getAddedTick(component_id: ComponentId, row: TableRow) {
+        return this.getColumn(component_id)?.added_ticks[row];
+    }
+
+    getChangedTick(component_id: ComponentId, row: TableRow) {
+        return this.getColumn(component_id)?.changed_ticks[row];
+    }
+
+    getDataSliceFor(component_id: ComponentId) {
+        return this.getColumn(component_id)?.getDataSlice(this.entityCount)
+    }
+
+    getChangedTicksSliceFor(component_id: ComponentId) {
+        return this.getColumn(component_id)?.getChangedTicksSlice(this.entityCount)
+    }
+
+    getAddedTicksSliceFor(component_id: ComponentId) {
+        return this.getColumn(component_id)?.getAddedTicksSlice(this.entityCount)
+    }
+
+    hasColumn(component_id: ComponentId) {
+        return this.#columns.has(component_id);
     }
 
     clear() {
         this.#entities.length = 0;
-        const values = this.#columns.__values_array();
+        const values = this.#columns.inner_values();
         for (let i = 0; i < values.length; i++) {
             values[i].clear();
         }
     }
 
     private __reserve(additional: number) {
-        // this.#entities.capacity() - this.#entities.length < additional
+        // this.#entities.capacity() - this.#length < additional
         if (capacity(this.#entities.length) - this.#entities.length < additional) {
             // this.entities.reserve(additional);
-            reserve(this.#entities, additional);
-            // this.#entities.length = Math.min(this.#entities.length, additional);
+            // reserve(this.#entities,capacity(this.#length), additional);
+            // this.#length = Math.min(this.#length, additional);
 
             // use entities vector capacity as driving capacity for all related allocations
             let new_capacity = capacity(this.#entities.length);
 
-            const values = this.#columns.__values_array();
+            const values = this.#columns.inner_values();
             for (let i = 0; i < values.length; i++) {
                 const column = values[i]
                 // @ts-expect-error
-                column.__reserve_exact(new_capacity - column.len());
+                column.__reserve_exact(new_capacity - column.length);
             }
         }
     }
@@ -139,12 +133,12 @@ export class Table {
     ///
     /// # Safety
     /// the allocated row must be written to immediately with valid values in each column
-    private __allocate(entity: Entity): TableRow {
+    allocate(entity: Entity): TableRow {
         this.__reserve(1);
         const index = this.#entities.length;
         this.#entities.push(entity);
 
-        const values = this.#columns.__values_array()
+        const values = this.#columns.inner_values()
         for (let i = 0; i < values.length; i++) {
             values[i].data.length = this.#entities.length;
 
@@ -159,26 +153,27 @@ export class Table {
     /// `row` must be in-bounds
 
     // @ts-ignore
-    private __swap_remove_unchecked(row: TableRow) {
-        debug_assert(row < this.entity_count());
-        const last_element_index = this.entity_count() - 1;
+    private __swapRemoveUnchecked(row: TableRow) {
+        debug_assert(row < this.entityCount, '');
+        const last_element_index = this.entityCount - 1;
 
-        const values = this.#columns.__values_array();
+        const values = this.#columns.inner_values();
         if (row !== last_element_index) {
             for (let i = 0; i < values.length; i++) {
+                const column = values[i];
                 // @ts-expect-error
-                column.__swap_remove_and_drop_unchecked_nonoverlapping(last_element_index, row)
+                column.__swapRemoveAndDropUncheckedNonoverlapping(last_element_index, row)
             }
         } else {
             for (let i = 0; i < values.length; i++) {
+                const column = values[i];
                 // @ts-expect-error
-                column.__drop_last_component(last_element_index)
+                column.__dropLastComponent(last_element_index)
             }
 
         }
 
         const is_last = row === last_element_index;
-        // swap_remove(this.#entities, row);
         swap(this.#entities, row, this.#entities.length - 1);
         const ent = is_last ? null : this.#entities[row]
         this.#entities.pop();
@@ -194,19 +189,19 @@ export class Table {
     /// # Safety
     /// Row must be in-bounds
     // @ts-ignore
-    private __move_to_and_forget_missing_unchecked(row: TableRow, new_table: Table): TableMoveResult {
+    private __moveToAndForgetMissingUnchecked(row: TableRow, new_table: Table): TableMoveResult {
         const last_element_index = this.#entities.length - 1
         const is_last = row === last_element_index;
-        const new_row = new_table.__allocate(swap_remove(this.#entities, row)!);
+        const new_row = new_table.allocate(swap_remove(this.#entities, row)!);
 
-        this.#columns.for_each((component_id, column) => {
-            let new_column = new_table.get_column(component_id);
-            if (is_some(new_column)) {
+        this.#columns.forEach((component_id, column) => {
+            let new_column = new_table.getColumn(component_id);
+            if (new_column != null) {
                 // @ts-expect-error
-                new_column.__initialize_from_unchecked(column, last_element_index, row, new_row)
+                new_column.__initializeFromUnchecked(column, last_element_index, row, new_row)
             } else {
                 // @ts-expect-error
-                column.__swap_remove_unchecked(row)
+                column.__swapRemoveUnchecked(row)
             }
         })
 
@@ -223,19 +218,19 @@ export class Table {
     /// # Safety
     /// row must be in-bounds
     // @ts-ignore
-    private __move_to_and_drop_missing_unchecked(row: TableRow, new_table: Table): TableMoveResult {
+    private __moveToAndDropMissingUnchecked(row: TableRow, new_table: Table): TableMoveResult {
         const last_element_index = this.#entities.length - 1
         const is_last = row === last_element_index;
-        const new_row = new_table.__allocate(swap_remove(this.#entities, row as number)!);
+        const new_row = new_table.allocate(swap_remove(this.#entities, row as number)!);
 
-        this.#columns.for_each((component_id, column) => {
-            const new_column = new_table.get_column(component_id)
+        this.#columns.forEach((component_id, column) => {
+            const new_column = new_table.getColumn(component_id)
             if (new_column) {
                 // @ts-expect-error
-                new_column.__initialize_from_unchecked(column, last_element_index, row, new_row)
+                new_column.__initializeFromUnchecked(column, last_element_index, row, new_row)
             } else {
                 // @ts-expect-error
-                column.__swap_remove_unchecked(row)
+                column.__swapRemoveUnchecked(row)
             }
         })
 
@@ -252,19 +247,28 @@ export class Table {
     /// # Safety
     /// `row` must be in-bounds. `new_table` must contain every component this table has
     // @ts-ignore
-    private __move_to_superset_unchecked(row: TableRow, new_table: Table): TableMoveResult {
-        debug_assert(row < this.entity_count());
-        const last_element_index = this.entity_count() - 1;
+    private __moveToSupersetUnchecked(row: TableRow, new_table: Table): TableMoveResult {
+        debug_assert(row < this.entityCount, '');
+        const last_element_index = this.entityCount - 1;
         const is_last = row === last_element_index;
-        const new_row = new_table.__allocate(swap_remove(this.#entities, row)!)
+        const swapped = swap_remove(this.#entities, row)!;
+        const new_row = new_table.allocate(swapped)
 
         // @ts-expect-error
-        this.#columns.for_each((component_id, column) => new_table.get_column(component_id)!.__initialize_from_unchecked(column, last_element_index, row, new_row))
+        this.#columns.forEach((component_id, column) => new_table.getColumn(component_id)!.__initializeFromUnchecked(column, last_element_index, row, new_row))
 
         return {
             new_row,
             swapped_entity: is_last ? null : this.#entities[row]
         }
+    }
+
+    iter() {
+        return this.#columns.iter();
+    }
+
+    iter_columns() {
+        return this.#columns.values();
     }
 
     [Symbol.iterator]() {
@@ -273,30 +277,26 @@ export class Table {
 }
 
 export class TableBuilder {
-    #columns: SparseSet<ComponentId, Column>;
+    #columns: SparseSet<Column>;
     #capacity: number;
 
-    constructor(columns: SparseSet<ComponentId, Column>, capacity: number) {
+    constructor(columns: SparseSet<Column>, capacity: number) {
         this.#capacity = capacity;
         this.#columns = columns;
     }
 
-    static with_capacity(capacity: number, column_capacity: number) {
-        return new TableBuilder(SparseSet.with_capacity(column_capacity) as SparseSet<ComponentId, Column>, capacity)
+    static withCapacity(capacity: number, column_capacity: number) {
+        return new TableBuilder(SparseSet.withCapacity(column_capacity), capacity)
     }
 
-    add_column(component_info: ComponentInfo) {
-        this.#columns.insert(component_info.id(), Column.default())
+    addColumn(component_info: ComponentInfo) {
+        this.#columns.set(component_info.id, new Column())
         return this
     }
 
     build() {
         return new Table(this.#columns, new Array(this.#capacity))
     }
-}
-
-function hash_component_ids(component_ids: ComponentId[]): string {
-    return component_ids.join(' ');
 }
 
 export class Tables {
@@ -309,29 +309,38 @@ export class Tables {
     }
 
     static default() {
-        const empty_table = TableBuilder.with_capacity(0, 0).build()
-        return new Tables([empty_table], new Map())
+        return new Tables(
+            [TableBuilder.withCapacity(0, 0).build()],
+            new Map()
+        )
     }
 
-    check_change_ticks(change_tick: Tick) {
-        for (let i = 0; i < this.#tables.length; i++) {
-            this.#tables[i].check_change_ticks(change_tick);
-        }
-    }
 
-    len(): number {
+    /**
+     * The total amount of tables.
+     */
+    get length(): number {
         return this.#tables.length;
     }
 
-    is_empty() {
+    /**
+     * Is true if no tables exist.
+     */
+    get isEmpty() {
         return this.#tables.length === 0;
+    }
+
+    checkChangeTicks(change_tick: Tick) {
+        for (let i = 0; i < this.#tables.length; i++) {
+            this.#tables[i].checkChangeTicks(change_tick);
+        }
     }
 
     get(id: TableId): Option<Table> {
         return this.#tables[id];
     }
 
-    get_2(a: TableId, b: TableId) {
+    get2(a: TableId, b: TableId) {
         if (a > b) {
             const [b_slice, a_slice] = split_at(this.#tables, a)!;
             return [a_slice[0], b_slice[b]] as const;
@@ -346,20 +355,20 @@ export class Tables {
     ///
     /// # Safety
     /// `component_ids` must contain components that exist in `components`
-    __get_id_or_insert(component_ids: ComponentId[], components: Components): TableId {
+    __getIdOrSet(component_ids: ComponentId[], components: Components): TableId {
         if (component_ids.length === 0) {
-            return TableId.empty
+            return TableId.empty;
         }
 
         const tables = this.#tables;
 
         let value!: TableId;
-        const hash = hash_component_ids(component_ids);
+        const hash = component_ids.join(',')
 
         return entry(this.#table_ids, hash, () => {
-            const table = TableBuilder.with_capacity(0, component_ids.length)
+            const table = TableBuilder.withCapacity(0, component_ids.length)
             for (let i = 0; i < component_ids.length; i++) {
-                table.add_column(components.get_info(component_ids[i])!)
+                table.addColumn(components.getInfo(component_ids[i])!)
             }
             tables.push(table.build());
             value = tables.length - 1;

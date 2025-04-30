@@ -1,22 +1,15 @@
 import { ErrorExt } from "joshkaposh-option";
-import { TODO } from 'joshkaposh-iterator/src/util'
 import { EntityWorldMut, FromWorld } from "../../world";
-import { Command } from "./command";
 import { EntityFetchError } from "../../world/error";
-import { Bundle, InsertMode } from "../../bundle";
+import { InsertMode } from "../../bundle";
 import { Component, ComponentId } from "../../component";
 import { Entity } from "../../entity";
 import { BundleInput } from "../../world/entity-ref";
 import { EntityClonerBuilder } from "../../entity/clone_entities";
-
-type HandleError<Out> = {};
+import { CommandWithEntity } from "../../error/command-handling";
 
 export interface EntityCommand<Out = any> {
     exec(entity: EntityWorldMut): Out;
-}
-
-export interface CommandWithEntity<Out> {
-    with_entity(): Command & HandleError<Out>;
 }
 
 export class EntityCommandError<E> extends ErrorExt<{ EntityFetchError: EntityFetchError } | { CommandFailed: E }> {
@@ -25,65 +18,52 @@ export class EntityCommandError<E> extends ErrorExt<{ EntityFetchError: EntityFe
     }
 }
 
+function intoCommand<T extends (entity: EntityWorldMut) => any>(fn: T): EntityCommand<ReturnType<T>> & CommandWithEntity<ReturnType<T>> {
+    return CommandWithEntity({
+        exec: fn
+    }) as any
+}
+
 export function insert(bundle: BundleInput) {
-    return (entity: EntityWorldMut) => {
-        entity.insert(bundle);
-    }
+    return intoCommand(entity => entity.insert(...bundle))
 }
 
 export function insert_if_new(bundle: BundleInput) {
-    return (entity: EntityWorldMut) => {
-        entity.insert(bundle, InsertMode.Keep);
-    }
+    return intoCommand(entity => entity.insertIfNew(...bundle));
 }
 
 export function insert_by_id<T extends InstanceType<Component>>(component_id: ComponentId, value: T) {
-    return (entity: EntityWorldMut) => {
-        entity.insert_by_id(component_id, value)
-    };
+    return intoCommand(entity => entity.insert_by_id(component_id, value))
 }
 
 export function insert_from_world<T extends Component & FromWorld<T>>(type: T, mode: InsertMode) {
-    return (entity: EntityWorldMut) => {
-        const value = entity.world_scope(world => type.from_world(world));
-        entity.insert([value], mode);
-    }
+    return intoCommand(entity => entity.insert([
+        entity.worldScope(world => type.from_world(world))
+    ], mode));
 }
 
 export function remove(bundle: BundleInput) {
-    return (entity: EntityWorldMut) => {
-        entity.remove(bundle)
-    }
-}
+    return intoCommand(entity => entity.remove(bundle))
+};
 
 export function remove_with_requires(bundle: BundleInput) {
-    return (entity: EntityWorldMut) => {
-        entity.remove_with_requires(bundle);
-    }
+    return intoCommand(entity => entity.remove_with_requires(bundle));
 }
 
 export function remove_by_id(component_id: ComponentId) {
-    return (entity: EntityWorldMut) => {
-        entity.remove_by_id(component_id)
-    }
+    return intoCommand(entity => entity.removeById(component_id))
 }
 
 export function clear() {
-    return (entity: EntityWorldMut) => {
-        entity.clear();
-    }
+    return intoCommand(entity => entity.clear())
 }
 
 export function retain(bundle: BundleInput) {
-    return (entity: EntityWorldMut) => {
-        entity.retain(bundle);
-    }
+    return intoCommand(entity => entity.retain(bundle));
 }
 
 export function despawn() {
-    return (entity: EntityWorldMut) => {
-        entity.despawn();
-    }
+    return intoCommand(entity => entity.despawn());
 }
 
 // export function observe<E extends Event, M>(observer: IntoObserverSystem<E, Bundle, M>) {
@@ -94,26 +74,17 @@ export function despawn() {
 // }
 
 export function clone_with(target: Entity, config: (builder: EntityClonerBuilder) => void) {
-    return (entity: EntityWorldMut) => {
-        entity.clone_with(target, config);
-    }
+    return intoCommand(entity => entity.clone_with(target, config));
 }
 
 export function clone_components(target: Entity, bundle: BundleInput) {
-    return (entity: EntityWorldMut) => {
-        entity.clone_components(target, bundle);
-    }
+    return intoCommand(entity => entity.clone_components(target, bundle));
 }
 
 export function move_components(target: Entity, bundle: BundleInput) {
-    return (entity: EntityWorldMut) => {
-        entity.move_components(target, bundle);
-    }
+    return intoCommand(entity => entity.move_components(target, bundle));
 }
 
 export function log_components() {
-    return (entity: EntityWorldMut) => {
-        const infos = entity.world().inspect_entity(entity.id()).map(info => info.name())
-        console.info(`Entity ${entity.id()}: ${infos}`)
-    }
+    return intoCommand(entity => console.info(`Entity ${entity.id}: ${entity.world().inspectEntity(entity.id).map(info => info.name)}`))
 }

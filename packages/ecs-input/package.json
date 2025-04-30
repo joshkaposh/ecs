@@ -1,0 +1,13 @@
+{
+  "name": "ecs-input",
+  "version": "0.0.1",
+  "description": "systems for handing user input",
+  "license": "MIT",
+  "author": "",
+  "type": "module",
+  "main": "src/index.ts",
+  "scripts": {
+    "test": "vitest"
+  },
+  "devDependencies": {}
+}

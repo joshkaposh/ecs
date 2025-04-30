@@ -1,3 +1,2 @@
-export { define_system } from './system';
+export { defineSystem, defineCondition } from './system';
 export { set } from "./schedule/set";
-

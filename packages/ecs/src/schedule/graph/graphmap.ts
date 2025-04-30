@@ -1,10 +1,11 @@
-import { IndexMap } from "joshkaposh-index-map";
-import { NodeId } from "./node";
+// import { IndexMap } from "joshkaposh-index-map";
+import { IndexMap } from '../../temp-index-map'
 import { iter } from "joshkaposh-iterator";
-import { new_tarjan_scc } from "./tarjan_scc";
 import { assert } from "joshkaposh-iterator/src/util";
-import { is_none } from "joshkaposh-option";
 import { swap_remove } from "joshkaposh-graph/src/array-helpers";
+import { NodeId } from "./node";
+import { new_tarjan_scc } from "./tarjan_scc";
+import { debug_assert } from "../../util";
 
 export class Graph<const DIRECTED extends boolean, S extends (value: any) => number | string = (value: any) => number | string> {
     #DIRECTED: DIRECTED;
@@ -12,11 +13,7 @@ export class Graph<const DIRECTED extends boolean, S extends (value: any) => num
     #edges: Set<CompactNodeIdPairPrimitive>
     constructor(
         DIRECTED: DIRECTED = true as DIRECTED,
-        nodes: IndexMap<NodeId, CompactNodeIdAndDirection[], S> = IndexMap.with_hasher(((n: NodeId) => {
-            const p = n.to_primitive();
-            console.log("Hashing value", n, p)
-            return p;
-        }) as S),
+        nodes: IndexMap<NodeId, CompactNodeIdAndDirection[], S> = IndexMap.withHasher((function hash_node_id(n) { n.to_primitive() }) as S),
         edges: Set<CompactNodeIdPairPrimitive> = new Set()
     ) {
         this.#nodes = nodes
@@ -25,34 +22,40 @@ export class Graph<const DIRECTED extends boolean, S extends (value: any) => num
     }
 
     static with_capacity<const DIRECTED extends boolean>(nodes: number, _edges: number, directed: DIRECTED): Graph<DIRECTED> {
-        return new Graph(directed, IndexMap.with_capacity_and_hasher(nodes, (n) => n.to_primitive()), new Set());
+        return new Graph(directed, IndexMap.withCapacityAndHasher(nodes, (n) => n.to_primitive()));
     }
 
     static default<const DIRECTED extends boolean>(DIRECTED: DIRECTED) {
-        return Graph.with_capacity<DIRECTED>(0, 0, DIRECTED)
+        return Graph.with_capacity<DIRECTED>(0, 0, DIRECTED);
     }
 
     clone() {
-        return new Graph(this.#DIRECTED, IndexMap.from(this.#nodes.entries()), new Set(this.#edges))
+        const edges = new Set(Array.from(this.#edges));
+        return new Graph(this.#DIRECTED, this.#nodes.clone(), edges)
+    }
+
+    clone_from(src: Graph<DIRECTED, S>) {
+        this.#nodes.cloneFrom(src.#nodes);
+        this.#edges = new Set(Array.from(src.#edges));
     }
 
     edge_key(a: NodeId, b: NodeId) {
-        const [a_, b_] = this.#DIRECTED || a < b ? [a, b] : [b, a];
+        const [a_, b_] = this.#DIRECTED || a <= b ? [a, b] : [b, a];
         return CompactNodeIdPair.store(a_, b_);
     }
 
     node_count() {
-        return this.#nodes.len();
+        return this.#nodes.size;
     }
 
     add_node(n: NodeId) {
-        if (!this.#nodes.contains_key(n)) {
-            this.#nodes.insert(n, []);
+        if (!this.#nodes.has(n)) {
+            this.#nodes.set(n, []);
         }
     }
 
     remove_node(n: NodeId) {
-        const links_ = this.#nodes.swap_remove(n);
+        const links_ = this.#nodes.swapRemove(n);
         if (!links_) {
             return
         }
@@ -70,7 +73,7 @@ export class Graph<const DIRECTED extends boolean, S extends (value: any) => num
     }
 
     contains_node(n: NodeId) {
-        return this.#nodes.contains_key(n);
+        return this.#nodes.has(n);
     }
 
     add_edge(a: NodeId, b: NodeId) {
@@ -84,19 +87,19 @@ export class Graph<const DIRECTED extends boolean, S extends (value: any) => num
             let list = this.#nodes.get(a);
             if (!list) {
                 list = []
-                this.#nodes.insert(a, list)
+                this.#nodes.set(a, list)
             }
             list.push(CompactNodeIdAndDirection.store(b, Outgoing))
 
             if (!a.eq(b)) {
+                // self loops dont have the Incoming entry
                 let list = this.#nodes.get(b);
 
                 if (!list) {
                     list = []
-                    this.#nodes.insert(b, list)
+                    this.#nodes.set(b, list)
                 }
                 list.push(CompactNodeIdAndDirection.store(a, Incoming))
-
             }
 
         }
@@ -110,16 +113,19 @@ export class Graph<const DIRECTED extends boolean, S extends (value: any) => num
         }
 
         let index;
+        const DIRECTED = this.#DIRECTED
         for (let i = 0; i < sus.length; i++) {
             const [node, direction] = sus[i].load();
-            if ((this.#DIRECTED && node.index === b.index && direction.value === dir.value)
-                || (!this.#DIRECTED && node.index === b.index)) {
+            if (
+                (DIRECTED && node.eq(b) && direction.value === dir.value)
+                || (!DIRECTED && node.eq(b))
+            ) {
                 index = i;
                 break;
             }
         }
 
-        if (is_none(index)) {
+        if (index == null) {
             return false
         }
 
@@ -133,7 +139,7 @@ export class Graph<const DIRECTED extends boolean, S extends (value: any) => num
         const weight = this.edge_key(a, b);
         this.#edges.delete(weight.to_primitive())
 
-        assert(exist1 === exist2);
+        debug_assert(exist1 === exist2, `${exist1} must equal ${exist2}`);
         return exist1;
     }
 
@@ -168,8 +174,18 @@ export class Graph<const DIRECTED extends boolean, S extends (value: any) => num
         })
     }
 
+    inner_nodes() {
+        return this.#nodes;
+    }
+
+    inner_edges() {
+        return this.#edges;
+    }
+
     neighbors_directed(a: NodeId, dir: Direction) {
         const neighbors = this.#nodes.get(a) ?? [];
+        // console.log(`neighbors_directed: ${a}`, neighbors);
+
         const array = [];
         for (let i = neighbors?.length - 1; i >= 0; i--) {
             const [n, d] = neighbors[i].load();
@@ -194,31 +210,29 @@ export class Graph<const DIRECTED extends boolean, S extends (value: any) => num
     edges(a: NodeId) {
         return this.neighbors(a)
             .map(b => {
+                // debug_assert(this.#edges.has(this.edge_key(a, b)))
                 return [a, b] as [NodeId, NodeId];
             })
     }
 
+    /**
+     * @returns an iterator of target nodes with an edge starting from `a` and their respective edge weights
+     */
     edges_directed(a: NodeId, dir: Direction) {
-        return this.neighbors_directed(a, dir)
+        return this.iter_neigbors_directed(a, dir)
             .map(b => {
-                const [a1, b1] = dir.value === Incoming.value ? [b, a] : [a, b]
-                const key = this.edge_key(a1, b1);
-                assert(this.#edges.has(key.to_primitive()), `Failed to map ${key} to Graph edge as it does not exist`)
+                const [a1, b1] = dir.value === Incoming.value ? [b, a] : [a, b];
+                assert(this.#edges.has(this.edge_key(a1, b1).to_primitive()));
                 return [a, b] as [NodeId, NodeId];
-            })
+            }).collect()
     }
 
     all_edges() {
         return iter(this.#edges).map(e => CompactNodeIdPair.from_primitive(e).load())
     }
 
-    // to_index(ix: NodeId) {
-    //     return this.#nodes.get_index_of(ix)!;
-    // }
-
     to_index(ix: NodeId) {
-        // TODO: figure out why above errors out (in TarjanScc)
-        return this.#nodes.keys().position(n => n.eq(ix))!;
+        return this.#nodes.indexOf(ix)!;
     }
 
     iter_sccs() {
@@ -249,10 +263,6 @@ export class Direction {
 
     opposite() {
         return new Direction(this.value === 0 ? 1 : 0);
-    }
-
-    index() {
-        return this.value & 0x1;
     }
 }
 

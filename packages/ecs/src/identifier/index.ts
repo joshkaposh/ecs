@@ -1,7 +1,6 @@
 import { ErrorExt, Result } from 'joshkaposh-option';
 import { IdKind } from './kinds';
 import { IdentifierMask } from './mask';
-import { Entity } from '../entity';
 
 export * from './mask';
 export * from './kinds';
@@ -19,15 +18,14 @@ export const IdentifierError = {
 
 export type IdentifierErrorType = typeof IdentifierError[keyof typeof IdentifierError];
 
-export function id_to_bits(entity: Entity) {
-    const low = entity.index();
-    const high = entity.generation();
+// export function id_to_bits(entity: EntityOld) {
+//     const low = entity.index();
+//     const high = entity.generation();
 
 
-    const masked_value = IdentifierMask.extract_value_from_high(high);
-    const packed_high = IdentifierMask.pack_kind_into_high(masked_value, 0)
-
-}
+//     const masked_value = IdentifierMask.extract_value_from_high(high);
+//     const packed_high = IdentifierMask.pack_kind_into_high(masked_value, 0)
+// }
 
 export class Identifier {
     // @ts-expect-error

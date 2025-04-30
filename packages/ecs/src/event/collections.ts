@@ -63,9 +63,8 @@ export class Events<E extends Event> {
      * This is more efficient than sending each event individually.
      * This method returns the [IDs](`EventId`) of the sent `events`. 
      */
-    send_batch(events: Iterator<Instance<E>>): SendBatchIds<E> {
+    send_batch(events: Iterator<Instance<E>> | InstanceType<E>[]): SendBatchIds<E> {
         const last_count = this.#event_count;
-
         this.extend(events);
 
         return new SendBatchIds(last_count, this.#event_count);
@@ -142,6 +141,9 @@ export class Events<E extends Event> {
         this.__events_b.start_event_count = this.#event_count;
     }
 
+    /**
+     * Clears all events from the previous frame as well as this one.
+     */
     clear(): void {
         this.reset_start_event_count();
         this.__events_a.events.length = 0;
@@ -206,7 +208,7 @@ export class Events<E extends Event> {
 
 }
 
-export type EventSequence<E extends Event> = {
+export interface EventSequence<E extends Event> {
     events: EventInstance<E>[];
     start_event_count: number;
 }

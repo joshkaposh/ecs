@@ -1,4 +1,5 @@
 
+export type NodeIdString = `${'system' | 'set'}:${number}`
 export type NodeId = InstanceType<typeof NodeId['Set' | 'System']>;
 export const NodeId = {
     System: class {
@@ -6,7 +7,7 @@ export const NodeId = {
         is_system() { return true }
         is_set() { return false }
         to_primitive() {
-            return `${this.index} ${true}`
+            return `system:${this.index}` as const
         }
         eq(other: NodeId) {
             return this.index === other.index && this.is_system() === other.is_system()
@@ -20,7 +21,7 @@ export const NodeId = {
         is_system() { return false }
         is_set() { return true }
         to_primitive() {
-            return `${this.index} ${false}`
+            return `set:${this.index}` as const
         }
         eq(other: NodeId) {
             return this.index === other.index && this.is_system() === other.is_system()
@@ -31,9 +32,10 @@ export const NodeId = {
         }
     },
     to_node_id(key: string) {
-        const [id_, is_system] = key.split(' ');
+        const [type, id_] = key.split(':');
         const id = Number(id_)
-        return Boolean(Number(is_system)) ? new this.System(id) : new this.Set(id)
+        const is_system = type === 'system';
+        return is_system ? new NodeId.System(id) : new NodeId.Set(id)
     },
 
     [Symbol.hasInstance](other: any) {

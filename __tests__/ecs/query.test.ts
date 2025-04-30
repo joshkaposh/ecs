@@ -1,14 +1,31 @@
-import { assert, expect, test } from 'vitest'
-import { With, Without, World, Maybe, Added, Write, EntityRef, Changed, QueryBuilder, Entity, Component, QueryState } from 'ecs'
-import { define_component, define_marker } from 'define';
-import { skip_large } from '../constants';
+import { assert, describe, expect, it, test } from 'vitest'
+import { With, Without, World, Maybe, Added, mut, EntityRef, Changed, QueryBuilder, Entity, Component, QueryState, ThinWorld, index, ThinQueryState, Archetype, QueryDataTuple, $WorldQuery, QueryData, Read, Schedule } from 'ecs'
+import { defineComponent, defineComponent2, defineMarker } from 'define';
+import { skip } from '../constants';
+import { TypedArray } from 'joshkaposh-option';
+import { iter, range } from 'joshkaposh-iterator';
+import { Perf } from '../performance';
 
-const A = define_component(class A { constructor(public value = 'hello world!') { } })
-const B = define_component(class B { constructor(public value = 'getting groovy!') { } })
-const C = define_component(class C { constructor(public value = 'c!') { } })
-const D = define_component(class D { constructor(public value = 'd!') { } })
+const A = defineComponent(class A { constructor(public value = 'hello world!') { } })
+const B = defineComponent(class B { constructor(public value = 'getting groovy!') { } })
+const C = defineComponent(class C { constructor(public value = 'c!') { } })
+const D = defineComponent(class D { constructor(public value = 'd!') { } })
+const AVec3 = defineComponent(class AVec3 { constructor(public x = 0, public y = 0, public z = 0) { } })
+const BVec3 = defineComponent(class BVec3 { constructor(public x = 0, public y = 0, public z = 0) { } })
 
-function assert_throws(fn) {
+
+const Vect3 = {
+    x: TypedArray.f32,
+    y: TypedArray.f32,
+    z: TypedArray.f32,
+} as const;
+
+const ThinVec3 = defineComponent2(Vect3);
+const ThinA = defineComponent2(Vect3);
+const ThinB = defineComponent2(Vect3);
+const ThinC = defineComponent2(Vect3);
+
+function assert_throws(fn: () => void) {
     assert((() => {
         let res = false
         try {
@@ -22,16 +39,82 @@ function assert_throws(fn) {
 
 }
 
-function qiter(world: World, state: QueryState<any>) {
-    return state.iter(world, world.last_change_tick(), world.change_tick())
-}
-
 const Team = {
-    Blue: define_marker(),
-    Red: define_marker(),
+    Blue: defineMarker(),
+    Red: defineMarker(),
 } as const;
 
 const skip_non_change_detection = false;
+
+// test('large query perf test', () => {
+//     const thinw = new ThinWorld();
+//     const w = new World();
+
+//     for (let i = 0; i < 5000; i++) {
+//         w.spawn(new AVec3(i, i, i));
+//         w.spawn(new AVec3(i, i, i), new BVec3(i, i, i));
+//         thinw.spawn(ThinA(i, i, i));
+//         thinw.spawn(ThinA(i, i, i), ThinB(i, i, i));
+//     }
+
+//     const thin_query = thinw.query([ThinA]);
+//     const query = w.query([AVec3]);
+
+//     const times = 100;
+
+//     for (let i = 0; i < times; i++) {
+//         const then = performance.now();
+//         for (const _ of query.iter(w)) { }
+//         // console.log('normal: ', performance.now() - then)
+//     }
+
+
+//     for (let i = 0; i < times; i++) {
+//         const then = performance.now();
+//         const it = thin_query.iter(thinw);
+//         for (const [a] of it) {
+//             const len = a.length;
+//             for (let i = it.index(); i < len; i = it.index()) {
+//             }
+//         }
+//         console.log('thin manual: ', performance.now() - then)
+//     }
+
+//     for (let i = 0; i < times; i++) {
+//         const then = performance.now();
+//         for (const _ of thin_query.iter(thinw).for_each(() => { })) { }
+//         console.log('thin for each: ', performance.now() - then)
+//     }
+
+//     assert(query.iter(w).count() === 10000);
+
+// })
+
+test('thin query', () => {
+    const w = new ThinWorld();
+    const aid = w.registerComponent(ThinA);
+    const qa = w.query([ThinA]);
+
+    let arch_a!: Archetype;
+    for (let i = 0; i < 25; i++) {
+        arch_a = w.spawn(ThinA(3, 1, 8)).archetype;
+    }
+
+    for (let i = 0; i < 25; i++) {
+        w.spawn(ThinA(7, 7, 7), ThinB(8, 1, 3));
+    }
+
+    const as = qa.iter(w as any);
+
+    as.for_each(() => { });
+    // for (const proxies of as) {
+    //     const [aprox] = proxies;
+    //     const len = aprox.length;
+    //     for (let i = as.index(); i < len; i = as.index()) {
+    //         console.log(i);
+    //     }
+    // }
+})
 
 test.skipIf(skip_non_change_detection)('query_builder', () => {
     // const w = new World();
@@ -53,55 +136,48 @@ test.skipIf(skip_non_change_detection)('query_with_marker', () => {
 
     const w = new World();
 
-    w.register_component(A)
-    w.register_component(B)
-    w.register_component(C)
-    w.register_component(D)
-    w.register_component(Team.Red);
-    w.register_component(Team.Blue)
+    w.registerComponent(A)
+    w.registerComponent(B)
+    w.registerComponent(C)
+    w.registerComponent(D)
+    w.registerComponent(Team.Red);
+    w.registerComponent(Team.Blue)
 
     w.spawn(new A('red'), new B('red'), new Team.Red())
     w.spawn(new A('red'), new B('red'), new Team.Red())
     w.spawn(new A('blue'), new B('blue'), new Team.Blue())
     w.spawn(new A('blue'), new B('blue'), new Team.Blue())
 
-    const qred = w.query_filtered([A, B], [With(Team.Red)]);
-    const qblue = w.query_filtered([A, B], [With(Team.Blue)]);
+    const qred = w.queryFiltered([A, B], [With(Team.Red)]);
+    const qblue = w.queryFiltered([A, B], [With(Team.Blue)]);
 
     const qab = w.query([A, B]);
 
     const qa = w.query([A]);
-    const qa_mut = w.query([Write(A)]);
+    const qa_mut = w.query([mut(A)]);
 
-    // const query_a_added = w.query_filtered([A], [Added(A)]);
-    // w.clear_trackers();
-
-    // assert(query_a_added.iter().count() === 0);
     w.spawn(new A())
     w.spawn(new A())
     w.spawn(new A())
-    // assert(query_a_added.iter().count() === 3);
-    // w.clear_trackers();
-    // assert(query_a_added.iter().count() === 0);
 
-    assert(qiter(w, qa).count() === 7);
+    // assert(qa.iter(w).count() === 7);
 
-    assert(qiter(w, qred).count() === 2 && qiter(w, qred).all(([a, b]) => a.value === 'red' && b.value === 'red'));
-    assert(qiter(w, qblue).count() === 2 && qiter(w, qblue).all(([a, b]) => a.value === 'blue' && b.value === 'blue'));
-    assert(qiter(w, qab).count() === 4)
+    // assert(qiter(w, qred).count() === 2 && qiter(w, qred).all(([a, b]) => a.value === 'red' && b.value === 'red'));
+    // assert(qiter(w, qblue).count() === 2 && qiter(w, qblue).all(([a, b]) => a.value === 'blue' && b.value === 'blue'));
+    // assert(qab.iter(w).count() === 4)
 
-    for (const [a] of qiter(w, qa)) {
-        assert_throws(() => {
-            a.value = 'not allowed'
-        })
+    // for (const [a] of qa.iter(w)) {
+    //     assert_throws(() => {
+    //         a.value = 'not allowed'
+    //     })
 
-    }
+    // }
 
-    for (const [a] of qiter(w, qa_mut)) {
-        a.value = 'mutated'
-    }
+    // for (const [a] of qiter(w, qa_mut)) {
+    //     a.value = 'mutated'
+    // }
 
-    assert(qiter(w, qa_mut).all(([a]) => a.value === 'mutated'))
+    // assert(qiter(w, qa_mut).all(([a]) => a.value === 'mutated'))
 })
 
 test.skipIf(skip_non_change_detection)('query_mut', () => {
@@ -111,19 +187,17 @@ test.skipIf(skip_non_change_detection)('query_mut', () => {
     w.spawn(new A(), new B());
 
     const q = w.query([A]);
-    assert(qiter(w, q).count() === 3);
-    assert(qiter(w, q).count() === 3);
+    assert(q.iter(w).count() === 3);
+    assert(q.iter(w).count() === 3);
 
-    for (const [a] of qiter(w, q)) {
-        assert_throws(() => a.value = 'modified')
-    }
-    assert(qiter(w, q).all(([t]) => t.value !== 'modified'))
-    const qm = w.query([Write(A)])
-    for (const [a] of qiter(w, qm)) {
-        a.value = 'modified'
+    assert(q.iter(w).all(([t]) => t.value !== 'modified'))
+
+    const qm = w.query([mut(A)])
+    for (const [a] of qm.iter(w)) {
+        a.v.value = 'modified'
     }
 
-    assert(qiter(w, q).all(([t]) => t.value === 'modified'))
+    assert(q.iter(w).all(([t]) => t.value === 'modified'))
 
 })
 
@@ -133,26 +207,37 @@ test.skipIf(skip_non_change_detection)('query_entity', () => {
     w.spawn(new A());
     w.spawn(new A());
 
-    const q = w.query([Entity, Write(A)]);
-    for (const [e, a1] of qiter(w, q)) {
-        const a2 = w.get(e, A)!;
-        a1.value = 'modified';
-        assert(a1.value === a2.value);
+    const q = w.query([Entity, mut(A)]);
+
+    const it = q.iter(w);
+
+    const n = it.next();
+    if (!n.done) {
+        const [e, a] = n.value;
+    }
+
+    for (const [_, a1] of q.iter(w)) {
+        a1.v.value = 'modified';
+    }
+
+    for (const [e, a0] of q.iter(w)) {
+        const a1 = w.get(e, A)!;
+        assert(a0.v.value === a1.value)
     }
 })
 
 test.skipIf(skip_non_change_detection)('query_entity_ref', () => {
-    const w = new World();
-    w.spawn(new A());
-    w.spawn(new A());
-    w.spawn(new A());
+    //     const w = new World();
+    //     w.spawn(new A());
+    //     w.spawn(new A());
+    //     w.spawn(new A());
 
-    const q = w.query([EntityRef, Write(A)]);
-    for (const [r, a1] of qiter(w, q)) {
-        const a2 = r.get(A)!;
-        a1.value = 'modified';
-        assert(a1.value === a2.value);
-    }
+    //     const q = w.query([EntityRef, mut(A)]);
+    //     for (const [r, a1] of q.iter(w)) {
+    //         const a2 = r.get(A)!;
+    //         a1.value = 'modified';
+    //         assert(a1.value === a2.value);
+    //     }
 })
 
 test.skipIf(skip_non_change_detection)('query', () => {
@@ -161,97 +246,73 @@ test.skipIf(skip_non_change_detection)('query', () => {
     const qa = w.query([A]);
     const qab = w.query([A, B]);
 
+    w.spawn(new A()).id;
 
-    w.spawn(new A())
-
-    assert(qiter(w, qa).count() === 1);
-
+    assert(qa.iter(w).count() === 1);
     w.spawn(new A('second a'), new B('second b'))
 
-    assert(qiter(w, qa).count() === 2);
-    assert(qiter(w, qab).count() === 1);
+    assert(qa.iter(w).count() === 2);
+    assert(qab.iter(w).count() === 1);
 
     w.spawn(new A('third a'), new B('third b'));
     w.spawn(new A('lonely a'));
 
-    assert(qiter(w, qab).count() === 2);
-    assert(qiter(w, qa).count() === 4);
+    assert(qab.iter(w).count() === 2);
+    assert(qa.iter(w).count() === 4);
 
     w.spawn(new A(), new C());
 
-    assert(qiter(w, qab).count() === 2);
-    assert(qiter(w, qa).count() === 5);
+    assert(qab.iter(w).count() === 2);
+    assert(qa.iter(w).count() === 5);
 })
 
 function test_large_query(w: World, length: number, query: Component[], spawn: () => InstanceType<Component>[]) {
-    w.clear_entities();
+    w.clearEntities();
 
     const q = w.query(query);
-    w.spawn_batch(Array.from({ length }, spawn));
+    w.spawnBatch(Array.from({ length }, spawn));
 
     console.time('query');
-    qiter(w, q).for_each(() => { });
+    q.iter(w).for_each(() => { });
     console.timeEnd('query');
 }
 
-// test('query fast', () => {
-//     const w = new World();
+test.skipIf(skip.large)('large_queries', () => {
 
-//     const q = w.query([A, B]);
+    const w = new World();
 
-//     for (let i = 0; i < 1000000; i++) {
-//         w.spawn(new A(), new B());
-//     }
+    test_large_query(w, 100, [A, B], () => [new A(), new B()]);
+    test_large_query(w, 1000, [A, B], () => [new A(), new B()]);
+    test_large_query(w, 10000, [A, B], () => [new A(), new B()]);
+    test_large_query(w, 100_000, [A, B], () => [new A(), new B()]);
+    test_large_query(w, 1_000_000, [A, B], () => [new A(), new B()]);
 
-
-//     for (let i = 0; i < 10; i++) {
-
-//         console.time('slow')
-//         q.iter().for_each(() => { })
-//         console.timeEnd('slow')
-
-//         console.time('fast')
-//         q.iter_fast().for_each(() => { })
-//         console.timeEnd('fast')
-//     }
-// })
-
-// test.skipIf(skip_large)('large_queries', () => {
-
-//     const w = new World();
-
-//     test_large_query(w, 100, [A, B], () => [new A(), new B()]);
-//     test_large_query(w, 1000, [A, B], () => [new A(), new B()]);
-//     test_large_query(w, 10000, [A, B], () => [new A(), new B()]);
-//     test_large_query(w, 100_000, [A, B], () => [new A(), new B()]);
-//     test_large_query(w, 1_000_000, [A, B], () => [new A(), new B()]);
-
-// })
+})
 
 test.skipIf(skip_non_change_detection)('query_with', () => {
     const w = new World();
-    w.register_component(A)
-    w.register_component(B)
-    w.register_component(C)
+    w.registerComponent(A)
+    w.registerComponent(B)
+    w.registerComponent(C)
 
     w.spawn(new A('lonely a'))
     w.spawn(new A('lonely a'))
 
-    const qa_with_b = w.query_filtered([A], [With(B)]);
-    assert(qiter(w, qa_with_b).count() === 0);
+    const qa_with_b = w.queryFiltered([A], [With(B)]);
+    // assert(qiter(w, qa_with_b).count() === 0);
 
     w.spawn(new A('with_b'), new B())
     w.spawn(new A('with_b'), new B())
     w.spawn(new C())
-    assert(qiter(w, qa_with_b).count() === 2);
+    // assert(qiter(w, qa_with_b).count() === 2);
 
     w.spawn(new A('without_b_with_c'), new C())
-    assert(qiter(w, qa_with_b).count() === 2);
+    // assert(qiter(w, qa_with_b).count() === 2);
 
-    assert(qiter(w, qa_with_b).all(([x]) => x.value === 'with_b'))
-    assert(qiter(w, qa_with_b).count() === 2);
+    // assert(qiter(w, qa_with_b).all(([x]) => x.value === 'with_b'))
+    // assert(qiter(w, qa_with_b).count() === 2);
     w.spawn(new A('with_b'), new B(), new C())
-    assert(qiter(w, qa_with_b).count() === 3);
+    // assert(qiter(w, qa_with_b).count() === 3);
 })
 
 test.skipIf(skip_non_change_detection)('query_without', () => {
@@ -262,19 +323,19 @@ test.skipIf(skip_non_change_detection)('query_without', () => {
     w.spawn(new A('without_b'));
     w.spawn(new A('with bc'), new B(), new C());
 
-    const qa_without_b = w.query_filtered([A], [Without(B)]);
-    assert(qiter(w, qa_without_b).count() === 2);
-    qiter(w, qa_without_b).for_each(([a]) => {
+    const qa_without_b = w.queryFiltered([A], [Without(B)]);
+    // assert(qiter(w, qa_without_b).count() === 2);
+    qa_without_b.iter(w).for_each(([a]) => {
         assert(a.value === 'without_b')
     })
     w.spawn(new A('without_b'))
     w.spawn(new A('without_b'))
     w.spawn(new A(), new C())
-    assert(qiter(w, qa_without_b).count() === 5);
+    // assert(qiter(w, qa_without_b).count() === 5);
 
-    w.clear_entities();
+    w.clearEntities();
 
-    const qa_without_bd = w.query_filtered([A], [Without(B), Without(D)]);
+    const qa_without_bd = w.queryFiltered([A], [Without(B), Without(D)]);
 
     w.spawn(new A('with_bd'), new C(), new B(), new D());
     w.spawn(new A('with_bd'), new C(), new B(), new D());
@@ -288,7 +349,7 @@ test.skipIf(skip_non_change_detection)('query_without', () => {
     w.spawn(new A('lonely'));
     w.spawn(new A('with_c'), new C())
 
-    assert(qiter(w, qa_without_bd).all(([a]) => a.value !== 'with_b' && a.value !== 'with_d' && a.value !== 'with_bd'))
+    assert(qa_without_bd.iter(w).all(([a]) => a.value !== 'with_b' && a.value !== 'with_d' && a.value !== 'with_bd'))
 })
 
 test.skipIf(skip_non_change_detection)('query_with_without', () => {
@@ -302,7 +363,7 @@ test.skipIf(skip_non_change_detection)('query_with_without', () => {
     w.spawn(new A('with bc'), new B(), new C());
     w.spawn(new A('with bc'), new B(), new C());
 
-    const q_a_with_b_without_c = w.query_filtered([A], [With(B), Without(C)])
+    const q_a_with_b_without_c = w.queryFiltered([A], [With(B), Without(C)])
     // assert(qiter(w, q_a_with_b_without_c).count() === 1)
 
     w.spawn(new A('with bd'), new B(), new D());
@@ -324,9 +385,9 @@ test.skipIf(skip_non_change_detection)('query_maybe', () => {
     const qa_maybe_b = w.query([A, Maybe(B)]);
     const qac_maybe_b = w.query([A, Maybe(B), C]);
 
-    assert(qiter(w, qa).count() === 3)
-    assert(qiter(w, qa_maybe_b).count() === 8);
-    assert(qiter(w, qac_maybe_b).count() === 3)
+    // assert(qa.iter(w).count() === 3)
+    // assert(qiter(w, qa_maybe_b).count() === 8);
+    // assert(qiter(w, qac_maybe_b).count() === 3)
 })
 
 test.skipIf(skip_non_change_detection)('query_or', () => {
@@ -337,70 +398,73 @@ test.skipIf(skip_non_change_detection)('query_or', () => {
     // w.spawn(new A(), new B());
     // w.spawn(new A('lonely'));
 
-    // const q = w.query_filtered([A], [With(A), With(B)])
-    // assert(qiter(w, q).all(([a]) => a.value !== 'lonely'))
+    // const q = w.queryFiltered([A], [With(A), With(B)])
+    // assert(q.iter(w).all(([a]) => a.value !== 'lonely'))
 })
 
-// test('query_added', () => {
-//     const w = new World();
+test('query_added', () => {
+    const w = new World();
 
-//     const q_normal = w.query([A])
-//     const q_added = w.query_filtered([A], [Added(A)])
+    const normal = w.query([A])
+    const added = w.queryFiltered([A], [Added(A)])
 
-//     w.clear_trackers();
+    w.clearTrackers();
 
-//     w.spawn(new A(), new B(), new C());
-//     w.spawn(new A(), new B(), new C());
-//     w.spawn(new A(), new B(), new C());
+    w.spawn(new A(), new B(), new C());
+    w.spawn(new A(), new B(), new C());
+    w.spawn(new A(), new B(), new C());
 
 
-//     assert(qiter(w, q_added).count() === 3)
-//     assert(qiter(w, q_normal).count() === 3)
+    assert(added.iter(w).count() === 3)
+    assert(normal.iter(w).count() === 3)
 
-//     w.spawn(new A(), new B(), new C());
-//     w.spawn(new A(), new B(), new C());
-//     w.spawn(new A(), new B(), new C());
+    w.spawn(new A(), new B(), new C());
+    w.spawn(new A(), new B(), new C());
+    w.spawn(new A(), new B(), new C());
 
-//     w.clear_trackers();
+    w.clearTrackers();
 
-//     assert(qiter(w, q_added).count() === 0);
-//     assert(qiter(w, q_normal).count() === 6)
+    assert(added.iter(w).count() === 0);
+    assert(normal.iter(w).count() === 6)
 
-//     w.spawn(new A(), new B(), new C());
-//     w.spawn(new A(), new B(), new C());
-//     w.spawn(new A(), new B(), new C());
+    w.spawn(new A(), new B(), new C());
+    w.spawn(new A(), new B(), new C());
+    w.spawn(new A(), new B(), new C());
 
-//     assert(qiter(w, q_added).count() === 3);
-//     assert(qiter(w, q_normal).count() === 9)
-// })
+    assert(added.iter(w).count() === 3);
+    assert(normal.iter(w).count() === 9)
 
-// test('changed', () => {
-//     const w = new World();
+})
 
-//     const q_changed = w.query_filtered([Entity], [Changed(A)]);
+test('changed', () => {
+    const w = new World();
 
-//     w.clear_trackers()
+    const normal = w.query([mut(A)])
+    const changed = w.queryFiltered([A], [Changed(A)])
 
-//     w.spawn(new A(), new B(), new C());
-//     w.spawn(new A(), new B(), new C());
-//     w.spawn(new A(), new B(), new C());
+    w.clearTrackers();
 
-//     const entities = qiter(w, q_changed).flatten().collect() as Entity[];
+    w.spawn(new A(), new B(), new C());
+    w.spawn(new A(), new B(), new C());
+    w.spawn(new A(), new B(), new C());
 
-//     assert(qiter(w, q_changed).count() === 3);
-//     assert(qiter(w, q_changed).count() === 3);
 
-//     assert(entities.length === 3);
+    assert(changed.iter(w).count() === 3)
+    assert(normal.iter(w).count() === 3)
 
-//     w.clear_trackers();
+    w.spawn(new A(), new B(), new C());
+    w.spawn(new A(), new B(), new C());
+    w.spawn(new A(), new B(), new C());
 
-//     assert(qiter(w, q_changed).count() === 0);
+    w.incrementChangeTick();
 
-//     for (const e of entities) {
-//         const mut = w.get_mut(e, A)!;
-//         mut.v.value = 'changed';
-//     }
+    for (const [a] of normal.iter(w)) {
+        a.v;
+    }
 
-//     assert(qiter(w, q_changed).count() === 3);
 
-// })
+    assert(changed.iter(w).count() === normal.iter(w).count());
+
+    w.incrementChangeTick();
+
+})

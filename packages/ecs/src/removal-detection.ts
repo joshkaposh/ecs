@@ -1,15 +1,14 @@
-import { Option } from "joshkaposh-option";
-import { Component, ComponentId, Tick } from "./component";
-import { Entity } from "./entity";
-import { SparseSet } from "./storage/sparse-set";
-import { EventCursor, EventId, Events } from "./event";
-import { SystemMeta } from "./system";
+import { type Iterator, iter } from "joshkaposh-iterator";
+import type { Option } from "joshkaposh-option";
+import type { Component, ComponentId, Tick } from "./component";
+import type { Entity } from "./entity";
+import type { SystemMeta } from "./system";
+import type { World } from "./world";
+import type { Archetype } from "./archetype";
+import { type StorageType, SparseSet } from "./storage";
+import { type EventId, EventCursor, Events } from "./event";
 import { unit } from "./util";
-import { World } from "./world";
-import { iter, Iterator } from "joshkaposh-iterator";
-import { Archetype } from "./archetype";
-import { define_event } from "define";
-import type { StorageType } from "./storage";
+import { defineEvent } from "define";
 
 class RemovedComponentEntity {
     static readonly type_id: UUID;
@@ -24,14 +23,14 @@ class RemovedComponentEntity {
         return this.entity;
     }
 }
-define_event(RemovedComponentEntity)
+defineEvent(RemovedComponentEntity)
 
 export class RemovedComponentEvents {
     State!: unit;
     Item!: RemovedComponentEvents;
-    #events_sets: SparseSet<ComponentId, Events<typeof RemovedComponentEntity>>;
+    #events_sets: SparseSet<Events<typeof RemovedComponentEntity>>;
 
-    constructor(event_sets: SparseSet<ComponentId, Events<typeof RemovedComponentEntity>> = new SparseSet()) {
+    constructor(event_sets: SparseSet<Events<typeof RemovedComponentEntity>> = new SparseSet()) {
         this.#events_sets = event_sets;
     }
 
@@ -51,14 +50,14 @@ export class RemovedComponentEvents {
 
     send(component_id: ComponentId, entity: Entity) {
         this.#events_sets
-            .get_or_insert_with(component_id, () => new Events(RemovedComponentEntity))
+            .getOrSetWith(component_id, () => new Events(RemovedComponentEntity))
             .send(new RemovedComponentEntity(entity));
     }
 
     static init_state(_world: World, _system_meta: SystemMeta): unit { return unit }
 
     static get_param(_state: unit, _system_meta: SystemMeta, world: World, _change_tick: Tick): RemovedComponentEvents {
-        return world.removed_components()
+        return world.removedComponents;
     }
 
     static apply(_state: typeof unit, _system_meta: SystemMeta, _world: World): void {
@@ -101,8 +100,8 @@ export class RemovedComponents<T extends Component> {
 
     //* SystemParam methods
 
-    static init_state(_world: World, _system_meta: SystemMeta) {
-
+    static init_state(world: World, system_meta: SystemMeta, component_id: ComponentId) {
+        return world.removedComponents.get(component_id);
     }
 
     static get_param(_state: any, _system_meta: SystemMeta, _world: World, _change_tick: Tick) {
@@ -127,6 +126,15 @@ export class RemovedComponents<T extends Component> {
 
     //* SystemParam methods end
 
+    get length() {
+        const events = this.events();
+        return events ? this.#reader.reader.len(events) : 0
+    }
+
+    get isEmpty() {
+        const events = this.events();
+        return events ? this.#reader.reader.is_empty(events) : true;
+    }
 
     reader(): EventCursor<typeof RemovedComponentEntity> {
         return this.#reader.reader
@@ -148,7 +156,6 @@ export class RemovedComponents<T extends Component> {
             return reader
                 .reader
                 .read(events)
-                // .flatten()
                 .map(e => e.entity);
         }
         return iter.of();
@@ -165,16 +172,6 @@ export class RemovedComponents<T extends Component> {
                 .map(map_id_events)
         }
         return;
-    }
-
-    len() {
-        const events = this.events();
-        return events ? this.#reader.reader.len(events) : 0
-    }
-
-    is_empty() {
-        const events = this.events()
-        return events ? this.#reader.reader.is_empty(events) : true;
     }
 
     clear() {

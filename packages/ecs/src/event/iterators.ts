@@ -11,6 +11,10 @@ export class EventIterator<E extends Event> extends ExactSizeIterator<Instance<E
         this.#iter = it;
     }
 
+    get length(): number {
+        return this.#iter.len();
+    }
+
     into_iter(): ExactSizeIterator<Instance<E>> {
         this.#iter.into_iter();
         return this;
@@ -39,9 +43,6 @@ export class EventIterator<E extends Event> extends ExactSizeIterator<Instance<E
         return el.done ? done() : item(el.value[0]);
     }
 
-    len(): number {
-        return this.#iter.len();
-    }
 }
 
 export class EventIteratorWithId<E extends Event> extends ExactSizeIterator<[Instance<E>, number]> {
@@ -87,7 +88,8 @@ export class EventIteratorWithId<E extends Event> extends ExactSizeIterator<[Ins
         return done()
     }
     size_hint(): [number, number] {
-        return this.#chain.size_hint() as [number, number];
+        const [lo, hi] = this.#chain.size_hint();
+        return [lo, hi ?? this.#unread];
     }
 
     last(): Option<[Instance<E>, number]> {

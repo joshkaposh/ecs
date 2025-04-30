@@ -1,14 +1,14 @@
 import { test, assert } from 'vitest'
 import { is_some, } from 'joshkaposh-option';
 import { Archetypes, Components, StorageType, Storages } from 'ecs';
-import { define_component, define_marker } from 'define';
+import { defineComponent, defineMarker } from 'define';
 
-const A = define_component(class A { constructor(public value = 'A') { } });
-const B = define_component(class B { constructor(public value = 'B') { } });
-const C = define_component(class C { constructor(public value = 'C') { } });
+const A = defineComponent(class A { constructor(public value = 'A') { } });
+const B = defineComponent(class B { constructor(public value = 'B') { } });
+const C = defineComponent(class C { constructor(public value = 'C') { } });
 
-const MarkerA = define_marker()
-const MarkerB = define_marker()
+const MarkerA = defineMarker()
+const MarkerB = defineMarker()
 
 test('archetype', () => {
     const archetypes = new Archetypes();
@@ -19,41 +19,41 @@ test('archetype', () => {
     const components = new Components();
     const storages = new Storages();
 
-    const a_id = components.register_component(A)
-    const b_id = components.register_component(B)
-    const c_id = components.register_component(C);
+    const a_id = components.registerComponent(A)
+    const b_id = components.registerComponent(B)
+    const c_id = components.registerComponent(C);
 
-    const ma_id = components.register_component(MarkerA)
-    const mb_id = components.register_component(MarkerB)
+    const ma_id = components.registerComponent(MarkerA)
+    const mb_id = components.registerComponent(MarkerB)
 
     assert(a_id === 0)
     assert(mb_id === 4)
 
-    assert(components.get_info(a_id!)?.descriptor.storage_type === StorageType.Table)
-    assert(components.get_info(b_id!)?.descriptor.storage_type === StorageType.Table)
-    assert(components.get_info(c_id!)?.descriptor.storage_type === StorageType.Table)
+    assert(components.getInfo(a_id!)?.descriptor.storage_type === StorageType.Table)
+    assert(components.getInfo(b_id!)?.descriptor.storage_type === StorageType.Table)
+    assert(components.getInfo(c_id!)?.descriptor.storage_type === StorageType.Table)
 
-    assert(components.get_info(ma_id!)?.descriptor.storage_type === StorageType.SparseSet)
-    assert(components.get_info(mb_id!)?.descriptor.storage_type === StorageType.SparseSet)
+    assert(components.getInfo(ma_id!)?.descriptor.storage_type === StorageType.SparseSet)
+    assert(components.getInfo(mb_id!)?.descriptor.storage_type === StorageType.SparseSet)
 
     const columns = [a_id!, b_id!, c_id!];
 
     const sparse_ids_ma = [ma_id!];
     const sparse_ids_mb = [mb_id!];
 
-    const table_id = storages.tables.__get_id_or_insert(columns, components)
+    const table_id = storages.tables.__getIdOrSet(columns, components)
 
-    const sparse_set_ma = storages.sparse_sets.__get_or_insert(components.get_info(ma_id!)!)
-    const sparse_set_mb = storages.sparse_sets.__get_or_insert(components.get_info(mb_id!)!)
+    const sparse_set_ma = storages.sparse_sets.__getOrSet(components.getInfo(ma_id!)!)
+    const sparse_set_mb = storages.sparse_sets.__getOrSet(components.getInfo(mb_id!)!)
 
-    assert(is_some(sparse_set_ma))
-    assert(is_some(sparse_set_mb))
+    assert(sparse_set_ma != null)
+    assert(sparse_set_mb != null)
 
-    const arch_a_id = archetypes.get_id_or_insert(table_id, columns, sparse_ids_ma);
-    const arch_b_id = archetypes.get_id_or_insert(table_id, columns, sparse_ids_mb);
+    const arch_a_id = archetypes.getIdOrSet(table_id, columns, sparse_ids_ma);
+    const arch_b_id = archetypes.getIdOrSet(table_id, columns, sparse_ids_mb);
     const arch_a = archetypes.get(arch_a_id)!;
     const arch_b = archetypes.get(arch_b_id)!;
 
-    assert(is_some(arch_a_id) && arch_a_id === arch_a.id())
-    assert(is_some(arch_b_id) && arch_b_id === arch_b.id())
+    assert(arch_a_id != null && arch_a_id === arch_a.id)
+    assert(arch_b_id != null && arch_b_id === arch_b.id)
 });

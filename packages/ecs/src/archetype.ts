@@ -1,13 +1,14 @@
-import { iter, Iterator, Range, range } from "joshkaposh-iterator";
+import { iter, Iterator, Range } from "joshkaposh-iterator";
 import { is_none, u32, type Option } from 'joshkaposh-option'
-import { ComponentId } from "./component";
-import { TableId, type TableRow } from "./storage/table";
-import { Entity, EntityLocation } from "./entity";
+import type { ComponentId } from "./component";
+import type { Entity, EntityLocation } from "./entity";
+import type { BundleId } from './bundle';
+import { type TableRow, TableId, SparseSet } from "./storage";
 import { StorageType } from "./storage";
-import { SparseArray, SparseSet } from "./storage/sparse-set";
-import { reserve, swap_remove, split_at } from "./array-helpers";
-import { type BundleId } from './bundle';
+import { reserve, swap_remove, split_at, swap } from "./array-helpers";
 import { entry } from "./util";
+import { World } from "./world";
+import { SystemMeta } from "./system";
 
 export type ArchetypeGeneration = number;
 export const ArchetypeGeneration = {
@@ -66,13 +67,13 @@ export const SpawnBundleStatus = {
 } as const;
 
 export class Edges {
-    #insert_bundle: SparseArray<BundleId, ArchetypeAfterBundleInsert>;
-    #remove_bundle: SparseArray<BundleId, Option<ArchetypeId>>
-    #take_bundle: SparseArray<BundleId, Option<ArchetypeId>>
+    #insert_bundle: Option<ArchetypeAfterBundleInsert>[];
+    #remove_bundle: Option<ArchetypeId>[]
+    #take_bundle: Option<ArchetypeId>[]
     constructor(
-        insert_bundle: SparseArray<BundleId, ArchetypeAfterBundleInsert> = new SparseArray(),
-        remove_bundle: SparseArray<BundleId, Option<ArchetypeId>> = new SparseArray(),
-        take_bundle: SparseArray<BundleId, Option<ArchetypeId>> = new SparseArray(),
+        insert_bundle: Option<ArchetypeAfterBundleInsert>[] = [],
+        remove_bundle: Option<ArchetypeId>[] = [],
+        take_bundle: Option<ArchetypeId>[] = [],
     ) {
         this.#insert_bundle = insert_bundle;
         this.#remove_bundle = remove_bundle;
@@ -84,39 +85,45 @@ export class Edges {
     }
 
     get_archetype_after_bundle_insert_internal(bundle_id: BundleId): Option<ArchetypeAfterBundleInsert> {
-        return this.#insert_bundle.get(bundle_id)
+        return this.#insert_bundle[bundle_id]
     }
 
     cache_archetype_after_bundle_insert(bundle_id: BundleId, archetype_id: ArchetypeId, bundle_status: ComponentStatus[], required_components: any[], added: ComponentId[], existing: ComponentId[]) {
-        this.#insert_bundle.insert(bundle_id, new ArchetypeAfterBundleInsert(
+        this.#insert_bundle[bundle_id] = new ArchetypeAfterBundleInsert(
             archetype_id,
             bundle_status,
             required_components,
             added,
             existing
-        ))
+        );
     }
 
     get_archetype_after_bundle_remove(bundle_id: BundleId): Option<ArchetypeId> {
-        return this.#remove_bundle.get(bundle_id)
+        return this.#remove_bundle[bundle_id]
     }
 
     cache_archetype_after_bundle_remove(bundle_id: BundleId, archetype_id: Option<ArchetypeId>) {
-        this.#remove_bundle.insert(bundle_id, archetype_id);
+        this.#remove_bundle[bundle_id] = archetype_id;
     }
 
     get_archetype_after_bundle_take(bundle_id: BundleId): Option<ArchetypeId> {
-        return this.#take_bundle.get(bundle_id);
+        return this.#take_bundle[bundle_id];
     }
 
     cache_archetype_after_bundle_take(bundle_id: BundleId, archetype_id: Option<ArchetypeId>) {
-        this.#take_bundle.insert(bundle_id, archetype_id);
+        this.#take_bundle[bundle_id] = archetype_id;
     }
 }
 
-export class ArchetypeEntity {
+export interface InternalArchetypeEntity {
     entity: Entity;
     table_row: TableRow;
+    id(): Entity;
+}
+
+export class ArchetypeEntity {
+    private entity: Entity;
+    private table_row: TableRow;
     constructor(entity: Entity, table_row: TableRow) {
         this.entity = entity;
         this.table_row = table_row;
@@ -125,7 +132,6 @@ export class ArchetypeEntity {
     id() {
         return this.entity;
     }
-
 }
 
 type ArchetypeSwapRemoveResult = {
@@ -147,8 +153,11 @@ export class Archetype {
     #id: ArchetypeId;
     #table_id: TableId;
     #edges: Edges;
-    #entities: ArchetypeEntity[];
-    #components: SparseSet<ComponentId, ArchetypeComponentInfo>
+    #entities: InternalArchetypeEntity[];
+    #components: SparseSet<ArchetypeComponentInfo>;
+    #table_components: ComponentId[];
+    #sparse_set_components: ComponentId[];
+
     constructor(
         component_index: ComponentIndex,
         id: ArchetypeId,
@@ -158,53 +167,54 @@ export class Archetype {
     ) {
         const [min_table] = table_components.size_hint();
         const [min_sparse] = sparse_set_components.size_hint();
-        const archetype_components = SparseSet.with_capacity<number, ArchetypeComponentInfo>(min_table + min_sparse);
+        const archetype_components = SparseSet.withCapacity<ArchetypeComponentInfo>(min_table + min_sparse);
 
+        const table_c = [];
+        const sparse_c = [];
         for (const [idx, [component_id, archetype_component_id]] of table_components.enumerate()) {
-            // const info = components.get_info(component_id)!;
-            // info.update_archetype_flags()
+            table_c.push(component_id);
 
-            archetype_components.insert(component_id, {
+            archetype_components.set(component_id, {
                 storage_type: StorageType.Table,
                 archetype_component_id
-            }
-            )
+            })
 
-            const map = entry(component_index, component_id, () => new Map())
-            map.set(component_id, { column: idx });
+            entry(component_index, component_id, () => new Map()).set(component_id, { column: idx });
         }
 
-        for (const [component_id, archetype_component_id] of sparse_set_components.into_iter()) {
-            archetype_components.insert(component_id, {
+        for (const [component_id, archetype_component_id] of sparse_set_components) {
+            sparse_c.push(component_id);
+
+            archetype_components.set(component_id, {
                 storage_type: StorageType.SparseSet,
                 archetype_component_id
             })
 
-
-            const map = entry(component_index, component_id, () => new Map());
-            map.set(id, { column: null })
+            entry(component_index, component_id, () => new Map()).set(id, { column: null })
         }
 
         this.#id = id;
         this.#table_id = table_id;
         this.#entities = [];
-        this.#components = archetype_components.into_immutable();
+        this.#components = archetype_components.intoImmutable();
+        this.#table_components = table_c;
+        this.#sparse_set_components = sparse_c;
         this.#edges = new Edges();
     }
 
-    id(): ArchetypeId {
+    get id(): ArchetypeId {
         return this.#id;
     }
 
-    table_id(): TableId {
+    get tableId(): TableId {
         return this.#table_id;
     }
 
     /**
      * @summary Fetches the entities contained in this archetype.
      */
-    entities(): ArchetypeEntity[] {
-        return this.#entities
+    get entities(): ArchetypeEntity[] {
+        return this.#entities as unknown as ArchetypeEntity[];
     }
 
     /**
@@ -213,8 +223,9 @@ export class Archetype {
      * 
      * All of the IDs are unique.
      */
-    table_components(): Iterator<ComponentId> {
-        return this.#components.iter().filter_map(([id, component]) => component.storage_type === StorageType.Table ? id : null)
+    tableComponents(): Iterator<ComponentId> {
+        // return this.#components.iter().filter_map(([id, component]) => component.storage_type === StorageType.Table ? id : null)
+        return iter(this.#table_components);
     }
 
     /**
@@ -223,8 +234,9 @@ export class Archetype {
      * 
      * All of the IDs are unique.
      */
-    sparse_set_components(): Iterator<ComponentId> {
-        return this.#components.iter().filter_map(([id, component]) => component.storage_type === StorageType.SparseSet ? id : null)
+    sparseSetComponents(): Iterator<ComponentId> {
+        // return this.#components.iter().filter_map(([id, component]) => component.storage_type === StorageType.SparseSet ? id : null)
+        return iter(this.#sparse_set_components);
     }
 
     /**
@@ -234,18 +246,18 @@ export class Archetype {
      * All of the IDs are unique.
      */
     components(): Iterator<ComponentId> {
-        return this.#components.indices()
+        return this.#components.keys();
     }
 
-    __components_array(): ComponentId[] {
-        return this.#components.__indices_array();
+    __componentsArray(): ComponentId[] {
+        return this.#components.inner_keys() as ComponentId[];
     }
 
-    component_count() {
+    get component_count() {
         return this.#components.length;
     }
 
-    __components_with_archetype_component_id() {
+    __componentsWithArchetypeComponentId() {
         return this.#components.iter().map(([component_id, info]) => [component_id, info.archetype_component_id])
     }
 
@@ -260,22 +272,22 @@ export class Archetype {
         return this.#edges;
     }
 
-    len(): number {
+    get length(): number {
         return this.#entities.length;
     }
 
     /**
      * @returns Returns true if and only if no `Component`s are in this `Archetype`
      */
-    is_empty(): boolean {
+    get isEmpty(): boolean {
         return this.#entities.length === 0;
     }
 
     /**
      * @summary Checks if the archetype contains a specific component. This runs in `O(1)` time.
      */
-    contains(component_id: ComponentId): boolean {
-        return this.#components.contains(component_id)
+    has(component_id: ComponentId): boolean {
+        return this.#components.has(component_id)
     }
 
     /**
@@ -285,7 +297,7 @@ export class Archetype {
      * This runs in `O(1)` time.
      */
 
-    get_storage_type(component_id: ComponentId): Option<StorageType> {
+    getStorageType(component_id: ComponentId): Option<StorageType> {
         return this.#components.get(component_id)?.storage_type
     }
 
@@ -293,28 +305,28 @@ export class Archetype {
      * @summary Gets the `ArchetypeComponentId` for the given `ComponentId`.
      * @returns Returns None if component is not in archetype.
      */
-    get_archetype_component_id(component_id: ComponentId): Option<ArchetypeComponentId> {
+    getArchetypeComponentId(component_id: ComponentId): Option<ArchetypeComponentId> {
         return this.#components.get(component_id)?.archetype_component_id;
     }
 
-    entity_table_row(row: ArchetypeRow) {
+    entityTableRow(row: ArchetypeRow) {
         return this.#entities[row].table_row;
     }
 
-    set_entity_table_row(row: ArchetypeRow, table_row: TableRow) {
+    setEntityTableRow(row: ArchetypeRow, table_row: TableRow) {
         this.#entities[row].table_row = table_row;
     }
 
-    has_add_observer() {
+    hasAddObserver() {
         return false
     }
-    has_insert_observer() {
+    hasInsertObserver() {
         return false
     }
-    has_replace_observer() {
+    hasReplaceObserver() {
         return false
     }
-    has_remove_observer() {
+    hasRemoveObserver() {
         return false
     }
 
@@ -324,9 +336,9 @@ export class Archetype {
      * **Safety** - valid component values must be immediately written to the relevant storages.
      */
     // @ts-ignore
-    private __allocate(entity: Entity, table_row: TableRow): EntityLocation {
+    allocate(entity: Entity, table_row: TableRow): EntityLocation {
         const archetype_row = this.#entities.length;
-        this.#entities.push(new ArchetypeEntity(entity, table_row));
+        this.#entities.push(new ArchetypeEntity(entity, table_row) as unknown as InternalArchetypeEntity);
         return {
             archetype_id: this.#id,
             archetype_row,
@@ -347,9 +359,17 @@ export class Archetype {
      * @throws This function will **throw** if `index >= this.len()`
      */
     // @ts-ignore
-    private __swap_remove(row: ArchetypeRow): ArchetypeSwapRemoveResult {
-        const is_last = row == this.#entities.length - 1;
+    private __swapRemove(row: ArchetypeRow): ArchetypeSwapRemoveResult {
+
+        if (row >= this.length) {
+            throw new RangeError(`index ${row} exceeds length ${this.length}`)
+        }
+        const last_idx = this.#entities.length - 1;
+        const is_last = row === last_idx;
         const entity = swap_remove(this.#entities, row);
+
+        // console.log('Archetype swap_remove: ', row, entity, this.#entities);
+
         return {
             swapped_entity: is_last ? null : this.#entities[row].entity,
             table_row: entity!.table_row
@@ -357,7 +377,7 @@ export class Archetype {
     }
 
     // @ts-ignore
-    private __clear_entities() {
+    private __clearEntities() {
         this.#entities.length = 0;
     }
 }
@@ -401,14 +421,14 @@ type ArchetypeRecord = {
 
 type ComponentIndex = Map<ComponentId, Map<ArchetypeId, ArchetypeRecord>>
 
-function hash_by_components(ident: ArchetypeComponents) {
-    return `Table: ${ident.table_components.join(' ')}, Sparse: ${ident.sparse_set_components.join(' ')}` as const
+function hashByComponents(ident: ArchetypeComponents) {
+    return `Table:${ident.table_components.join(',')}, Sparse:${ident.sparse_set_components.join(',')}` as const
 }
 
 export class Archetypes {
     #archetypes: Archetype[];
     #archetype_component_count: number;
-    #by_components: Map<ReturnType<typeof hash_by_components>, ArchetypeId>;
+    #by_components: Map<ReturnType<typeof hashByComponents>, ArchetypeId>;
     // #by_components: Map<ArchetypeComponents, ArchetypeId>;
     #by_component: ComponentIndex
 
@@ -418,32 +438,39 @@ export class Archetypes {
         this.#by_component = new Map();
         this.#archetype_component_count = 0;
 
-        this.get_id_or_insert(TableId.empty, [], [])
+        this.getIdOrSet(TableId.empty, [], [])
+    }
+
+    static init_state() { }
+
+    static get_param(_state: void, _system_meta: SystemMeta, world: World) {
+        return world.archetypes;
     }
 
     get inner() {
         return this.#archetypes;
     }
 
-    generation() {
+    get generation() {
         return this.#archetypes.length;
     }
 
     /**
-     * @returns The total number of `Archetype`s registered to this world.
+     * The total number of `Archetype`s registered to this world.
      */
-    len(): number {
+    get length(): number {
         return this.#archetypes.length;
     }
 
     /**
- * @returns Returns a reference to the `Archetype` located at `ArchetypeId::EMPTY`
- */
-    empty(): Archetype {
+     * @returns Returns a reference to the `Archetype` located at `ArchetypeId::EMPTY`
+     */
+
+    get empty(): Archetype {
         return this.#archetypes[ArchetypeId.EMPTY];
     }
 
-    new_archetype_component_id(): ArchetypeComponentId {
+    newArchetypeComponentId(): ArchetypeComponentId {
         const id = this.#archetype_component_count;
         const count = u32.checked_add(this.#archetype_component_count, 1);
         if (is_none(count)) {
@@ -462,7 +489,7 @@ export class Archetypes {
     }
 
 
-    __get_2_mut(a: ArchetypeId, b: ArchetypeId): [Archetype, Archetype] {
+    __get2Mut(a: ArchetypeId, b: ArchetypeId): [Archetype, Archetype] {
         if (a > b) {
             const [b_slice, a_slice] = split_at(this.#archetypes, a)!;
             return [a_slice[0], b_slice[b]];
@@ -489,7 +516,7 @@ export class Archetypes {
      * 
      * [`TableId`] must exist in tables
      */
-    get_id_or_insert(table_id: TableId, table_components: ComponentId[], sparse_set_components: ComponentId[]): ArchetypeId {
+    getIdOrSet(table_id: TableId, table_components: ComponentId[], sparse_set_components: ComponentId[]): ArchetypeId {
 
         const archetype_identity: ArchetypeComponents = {
             sparse_set_components: structuredClone(sparse_set_components),
@@ -499,7 +526,7 @@ export class Archetypes {
         const archetypes = this.#archetypes;
         const component_index = this.#by_component;
 
-        return entry(this.#by_components, hash_by_components(archetype_identity), () => {
+        return entry(this.#by_components, hashByComponents(archetype_identity), () => {
             const { table_components, sparse_set_components } = archetype_identity;
             const id = archetypes.length;
             const table_start = this.#archetype_component_count;
@@ -520,21 +547,23 @@ export class Archetypes {
         })
     }
 
-    component_index() {
+    componentIndex() {
         return this.#by_component;
     }
 
-    archetype_components_len() {
+    archetypeComponentsLen() {
         return this.#archetype_component_count;
     }
 
-    iter_range(from = 0, to = this.#archetypes.length) {
-        return range(from, to).map(i => this.#archetypes[i]);
+    iterRange(from = 0, to = this.#archetypes.length) {
+        const amount = to - from;
+        return iter(this.#archetypes).skip(from).take(amount);
     }
-    __clear_entities() {
+
+    clearEntities() {
         for (const archetype of this.#archetypes) {
             // @ts-expect-error
-            archetype.__clear_entities();
+            archetype.__clearEntities();
         }
     }
 

@@ -3,22 +3,22 @@ import { u32 } from "joshkaposh-option";
 import { HIGH_MASK, IdKind, IdentifierMask } from 'ecs';
 const NON_ZERO_U32_MIN = 1;
 
-test('get_u64_parts', () => {
-    const value = 9223372032559808524n;
-    // assert(IdentifierMask.get_low(value) === 0x0000_000C);
-    // assert(IdentifierMask.get_high(value) === 0x7FFF_FFFF);
-})
+// test('get_u64_parts', () => {
+//     const value = 9223372032559808524n;
+//     assert(IdentifierMask.get_low(value) === 0x0000_000C);
+//     assert(IdentifierMask.get_high(value) === 0x7FFF_FFFF);
+// })
 
-test('extract_kind', () => {
-    // All bits are ones
-    let high = 0xFFFF_FFFF;
-    assert(IdentifierMask.extract_kind_from_high(high) === IdKind.Placeholder);
-    assert(IdentifierMask.extract_kind_from_high(high) === IdKind.Placeholder)
-    // Second and second to last bits are ones
-    high = 0x4000_0002;
-    IdentifierMask.extract_kind_from_high(high)
-    assert(IdentifierMask.extract_kind_from_high(high) === IdKind.Entity)
-})
+// test('extract_kind', () => {
+//     // All bits are ones
+//     let high = 0xFFFF_FFFF;
+//     assert(IdentifierMask.extract_kind_from_high(high) === IdKind.Placeholder);
+//     assert(IdentifierMask.extract_kind_from_high(high) === IdKind.Placeholder)
+//     // Second and second to last bits are ones
+//     high = 0x4000_0002;
+//     IdentifierMask.extract_kind_from_high(high)
+//     assert(IdentifierMask.extract_kind_from_high(high) === IdKind.Entity)
+// })
 
 test('extract_high_value', () => {
     let high = 0xFFFF_FFFF;

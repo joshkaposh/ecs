@@ -1,12 +1,10 @@
 import { Option } from 'joshkaposh-option'
-import { SystemMeta, World } from "..";
+import { DeferredWorld, SystemMeta, World } from "..";
 import { Command } from "../system/commands";
 
 interface CommandMeta {
     consume_command_and_get_size(value: any, world: Option<World>, cursor: number): number
 }
-
-
 
 export class CommandQueue {
     #bytes: any[]; // u8[]
@@ -44,19 +42,23 @@ export class CommandQueue {
         return new CommandQueue(cloned_bytes, this.#cursor, cloned_panic_recovery);
     }
 
-    static default() {
-        return new CommandQueue([], 0, [])
-    }
-
     push(command: Command) {
         this.get_raw().push(command)
     }
 
     apply(world: World) {
-        world.__flush_entities();
-        world.__flush_commands();
+        world.__flushEntities();
+        world.__flushCommands();
 
         this.get_raw().apply_or_drop_queued(world);
+    }
+
+    exec(world: World) {
+        this.apply(world);
+    }
+
+    queue(world: DeferredWorld) {
+        world.commands.append(this);
     }
 
     apply_or_drop_queued(world: World) {
@@ -87,13 +89,12 @@ export class CommandQueue {
         this.get_raw().apply_or_drop_queued(null);
     }
 
-
     apply_system_buffer(_system_meta: SystemMeta, world: World) {
         this.apply(world);
     }
 
     queue_system_buffer(_system_meta: SystemMeta, world: World) {
-        world.commands().append(this)
+        world.commands.append(this)
     }
 }
 
@@ -138,10 +139,9 @@ export class RawCommandQueue {
             const meta = this.#bytes[local_cursor];
             local_cursor += 1;
 
-            // @ts-expect-error
-            const cmd = meta.command;
             try {
-
+                // @ts-expect-error
+                const cmd = meta.command;
                 // @ts-expect-error
                 (meta.meta.consume_command_and_get_size)(cmd, world, local_cursor);
             } catch (error) {
@@ -153,6 +153,8 @@ export class RawCommandQueue {
                 this.#cursor = start;
 
                 if (start === 0) {
+                    console.log('adding to bytes: ', panic_recovery);
+
                     bytes.push(...panic_recovery);
                 }
             }
@@ -163,6 +165,7 @@ export class RawCommandQueue {
     }
 
     clone() {
-        return new RawCommandQueue(structuredClone(this.#bytes), this.#cursor, structuredClone(this.#panic_recovery))
+        return new RawCommandQueue(this.#bytes, this.#cursor, this.#panic_recovery)
+        // return new RawCommandQueue(structuredClone(this.#bytes), this.#cursor, structuredClone(this.#panic_recovery))
     }
 }

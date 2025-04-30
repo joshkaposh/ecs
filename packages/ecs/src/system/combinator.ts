@@ -1,6 +1,9 @@
-import { Tick, World } from "..";
+import { ScheduleGraph, Tick, World } from "..";
 import { Access } from "../query";
 import { And, AndMarker, Condition, Nand, NandMarker, Nor, NorMarker, Or, OrMarker, Xnor, XnorMarker, Xor, XorMarker } from "../schedule/condition";
+import { ScheduleConfig, ScheduleConfigs } from "../schedule/config";
+import { Ambiguity, NodeId } from "../schedule/graph";
+import { IntoSystemSet, SystemSet, SystemTypeSet } from "../schedule/set";
 import { SystemInput } from "./input";
 import { System, SystemIn } from "./system";
 
@@ -12,14 +15,17 @@ export type Combine<A extends System<any, any>, B extends System<any, any>, In =
     ): Out;
 }
 
-export class CombinatorSystem<Marker extends Combine<A, B>, A extends System<any, any>, B extends System<any, any>> extends System<any, any> {
+
+export class CombinatorSystem<
+    Marker extends Combine<A, B>,
+    A extends System<any, any>,
+    B extends System<any, any>
+> implements System<any, any> {
     #a: A;
     #b: B;
-    #name: string;
     #component_access: Access;
     #archetype_component_access: Access;
     #type: Marker;
-    #type_id: string;
 
     constructor(
         type: Marker,
@@ -27,18 +33,107 @@ export class CombinatorSystem<Marker extends Combine<A, B>, A extends System<any
         b: B,
         name: string
     ) {
-        super();
         this.#type = type;
         this.#a = a;
         this.#b = b;
-        this.#name = name;
         this.#component_access = new Access();
         this.#archetype_component_access = new Access();
+        this.name = name;
         this.fallible = a.fallible || b.fallible;
-        this.#type_id = `${a.type_id()}+${b.type_id()}`
+        const type_id = `${a.type_id}+${b.type_id}` as UUID;
+        this.type_id = type_id;
+        this.system_type_id = type_id;
+
+        this.is_send = a.is_send && b.is_send;
+        this.is_exclusive = a.is_exclusive || b.is_exclusive;
+        this.has_deferred = a.has_deferred || b.has_deferred;
     }
 
     readonly fallible: boolean;
+    readonly name: string;
+    readonly type_id: UUID;
+    readonly system_type_id: UUID;
+
+    readonly is_send: boolean;
+    readonly is_exclusive: boolean;
+    readonly has_deferred: boolean;
+
+    setName(new_name: string): System<any, any> {
+        // @ts-expect-error
+        this.name = new_name;
+        return this as any;
+    }
+
+    processConfig(schedule_graph: ScheduleGraph, config: ScheduleConfigs): NodeId {
+        //@ts-expect-error
+        return schedule_graph.add_system_inner(config as any);
+    }
+
+
+    intoConfig(): ScheduleConfigs {
+        return new ScheduleConfig(
+            this as any,
+            {
+                hierarchy: this.defaultSystemSets(),
+                dependencies: [],
+                ambiguous_with: Ambiguity.default()
+            },
+            []
+        )
+    }
+
+    inSet(set: SystemSet): ScheduleConfigs {
+        return this.intoConfig().inSet(set);
+    }
+
+    before<M>(set: IntoSystemSet<M>): ScheduleConfigs {
+        return this.intoConfig().before(set);
+    }
+
+    beforeIgnoreDeferred<M>(set: IntoSystemSet<M>): ScheduleConfigs {
+        return this.intoConfig().beforeIgnoreDeferred(set);
+
+    }
+
+    after<M>(set: IntoSystemSet<M>): ScheduleConfigs {
+        return this.intoConfig().after(set);
+    }
+
+    afterIgnoreDeferred<M>(set: IntoSystemSet<M>): ScheduleConfigs {
+        return this.intoConfig().afterIgnoreDeferred(set);
+    }
+
+    distributiveRunIf<M>(condition: Condition<M, boolean>): ScheduleConfigs {
+        return this.intoConfig().distributiveRunIf(condition);
+    }
+
+    runIf<M>(condition: Condition<M, boolean>): ScheduleConfigs {
+        return this.intoConfig().runIf(condition);
+    }
+
+    chain(): ScheduleConfigs {
+        return this.intoConfig().chain();
+    }
+
+    chainIgnoreDeferred(): ScheduleConfigs {
+        return this.intoConfig().chainIgnoreDeferred();
+    }
+
+    ambiguousWith<M>(set: IntoSystemSet<M>): ScheduleConfigs {
+        return this.intoConfig().ambiguousWith(set);
+    }
+
+    ambiguousWithAll(): ScheduleConfigs {
+        return this.intoConfig().ambiguousWithAll();
+    }
+
+    intoSystem(): System<any, any> {
+        return this as any;
+    }
+
+    intoSystemSet(): SystemTypeSet {
+        return new SystemTypeSet(this)
+    }
 
     /**
              * Combines `this` condition and `other` into a new condition.
@@ -49,10 +144,11 @@ export class CombinatorSystem<Marker extends Combine<A, B>, A extends System<any
              * 
              * Short-curcuits: Condition `other` will not run if `this` condition returns false.
              */
-    and<M, C extends Condition<M, any>>(other: C): And<System<any, boolean>, System<any, boolean>> {
-        const a = this.#a.into_system();
-        const b = other.into_system();
-        const name = `${a.name()} && ${b.name()}`;
+    and<C extends Condition<any>>(other: C): And<Condition<any, boolean>, C> {
+        const a = this.intoSystem();
+        const b = other.intoSystem();
+        const name = `${a.name} && ${b.name}`;
+
         return new CombinatorSystem(new AndMarker(), a, b, name) as any;
     }
 
@@ -65,10 +161,10 @@ export class CombinatorSystem<Marker extends Combine<A, B>, A extends System<any
      * 
      * Short-curcuits: Condition `other` will not run if `this` condition returns true.
      */
-    nand<M, C extends Condition<M, any>>(other: C): Nand<System<any, boolean>, System<any, boolean>> {
-        const a = this.#a.into_system();
-        const b = other.into_system();
-        const name = `${a.name()} && ${b.name()}`;
+    nand<C extends Condition<any>>(other: C): Nand<Condition<any, boolean>, C> {
+        const a = this.#a.intoSystem();
+        const b = other.intoSystem();
+        const name = `${a.name} && ${b.name}`;
         return new CombinatorSystem(new NandMarker(), a, b, name) as any;
     }
 
@@ -82,10 +178,10 @@ export class CombinatorSystem<Marker extends Combine<A, B>, A extends System<any
      * 
      * Short-curcuits: Condition `other` will not run if `this` condition returns true.
      */
-    or<M, C extends Condition<M, any>>(other: C): Or<System<any, boolean>, System<any, boolean>> {
-        const a = this.#a.into_system();
-        const b = other.into_system();
-        const name = `${a.name()} && ${b.name()}`;
+    or<C extends Condition<any>>(other: C): Or<Condition<any, boolean>, C> {
+        const a = this.#a.intoSystem();
+        const b = other.intoSystem();
+        const name = `${a.name} && ${b.name}`;
         return new CombinatorSystem(new OrMarker(), a, b, name) as any;
 
     }
@@ -99,12 +195,11 @@ export class CombinatorSystem<Marker extends Combine<A, B>, A extends System<any
      * 
      * Short-curcuits: Condition `other` may not run if `this` condition returns false.
      */
-    nor<M, C extends Condition<M, any>>(other: C): Nor<System<any, boolean>, System<any, boolean>> {
-        const a = this.#a.into_system();
-        const b = other.into_system();
-        const name = `${a.name()} && ${b.name()}`;
+    nor<C extends Condition<any>>(other: C): Nor<Condition<any, boolean>, C> {
+        const a = this.#a.intoSystem();
+        const b = other.intoSystem();
+        const name = `${a.name} && ${b.name}`;
         return new CombinatorSystem(new NorMarker(), a, b, name) as any;
-
     }
 
     /**
@@ -116,10 +211,10 @@ export class CombinatorSystem<Marker extends Combine<A, B>, A extends System<any
      * 
      * Both conditions will always run.
      */
-    xor<M, C extends Condition<M, any>>(other: C): Xor<System<any, boolean>, System<any, boolean>> {
-        const a = this.#a.into_system();
-        const b = other.into_system();
-        const name = `${a.name()} && ${b.name()}`;
+    xor<C extends Condition<any>>(other: C): Xor<Condition<any, boolean>, C> {
+        const a = this.#a.intoSystem();
+        const b = other.intoSystem();
+        const name = `${a.name} && ${b.name}`;
         return new CombinatorSystem(new XorMarker(), a, b, name) as any;
     }
 
@@ -132,47 +227,26 @@ export class CombinatorSystem<Marker extends Combine<A, B>, A extends System<any
      * 
      * Both conditions will always run.
      */
-    xnor<M, C extends Condition<M, any>>(other: C): Xnor<System<any, boolean>, System<any, boolean>> {
-        const a = this.#a.into_system();
-        const b = other.into_system();
-        const name = `${a.name()} && ${b.name()}`;
+    xnor<C extends Condition<any>>(other: C): Xnor<Condition<any, boolean>, C> {
+        const a = this.#a.intoSystem();
+        const b = other.intoSystem();
+        const name = `${a.name} && ${b.name}`;
         return new CombinatorSystem(new XnorMarker(), a, b, name) as any;
     }
 
-
-    type_id(): UUID {
-        return this.#type_id as UUID;
-    }
-
-    name() {
-        return this.#name
-    }
-
-    component_access() {
+    componentAccess() {
         return this.#component_access
     }
 
-    archetype_component_access() {
+    archetypeComponentAccess() {
         return this.#archetype_component_access
     }
 
-    is_send() {
-        return this.#a.is_send() && this.#b.is_send();
-    }
-
-    is_exclusive(): boolean {
-        return this.#a.is_exclusive() || this.#b.is_exclusive();
-    }
-
-    has_deferred(): boolean {
-        return this.#a.has_deferred() || this.#b.has_deferred();
-    }
-
-    run_unsafe(input: SystemIn<System<any, any>>, world: World) {
+    runUnsafe(input: SystemIn<System<any, any>>, world: World) {
         return this.#type.combine(
             input,
-            input => this.#a.run_unsafe(input, world),
-            (input) => this.#b.run_unsafe(input, world)
+            input => this.#a.runUnsafe(input, world),
+            input => this.#b.runUnsafe(input, world)
         )
     }
 
@@ -185,18 +259,27 @@ export class CombinatorSystem<Marker extends Combine<A, B>, A extends System<any
         )
     }
 
-    apply_deferred(world: World): void {
-        this.#a.apply_deferred(world);
-        this.#b.apply_deferred(world);
+    runWithoutApplyingDeferred(input: any, world: World) {
+        this.updateArchetypeComponentAccess(world);
+        return this.runUnsafe(input, world);
     }
 
-    queue_deferred(world: World): void {
-        this.#a.queue_deferred(world);
-        this.#b.queue_deferred(world);
+    applyDeferred(world: World): void {
+        this.#a.applyDeferred(world);
+        this.#b.applyDeferred(world);
     }
 
-    validate_param_unsafe(world: World): boolean {
-        return this.#a.validate_param_unsafe(world);
+    queueDeferred(world: World): void {
+        this.#a.queueDeferred(world);
+        this.#b.queueDeferred(world);
+    }
+
+    validateParamUnsafe(world: World) {
+        return this.#a.validateParamUnsafe(world);
+    }
+
+    validateParam(world: World) {
+        return this.#a.validateParam(world);
     }
 
     initialize(world: World): void {
@@ -205,37 +288,51 @@ export class CombinatorSystem<Marker extends Combine<A, B>, A extends System<any
         a.initialize(world);
         b.initialize(world);
         const access = this.#component_access;
-        access.extend(a.component_access())
-        access.extend(b.component_access())
+        access.extend(a.componentAccess())
+        access.extend(b.componentAccess())
     }
 
-    update_archetype_component_access(world: World): void {
+    updateArchetypeComponentAccess(world: World): void {
         const a = this.#a;
         const b = this.#b;
-        a.update_archetype_component_access(world);
-        b.update_archetype_component_access(world);
+        a.updateArchetypeComponentAccess(world);
+        b.updateArchetypeComponentAccess(world);
         const access = this.#archetype_component_access;
-        access.extend(a.archetype_component_access())
-        access.extend(b.archetype_component_access())
+        access.extend(a.archetypeComponentAccess())
+        access.extend(b.archetypeComponentAccess())
     }
 
-    check_change_tick(change_tick: Tick): void {
-        this.#a.check_change_tick(change_tick);
-        this.#b.check_change_tick(change_tick);
+    checkChangeTick(change_tick: Tick): void {
+        this.#a.checkChangeTick(change_tick);
+        this.#b.checkChangeTick(change_tick);
     }
 
-    default_system_sets(): any[] {
-        const default_sets = this.#a.default_system_sets();
-        default_sets.push(...this.#b.default_system_sets());
-        return default_sets;
+    defaultSystemSets() {
+        return this.#a.defaultSystemSets().concat(this.#b.defaultSystemSets());
     }
 
-    get_last_run(): Tick {
-        return this.#a.get_last_run();
+    getLastRun(): Tick {
+        return this.#a.getLastRun();
     }
 
-    set_last_run(last_run: Tick): void {
-        this.#a.set_last_run(last_run);
-        this.#b.set_last_run(last_run);
+    setLastRun(last_run: Tick): void {
+        this.#a.setLastRun(last_run);
+        this.#b.setLastRun(last_run);
+    }
+
+    [Symbol.toPrimitive]() {
+        return `CombinatorSystem {
+            name: ${this.name},
+            is_exclusive: ${this.is_exclusive},
+            is_send: ${this.is_send}
+        }`
+    }
+
+    [Symbol.toStringTag]() {
+        return `CombinatorSystem {
+            name: ${this.name},
+            is_exclusive: ${this.is_exclusive},
+            is_send: ${this.is_send}
+        }`
     }
 }

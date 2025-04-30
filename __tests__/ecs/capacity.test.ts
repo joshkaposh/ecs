@@ -1,14 +1,16 @@
 import { assert, expect, test } from "vitest";
 import { capacity, extend, extend_map } from "ecs/src/array-helpers";
+import { push } from "ecs";
+import { range } from "joshkaposh-iterator";
 
 test('capacity', () => {
     const arr = [];
+    assert(cap(arr) === 0);
+    arr.length = 1;
     assert(cap(arr) === 4);
-
-    arr.length = 4;
-
+    arr.length = 5;
     assert(cap(arr) === 8);
-    arr.length = 8;
+    arr.length = 9;
     assert(cap(arr) === 16);
     arr.length = 200;
     assert(cap(arr) === 256);
@@ -50,3 +52,17 @@ test('extend', () => {
     expect(Array.from(src_set)).toEqual(expected_ext_array_set);
     expect(Array.from(src_map)).toEqual(expected_ext_map);
 })
+
+// test('push', () => {
+//     let array = new Uint32Array();
+
+//     for (let i = 0; i < 10; i++) {
+//         array = push(array, i + 1);
+//     }
+
+//     console.log('push', array);
+
+
+//     expect(array).toEqual(Uint32Array.from(range(1, 11).collect()));
+
+// })

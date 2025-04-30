@@ -1,6 +1,6 @@
 import { type Option, u32 } from "joshkaposh-option";
-import { Component, ComponentId, Resource, SystemMeta, Tick, World } from 'ecs';
-import { DeepReadonly, Instance } from "./util";
+import { type Component, type ComponentId, type Resource, type SystemMeta, type World, is_newer_than, SystemParamValidationError, Tick } from 'ecs';
+import type { DeepReadonly, Instance } from "./util";
 import { assert } from "joshkaposh-iterator/src/util";
 
 export const CHECK_TICK_THRESHOLD = 518_400_000;
@@ -39,7 +39,7 @@ export function $read_and_write<T>(type: Instance<T>, ticks: TicksMut) {
         },
 
         set(target, p, newValue, receiver) {
-            mut.set_changed();
+            mut.setChanged();
             Reflect.set(target, p, newValue, receiver)
             return true
         },
@@ -60,17 +60,17 @@ export abstract class DetectChanges<T extends any> {
         return this.v;
     }
 
-    is_added() {
+    isAdded() {
         const ticks = this.ticks;
-        return ticks.added.is_newer_than(ticks.last_run, ticks.this_run)
+        return is_newer_than(ticks.added, ticks.last_run, ticks.this_run);
     }
 
-    is_changed() {
+    isChanged() {
         const ticks = this.ticks;
-        return ticks.changed.is_newer_than(ticks.last_run, ticks.this_run)
+        return is_newer_than(ticks.changed, ticks.last_run, ticks.this_run);
     }
 
-    last_changed() {
+    lastChanged() {
         return this.ticks.changed;
     }
 }
@@ -78,53 +78,55 @@ export abstract class DetectChanges<T extends any> {
 export abstract class DetectChangesMut<T extends any> extends DetectChanges<T> {
     abstract v: T;
     abstract ticks: Ticks;
+
     deref() {
-        return this.v
+        return this.v as Instance<T>
     }
 
-    deref_mut() {
-        this.set_changed();
-        return this.v
+    derefMut() {
+        this.setChanged();
+        return this.v as Instance<T>
     }
 
-    into_inner() {
-        this.set_changed();
+    intoInner() {
+        this.setChanged();
         return this, this.v;
     }
 
-    map_unchanged<U>(f: (value: T) => U): Mut<U> {
+    mapUnchanged<U>(f: (value: T) => U): Mut<U> {
         return this.constructor(f(this.v), this.ticks);
     }
 
-    filter_map_unchanged<U>(f: (value: T) => Option<U>) {
+    filterMapUnchanged<U>(f: (value: T) => Option<U>) {
         const value = f(this.v);
         if (value != null) {
             return this.constructor(value, this.ticks)
         }
     }
 
-    set_changed() {
-        const { changed, this_run } = this.ticks
-        changed.set(this_run.get());
+    setChanged() {
+        // const { changed, this_run } = this.ticks;
+        // changed.set(this_run.get());
+        this.ticks.changed = this.ticks.this_run;
     }
 
-    set_last_changed(last_changed: Tick) {
-        this.ticks.changed.set(last_changed.get());
+    setLastChanged(last_changed: Tick) {
+        this.ticks.changed = last_changed;
     }
 
-    set_if_neq(value: T) {
-        const old = this.bypass_change_detection();
+    setIfNeq(value: T) {
+        const old = this.bypassChangeDetection();
         if (old !== value) {
             this.v = value;
-            this.set_changed();
+            this.setChanged();
             return true;
         } else {
             return false
         }
     }
 
-    replace_if_neq(value: T) {
-        const old = this.bypass_change_detection();
+    replaceIfNeq(value: T) {
+        const old = this.bypassChangeDetection();
         if (old !== value) {
             const prev = old;
             this.v = value;
@@ -134,57 +136,66 @@ export abstract class DetectChangesMut<T extends any> extends DetectChanges<T> {
         }
     }
 
-    bypass_change_detection() {
-        return this.v;
+    bypassChangeDetection(): Instance<T> {
+        return this.v as Instance<T>;
     }
 }
 
 export class Ticks {
+    added: Tick;
+    changed: Tick;
+    last_run: Tick;
+    this_run: Tick;
+
     constructor(
-        public added: Tick,
-        public changed: Tick,
-        public last_run: Tick,
-        public this_run: Tick
-    ) { }
+        added: Tick = 0,
+        changed: Tick = 0,
+        last_run: Tick = 0,
+        this_run: Tick = 0,
+    ) {
+        this.added = added;
+        this.changed = changed;
+        this.last_run = last_run;
+        this.this_run = this_run;
+    }
 
     clone() {
-        return new Ticks(this.added.clone(), this.changed.clone(), this.last_run.clone(), this.this_run.clone())
+        return new Ticks(this.added, this.changed, this.last_run, this.this_run)
     }
 
     static from(ticks: TicksMut): Ticks {
         return new Ticks(ticks.added, ticks.changed, ticks.last_run, ticks.this_run);
     }
 
-    static from_tick_cells(cells: TickCells, last_run: Tick, this_run: Tick) {
+    static fromTickCells(cells: TickCells, last_run: Tick, this_run: Tick) {
         return new Ticks(cells.added, cells.changed, last_run, this_run);
-    }
-
-    static new(added: Tick, changed: Tick, last_run: Tick, this_run: Tick) {
-        return new Ticks(added, changed, last_run, this_run)
-    }
-
-    static default() {
-        return Ticks.new(new Tick(0), new Tick(0), new Tick(0), new Tick(0))
     }
 }
 
 export class TicksMut {
-    constructor(public added: Tick, public changed: Tick, public last_run: Tick, public this_run: Tick) { }
+    added: Tick;
+    changed: Tick;
+    last_run: Tick;
+    this_run: Tick;
 
-    static new(added: Tick, changed: Tick, last_run: Tick, this_run: Tick) {
-        return new TicksMut(added, changed, last_run, this_run)
+    constructor(
+        added: Tick = 0,
+        changed: Tick = 0,
+        last_run: Tick = 0,
+        this_run: Tick = 0
+    ) {
+        this.added = added;
+        this.changed = changed;
+        this.last_run = last_run;
+        this.this_run = this_run;
     }
 
-    static default() {
-        return TicksMut.new(new Tick(0), new Tick(0), new Tick(0), new Tick(0))
-    }
-
-    static from_tick_cells(ticks: { added: Tick; changed: Tick }, last_run: Tick, this_run: Tick) {
+    static fromTickCells(ticks: { added: Tick; changed: Tick }, last_run: Tick, this_run: Tick) {
         return new TicksMut(ticks.added, ticks.changed, last_run, this_run);
     }
 
     clone() {
-        return new TicksMut(this.added.clone(), this.changed.clone(), this.last_run.clone(), this.this_run.clone())
+        return new TicksMut(this.added, this.changed, this.last_run, this.this_run)
     }
 }
 
@@ -208,13 +219,13 @@ export class Mut<T> extends DetectChangesMut<T> {
     }
 
     get v() {
-        this.set_changed();
+        this.setChanged();
         return this.#value;
     }
 
-    has_changed_since(tick: Tick) {
+    hasChangedSince(tick: Tick) {
         const ticks = this.ticks;
-        return ticks.changed.is_newer_than(tick, ticks.this_run)
+        return is_newer_than(ticks.changed, tick, ticks.this_run);
     }
 }
 
@@ -222,8 +233,8 @@ export class Res<T> extends DetectChanges<T> {
     v: Instance<T>;
     ticks: Ticks;
 
-    static State: ComponentId;
-    static Item: Instance<Resource>
+    // static State: ComponentId;
+    // static Item: Instance<Resource>
 
     constructor(type: Instance<T>, ticks: Ticks) {
         super()
@@ -236,12 +247,12 @@ export class Res<T> extends DetectChanges<T> {
     }
 
     static init_state<T extends Resource>(world: World, system_meta: SystemMeta, resource: T) {
-        const component_id = world.components().register_resource(resource);
-        const archetype_component_id = world.__initialize_resource_internal(component_id).id();
+        const component_id = world.components.registerResource(resource);
+        const archetype_component_id = world.__initializeResourceInternal(component_id).id;
 
         const combined_access = system_meta.__component_access_set.combined_access();
 
-        assert(!combined_access.has_resource_write(component_id), `Res<${resource.name}> in system ${system_meta.name()} conflicts with a previous ResMut<${resource.name}> access. Consider removing the duplicate access.`)
+        assert(!combined_access.has_resource_write(component_id), `Res<${resource.name}> in system ${system_meta.name} conflicts with a previous ResMut<${resource.name}> access. Consider removing the duplicate access.`)
 
         system_meta.__component_access_set.__add_unfiltered_resource_read(component_id);
 
@@ -249,19 +260,19 @@ export class Res<T> extends DetectChanges<T> {
         return component_id;
     }
 
-    static validate_param(component_id: ComponentId, system_meta: SystemMeta, world: World) {
-        const is_valid = world.storages().resources.get(component_id)?.is_present() ?? false;
-        if (!is_valid) {
-            system_meta.try_warn_param(Res)
-            return false;
+    static validate_param(component_id: ComponentId, _system_meta: SystemMeta, world: World) {
+
+        if (world.storages.resources.get(component_id)?.isPresent) {
+            return
+        } else {
+            return SystemParamValidationError.invalid('Res', 'Resource does not exist')
         }
-        return true;
     }
 
     static get_param<T>(component_id: ComponentId, system_meta: SystemMeta, world: World, change_tick: Tick) {
-        const tuple = world.get_resource_with_ticks(component_id);
+        const tuple = world.getResourceWithTicks(component_id);
         if (!tuple) {
-            throw new Error(`Resource requested by ${system_meta.name()} does not exist`);
+            throw new Error(`Resource requested by ${system_meta.name} does not exist`);
         }
 
         const [ptr, ticks] = tuple;
@@ -273,42 +284,34 @@ export class Res<T> extends DetectChanges<T> {
 
     static queue() { }
 
+    hasChangedSince(tick: Tick) {
+        const ticks = this.ticks;
+        return is_newer_than(ticks.changed, tick, ticks.this_run);
+    }
 
     clone() {
         return new Res(this.v, this.ticks.clone())
     }
 }
 
-export class OptionRes<T> extends DetectChanges<T> {
-    v: Instance<T>;
-    ticks: Ticks;
-    //! typescript types
-    static State: ComponentId;
-    static Item: Res<Resource>;
-
-    constructor(resource: Instance<T>, ticks: Ticks) {
-        super();
-        this.v = resource;
-        this.ticks = ticks;
-    }
-
-    static init_state<T extends Resource>(world: World, system_meta: SystemMeta, type: T) {
+export const OptRes = {
+    init_state<T extends Resource>(world: World, system_meta: SystemMeta, type: T) {
         return Res.init_state(world, system_meta, type)
-    }
+    },
 
-    static get_param<T extends Resource>(component_id: ComponentId, system_meta: SystemMeta, world: World, change_tick: Tick) {
-        const tuple = world.get_resource_with_ticks<T>(component_id);
+    get_param<T extends Resource>(component_id: ComponentId, system_meta: SystemMeta, world: World, change_tick: Tick) {
+        const tuple = world.getResourceWithTicks<T>(component_id);
         if (!tuple) {
             return
         }
 
         const [ptr, ticks] = tuple;
         return new Res(ptr, new Ticks(ticks.added, ticks.changed, system_meta.last_run, change_tick));
-    }
+    },
 
-    clone() {
-        return new OptionRes(this.v, this.ticks);
-    }
+    validate_param(_component_id: ComponentId, _system_meta: SystemMeta, _world: World) {
+
+    },
 }
 
 export class ResMut<T> extends DetectChangesMut<T> {
@@ -320,8 +323,66 @@ export class ResMut<T> extends DetectChangesMut<T> {
         this.ticks = ticks;
     }
 
+    static init_state(world: World, system_meta: SystemMeta, resource: Resource) {
+        const component_id = world.components.registerResource(resource);
+        const archetype_component_id = world.__initializeResourceInternal(component_id).id;
+
+        const combined_access = system_meta.__component_access_set.combined_access();
+
+        assert(!combined_access.has_resource_read(component_id), `Res<${resource.name}> in system ${system_meta.name} conflicts with a previous ResMut<${resource.name}> access. Consider removing the duplicate access.`)
+
+        system_meta.__component_access_set.__add_unfiltered_resource_write(component_id);
+        system_meta.__archetype_component_access.add_resource_write(archetype_component_id);
+
+        return component_id;
+    }
+
+    static validate_param(component_id: ComponentId, _system_meta: SystemMeta, world: World) {
+        if (world.storages.resources.get(component_id)?.isPresent) {
+            return
+        }
+
+        return SystemParamValidationError.invalid('ResMut', 'Resource does not exist');
+    }
+
+    static get_param<T>(component_id: ComponentId, system_meta: SystemMeta, world: World, change_tick: Tick): ResMut<T> {
+        const tuple = world.getResourceWithTicks(component_id);
+        if (!tuple) {
+            throw new Error(`Resource requested by ${system_meta.name} does not exist`);
+        }
+
+        const [ptr, ticks] = tuple;
+
+        return new ResMut(ptr as Instance<T>, new TicksMut(ticks.added, ticks.changed, system_meta.last_run, change_tick))
+        // return new Res<T>(ptr as Instance<T>, new Ticks(ticks.added, ticks.changed, system_meta.last_run, change_tick))
+    }
+
+
     clone() {
         return new Res(this.v, this.ticks.clone())
     }
 }
+
+export const OptResMut = {
+    init_state(world: World, system_meta: SystemMeta, resource: Resource) {
+        return ResMut.init_state(world, system_meta, resource);
+    },
+
+    validate_param(_component_id: ComponentId, _system_meta: SystemMeta, _world: World) {
+
+    },
+
+    get_param<T>(component_id: ComponentId, system_meta: SystemMeta, world: World, change_tick: Tick): ResMut<T> {
+        const mut = world.getResourceMutById(component_id);
+        if (!mut) {
+            throw new Error(`Resource requested by ${system_meta.name} does not exist`);
+        }
+
+        const { v, ticks } = mut;
+
+        return new ResMut(v as Instance<T>, new TicksMut(ticks.added, ticks.changed, system_meta.last_run, change_tick))
+    },
+}
+
+
 

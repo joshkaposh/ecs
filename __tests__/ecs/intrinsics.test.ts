@@ -1,52 +1,52 @@
-import { assert, expect, test } from "vitest";
-import { clamp_unchecked, lerp, u8, u16, u32, u64, clampu64_unchecked, clamp, clampu64, uint } from 'joshkaposh-option';
+import { assert, test } from "vitest";
+import { math, uint } from 'joshkaposh-option';
 
 test('clamp_unchecked', () => {
-    assert(clamp_unchecked(100, 0, 50) === 50);
-    assert(clamp_unchecked(-100, 0, 50) === 0);
-    assert(clamp_unchecked(-5, 0, -25) === -25);
+    assert(math.clamp_unchecked(100, 0, 50) === 50);
+    assert(math.clamp_unchecked(-100, 0, 50) === 0);
+    assert(math.clamp_unchecked(-5, 0, -25) === -25);
 
-    assert(clampu64_unchecked(100n, 0n, 50n) === 50n);
-    assert(clampu64_unchecked(-100n, 0n, 50n) === 0n);
-    assert(clampu64_unchecked(-5n, 0n, -25n) === -25n);
+    assert(math.clampu64_unchecked(100n, 0n, 50n) === 50n);
+    assert(math.clampu64_unchecked(-100n, 0n, 50n) === 0n);
+    assert(math.clampu64_unchecked(-5n, 0n, -25n) === -25n);
 
 })
 
 test('clamp', () => {
-    assert(clamp(100, 0, 50) === 50);
-    assert(clamp(-100, 0, 50) === 0);
-    assert(clamp(-5, 0, -25) === -5);
+    assert(math.clamp(100, 0, 50) === 50);
+    assert(math.clamp(-100, 0, 50) === 0);
+    assert(math.clamp(-5, 0, -25) === -5);
 
-    assert(clampu64(100n, 0n, 50n) === 50n);
-    assert(clampu64(-100n, 0n, 50n) === 0n);
-    assert(clampu64(-5n, 0n, -25n) === -5n);
+    assert(math.clampu64(100n, 0n, 50n) === 50n);
+    assert(math.clampu64(-100n, 0n, 50n) === 0n);
+    assert(math.clampu64(-5n, 0n, -25n) === -5n);
 
 })
 
 test('lerp', () => {
-    assert(lerp(0, 100, 0.0) === 0)
-    assert(lerp(0, 100, 0.1) === 10)
-    assert(lerp(0, 100, 0.2) === 20)
-    assert(lerp(0, 100, 0.3) === 30)
-    assert(lerp(0, 100, 0.4) === 40)
-    assert(lerp(0, 100, 0.5) === 50)
-    assert(lerp(0, 100, 0.6) === 60)
-    assert(lerp(0, 100, 0.7) === 70)
-    assert(lerp(0, 100, 0.8) === 80)
-    assert(lerp(0, 100, 0.9) === 90)
-    assert(lerp(0, 100, 1) === 100)
+    assert(math.lerp(0, 100, 0.0) === 0)
+    assert(math.lerp(0, 100, 0.1) === 10)
+    assert(math.lerp(0, 100, 0.2) === 20)
+    assert(math.lerp(0, 100, 0.3) === 30)
+    assert(math.lerp(0, 100, 0.4) === 40)
+    assert(math.lerp(0, 100, 0.5) === 50)
+    assert(math.lerp(0, 100, 0.6) === 60)
+    assert(math.lerp(0, 100, 0.7) === 70)
+    assert(math.lerp(0, 100, 0.8) === 80)
+    assert(math.lerp(0, 100, 0.9) === 90)
+    assert(math.lerp(0, 100, 1) === 100)
 
-    assert(lerp(100, 200, 0.0) === 100)
-    assert(lerp(100, 200, 0.1) === 110);
-    assert(lerp(100, 200, 0.2) === 120);
-    assert(lerp(100, 200, 0.3) === 130);
-    assert(lerp(100, 200, 0.4) === 140);
-    assert(lerp(100, 200, 0.5) === 150);
-    assert(lerp(100, 200, 0.6) === 160);
-    assert(lerp(100, 200, 0.7) === 170);
-    assert(lerp(100, 200, 0.8) === 180);
-    assert(lerp(100, 200, 0.9) === 190);
-    assert(lerp(100, 200, 1) === 200);
+    assert(math.lerp(100, 200, 0.0) === 100)
+    assert(math.lerp(100, 200, 0.1) === 110);
+    assert(math.lerp(100, 200, 0.2) === 120);
+    assert(math.lerp(100, 200, 0.3) === 130);
+    assert(math.lerp(100, 200, 0.4) === 140);
+    assert(math.lerp(100, 200, 0.5) === 150);
+    assert(math.lerp(100, 200, 0.6) === 160);
+    assert(math.lerp(100, 200, 0.7) === 170);
+    assert(math.lerp(100, 200, 0.8) === 180);
+    assert(math.lerp(100, 200, 0.9) === 190);
+    assert(math.lerp(100, 200, 1) === 200);
 })
 
 function uint_wrapping(BITS: any) {

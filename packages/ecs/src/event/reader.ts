@@ -3,8 +3,6 @@ import type { Events } from "./collections";
 import type { EventCursor } from "./event_cursor";
 import type { EventIterator, EventIteratorWithId } from "./iterators";
 
-
-// TODO: use Res<Events<E>>
 export class EventReader<E extends Event> {
     #reader: EventCursor<E>;
     #events: Events<E>;
@@ -14,20 +12,20 @@ export class EventReader<E extends Event> {
         this.#events = events;
     }
 
+    get length(): number {
+        return this.#reader.len(this.#events);
+    }
+
+    get isEmpty(): boolean {
+        return this.#reader.is_empty(this.#events);
+    }
+
     read(): EventIterator<E> {
         return this.#reader.read(this.#events);
     }
 
     read_with_id(): EventIteratorWithId<E> {
         return this.#reader.read_with_id(this.#events);
-    }
-
-    len(): number {
-        return this.#reader.len(this.#events);
-    }
-
-    is_empty(): boolean {
-        return this.#reader.is_empty(this.#events);
     }
 
     clear(): void {

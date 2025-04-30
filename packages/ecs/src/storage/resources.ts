@@ -1,7 +1,7 @@
 import type { Iterator } from "joshkaposh-iterator";
 import type { Option } from "joshkaposh-option";
-import { type ComponentId, type Components, ComponentTicks, type Resource, Tick } from "../component";
-import { SparseSet } from "./sparse-set";
+import { type ComponentId, type Components, ComponentTicks, type Resource, Tick, check_tick } from "../component";
+import { SparseSet, ThinSparseSet } from "./sparse-set";
 import type { ArchetypeComponentId } from "../archetype";
 import { $read_and_write, Mut, TicksMut } from "../change_detection";
 
@@ -20,49 +20,42 @@ class ResourceData<R extends Resource> {
         this.#changed_ticks = changed_ticks;
     }
 
-    name() {
+    get name() {
         return this.#type_name;
     }
 
-    is_present(): boolean {
+    get isPresent(): boolean {
         return this.#data != null
     }
 
-    id() {
+    get id() {
         return this.#id;
     }
 
-    get_data(): Option<InstanceType<R>> {
-        if (this.is_present()) {
-            return this.#data
-        }
-        return
+    getData(): Option<InstanceType<R>> {
+        return this.#data;
     }
 
-    get_ticks() {
-        return this.is_present() ? new ComponentTicks(this.#added_ticks, this.#changed_ticks) : undefined;
+    getTicks() {
+        return this.#data ? new ComponentTicks(this.#added_ticks, this.#changed_ticks) : undefined;
     }
 
-    get_mut(last_run: Tick, this_run: Tick): Option<Mut<R>> {
-        const data = this.get_with_ticks();
+    getMut(last_run: Tick, this_run: Tick): Option<Mut<R>> {
+        const data = this.getWithTicks();
         if (data) {
             const [ptr, tick_cells] = data;
-            const ticks_mut = TicksMut.from_tick_cells(tick_cells, last_run, this_run);
+            const ticks_mut = TicksMut.fromTickCells(tick_cells, last_run, this_run);
             return new Mut<R>($read_and_write(ptr, ticks_mut) as any, ticks_mut)
         }
         return;
     }
 
-
-    get_with_ticks(): Option<[InstanceType<R>, ComponentTicks]> {
-        if (this.is_present()) {
-            return [this.#data as InstanceType<R>, new ComponentTicks(this.#added_ticks, this.#changed_ticks)]
-        }
-        return;
+    getWithTicks(): Option<[InstanceType<R>, ComponentTicks]> {
+        return this.#data ? [this.#data as InstanceType<R>, new ComponentTicks(this.#added_ticks, this.#changed_ticks)] : undefined;
     }
 
-    insert(value: InstanceType<R>, change_tick: Tick) {
-        if (this.is_present()) {
+    set(value: InstanceType<R>, change_tick: Tick) {
+        if (this.#data) {
             this.#data = value
         } else {
             this.#data = value;
@@ -71,14 +64,14 @@ class ResourceData<R extends Resource> {
         this.#changed_ticks = change_tick;
     }
 
-    insert_with_ticks(value: InstanceType<R>, change_ticks: ComponentTicks) {
+    setWithTicks(value: InstanceType<R>, change_ticks: ComponentTicks) {
         this.#data = value;
         this.#added_ticks = change_ticks.added;
         this.#changed_ticks = change_ticks.changed;
     }
 
-    remove(): Option<[InstanceType<R>, ComponentTicks]> {
-        if (!this.is_present()) {
+    delete(): Option<[InstanceType<R>, ComponentTicks]> {
+        if (!this.#data) {
             return;
         }
 
@@ -87,48 +80,56 @@ class ResourceData<R extends Resource> {
         return [res, new ComponentTicks(this.#added_ticks, this.#changed_ticks)];
     }
 
-    remove_and_drop() {
+    deleteAndDrop() {
         this.#data = null;
     }
 
-    check_change_ticks(change_tick: Tick) {
-        this.#added_ticks.check_tick(change_tick)
-        this.#changed_ticks.check_tick(change_tick)
+    checkChangeTicks(change_tick: Tick) {
+        const added = this.#added_ticks;
+        const changed = this.#changed_ticks;
+        this.#added_ticks = check_tick(added, change_tick) ?? added;
+        this.#changed_ticks = check_tick(changed, change_tick) ?? changed;
     }
 }
 
 export class Resources {
-    #resources: SparseSet<ComponentId, ResourceData<Resource>>;
+    #resources: SparseSet<ResourceData<Resource>>;
     constructor() {
-        this.#resources = SparseSet.default();
+        this.#resources = new SparseSet();
     }
 
-    check_change_ticks(change_tick: Tick) {
-        this.#resources.values().for_each(info => info.check_change_ticks(change_tick))
+    /**
+     * The total amount of resources.
+     */
+    get length(): number {
+        return this.#resources.length;
+    }
+
+    /**
+     * Is true if no resources exist.
+     */
+    get isEmpty(): boolean {
+        return this.#resources.isEmpty
+    }
+
+    checkChangeTicks(change_tick: Tick) {
+        this.#resources.values().for_each(info => info.checkChangeTicks(change_tick))
     }
 
     clear() {
         this.#resources.clear();
     }
 
-    len(): number {
-        return this.#resources.len();
-    }
-
     iter(): Iterator<[ComponentId, ResourceData<Resource>]> {
         return this.#resources.iter();
-    }
-
-    is_empty(): boolean {
-        return this.#resources.is_empty();
     }
 
     get<R extends Resource>(component_id: ComponentId): Option<ResourceData<R>> {
         return this.#resources.get(component_id) as Option<ResourceData<R>>
     }
 
-    get_mut<R extends Resource>(component_id: ComponentId): Option<ResourceData<R>> {
-        return this.#resources.get_mut(component_id) as Option<ResourceData<R>>
+    getMut<R extends Resource>(component_id: ComponentId): Option<ResourceData<R>> {
+        return this.#resources.getMut(component_id) as Option<ResourceData<R>>
     }
 
     /**
@@ -137,15 +138,72 @@ export class Resources {
      * Fetches or initializes a new resource and returns back it's underlying column.
      * @throws Will Error if `component_id` is not valid for the provided `components`
      */
-    __initialize_with<R extends Resource>(component_id: ComponentId, components: Components, f: () => ArchetypeComponentId): ResourceData<R> {
-        return this.#resources.get_or_insert_with(component_id, () => {
-            const component_info = components.get_info(component_id)!;
+    __initializeWith<R extends Resource>(component_id: ComponentId, components: Components, f: () => ArchetypeComponentId): ResourceData<R> {
+        return this.#resources.getOrSetWith(component_id, () => {
+            const component_info = components.getInfo(component_id)!;
             return new ResourceData(
                 f(),
-                component_info.type(),
-                component_info.name(),
-                new Tick(0),
-                new Tick(0),
+                component_info.type,
+                component_info.name,
+                0,
+                0,
+            )
+        }) as ResourceData<R>;
+    }
+}
+
+export class ThinResources {
+    #resources: ThinSparseSet<ResourceData<Resource>>;
+    constructor() {
+        this.#resources = new ThinSparseSet();
+    }
+
+    get length(): number {
+        return this.#resources.length;
+    }
+
+    get isEmpty(): boolean {
+        return this.#resources.isEmpty;
+    }
+
+    checkChangeTicks(change_tick: Tick) {
+        const dense = this.#resources.inner_values();
+        for (let i = 0; i < dense.length; i++) {
+            dense[i].checkChangeTicks(change_tick);
+        }
+    }
+
+    clear() {
+        this.#resources.clear();
+    }
+
+    iter(): Iterator<[ComponentId, ResourceData<Resource>]> {
+        return this.#resources.iter();
+    }
+
+    get<R extends Resource>(component_id: ComponentId): Option<ResourceData<R>> {
+        return this.#resources.get(component_id) as Option<ResourceData<R>>
+    }
+
+    getMut<R extends Resource>(component_id: ComponentId): Option<ResourceData<R>> {
+        return this.#resources.getMut(component_id) as Option<ResourceData<R>>
+    }
+
+    /**
+     * 
+     *  @description
+     * Fetches or initializes a new resource and returns back it's underlying column.
+     * @throws Will Error if `component_id` is not valid for the provided `components`
+     */
+    __initializeWith<R extends Resource>(component_id: ComponentId, components: Components, f: () => ArchetypeComponentId): ResourceData<R> {
+        return this.#resources.getOrSetWith(component_id, () => {
+            const component_info = components.getInfo(component_id)!;
+            return new ResourceData(
+                f(),
+                component_info.type,
+                component_info.name,
+                0,
+                0,
             )
         }) as ResourceData<R>;
     }

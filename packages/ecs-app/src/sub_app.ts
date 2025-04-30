@@ -1,13 +1,15 @@
 import { Option } from "joshkaposh-option";
 import { iter, Iterator } from "joshkaposh-iterator";
-import { Component, ECS_EVENTS_TYPE, Event, EventRegistry, Events, Resource, Schedule, ScheduleBuildSettings, ScheduleLabel, Schedules, SystemInput, World } from "ecs";
+import { TODO } from 'joshkaposh-iterator/src/util';
+import { Component, Event, EventRegistry, IntoSystem, Resource, Schedule, ScheduleBuildSettings, ScheduleLabel, Schedules, SystemInput, World } from "ecs";
 // import { ECS_EVENTS_TYPE } from "define";
 import { App, AppLabel } from "./app";
 import { Plugin, Plugins, PluginsState } from "./plugin";
-import { IntoSystemConfigs, IntoSystemSetConfigs } from "ecs/src/schedule/config";
 // import { $Main, Main } from "./main_schedule";
-import { IntoSystemSet } from "ecs/src/schedule/set";
+import { IntoSystemSet, SystemSet } from "ecs/src/schedule/set";
 import { MainScheduleOrder } from "./main_schedule";
+import { IntoScheduleConfig, Schedulable } from "ecs/src/schedule/config";
+import { Chain } from "ecs/src/schedule/schedule";
 
 type ExtractFn = (world1: World, world2: World) => void;
 
@@ -37,7 +39,7 @@ export class SubApp {
         this.__plugins_state = plugins_state;
         this.#extract = extract;
         this.update_schedule = update_schedule;
-        world.init_resource(Schedules);
+        world.initResource(Schedules);
     }
 
     static #memswap(self: SubApp, other: SubApp) {
@@ -68,7 +70,7 @@ export class SubApp {
         other.update_schedule = update_schedule;
     }
 
-    world() {
+    get world() {
         return this.#world;
     }
 
@@ -76,28 +78,28 @@ export class SubApp {
      * This method is a workaround. Each `SubApp` can have its own plugins, but `Plugin`
      * works on an `App` as a whole
      */
-    run_as_app(fn: (app: App) => void) {
-        const app = App.empty();
-        const main = app.main();
+    runAsApp(fn: (app: App) => void) {
+        const app = new App();
+        const main = app.main;
         SubApp.#memswap(this, main);
         fn(app);
         SubApp.#memswap(this, main);
     }
 
-    run_default_schedule() {
-        if (this.is_building_plugins()) {
+    runDefaultSchedule() {
+        if (this.isBuildingPlugins()) {
             throw new Error('SubApp.run_default_schedule was called while a plugin was building.')
         }
 
         const label = this.update_schedule;
         if (label) {
-            this.#world.run_schedule(label)
+            this.#world.runSchedule(label)
         }
     }
 
     update() {
-        this.run_default_schedule();
-        this.#world.clear_trackers();
+        this.runDefaultSchedule();
+        this.#world.clearTrackers();
     }
 
     /**
@@ -109,7 +111,7 @@ export class SubApp {
         this.#extract?.call(null, world, this.#world)
     }
 
-    set_extract(extract: ExtractFn) {
+    setExtract(extract: ExtractFn) {
         this.#extract = extract;
         return this;
     }
@@ -122,59 +124,59 @@ export class SubApp {
      * the main world into the render world as part of the Extract phase. In that case, you cannot replace it with your own function.
      * Instead, take the jecs default function and wrap it and then calling it.
      */
-    take_extract(): Option<ExtractFn> {
+    takeExtract(): Option<ExtractFn> {
         const extract = this.#extract;
         this.#extract = undefined;
         return extract;
     }
 
-    init_resource(resource: Resource) {
-        this.#world.init_resource(resource);
+    initResource(resource: Resource) {
+        this.#world.initResource(resource);
         return this;
     }
 
-    insert_resource(resource: Resource) {
-        this.#world.insert_resource(resource);
+    insertResource(resource: Resource) {
+        this.#world.insertResource(resource);
         return this;
     }
 
-    add_systems(schedule: ScheduleLabel, systems: IntoSystemConfigs<any> | IntoSystemSetConfigs<any>) {
+    addSystems(schedule: ScheduleLabel, systems: IntoScheduleConfig<Schedulable>) {
         const schedules = this.#world.resource(Schedules);
-        schedules.add_systems(schedule, systems)
+        schedules.addSystems(schedule, systems)
         return this;
     }
 
-    register_system<I extends SystemInput, O, M>(system: IntoSystem<I, O, M>) {
-        return this.#world.register_system(system);
+    registerSystem<In extends SystemInput, Out>(system: IntoSystem<In, Out>) {
+        return this.#world.registerSystem(system);
     }
 
-    configure_sets(schedule: ScheduleLabel, sets: IntoSystemSetConfigs<any>) {
-        const schedules = this.#world.resource_mut(Schedules);
-        schedules.configure_sets(schedule, sets);
+    configureSets(schedule: ScheduleLabel, sets: IntoScheduleConfig<Schedulable<SystemSet, Chain>>) {
+        const schedules = this.#world.resourceMut(Schedules).v;
+        schedules.configureSets(schedule, sets as any);
         return this;
     }
 
-    add_schedule(schedule: Schedule) {
+    addSchedule(schedule: Schedule) {
         const schedules = this.#world.resource(Schedules);
         schedules.insert(schedule);
         return this
     }
 
-    init_schedule(label: ScheduleLabel) {
-        const schedules = this.#world.resource_mut(Schedules);
-        if (!schedules.contains(label)) {
+    initSchedule(label: ScheduleLabel) {
+        const schedules = this.#world.resourceMut(Schedules).v;
+        if (!schedules.has(label)) {
             schedules.insert(new Schedule(label))
         }
         return this;
     }
 
-    get_schedule(label: ScheduleLabel): Option<Schedule> {
+    getSchedule(label: ScheduleLabel): Option<Schedule> {
         return this.#world.resource(Schedules).get(label);
     }
 
-    edit_schedule(label: ScheduleLabel, f: (schedule: Schedule) => void) {
+    editSchedule(label: ScheduleLabel, f: (schedule: Schedule) => void) {
         const schedules = this.#world.resource(Schedules);
-        if (!schedules.contains(label)) {
+        if (!schedules.has(label)) {
             schedules.insert(new Schedule(label))
         }
 
@@ -184,65 +186,70 @@ export class SubApp {
         return this;
     }
 
-    configure_schedules(schedule_build_settings: ScheduleBuildSettings) {
-        this.#world.resource(Schedules).configure_schedules(schedule_build_settings);
+    configureSchedules(schedule_build_settings: ScheduleBuildSettings) {
+        this.#world.resource(Schedules).configureSchedules(schedule_build_settings);
         return this;
     }
 
-    allow_ambiguous_component(type: Component) {
-        this.#world.allow_ambiguous_component(type)
+    allowAmbiguousComponent(type: Component) {
+        TODO('App.allowAmbiguousComponent() -- this.#world.allowAmbiguousComponent(type)', type)
+        // this.#world.allowAmbiguousComponent(type)
         return this;
     }
 
-    allow_ambiguous_resource(type: Resource) {
-        this.#world.allow_ambiguous_resource(type)
+    allowAmbiguousResource(type: Resource) {
+        TODO('App.allowAmbiguousResource() -- this.#world.allowAmbiguousResource(type)', type)
+        // this.#world.allowAmbiguousResource(type)
         return this;
     }
 
-    ignore_ambiguity(label: ScheduleLabel, a: IntoSystemSet<any>, b: IntoSystemSet<any>) {
-        const schedules = this.#world.resource_mut(Schedules);
-        schedules.ignore_ambiguity(label, a, b);
+    ignoreAmbiguity(label: ScheduleLabel, a: IntoSystemSet<any>, b: IntoSystemSet<any>) {
+        const schedules = this.#world.resourceMut(Schedules);
+        schedules.v.ignoreAmbiguity(label, a, b);
         return this;
     }
 
 
-    add_event(type: Event) {
-        if (!this.#world.contains_resource(type.ECS_EVENTS_TYPE)) {
-            EventRegistry.register_event(type, this.#world)
+    addEvent(type: Event) {
+        // @ts-expect-error
+        const ev_type = type.ECS_EVENTS_TYPE;
+        if (!this.#world.hasResource(ev_type)) {
+            EventRegistry.registerEvent(ev_type, this.#world)
         }
 
         return this;
     }
 
-    add_plugins(plugins: Plugins) {
-        this.run_as_app(app => plugins.add_to_app(app))
+    addPlugins(plugins: Plugins) {
+        this.runAsApp(app => plugins.addToApp(app))
         return this
     }
 
-    is_plugin_added(plugin: Plugin) {
-        return this.__plugin_names.has(plugin.name())
+    isPluginAdded(plugin: Plugin) {
+        return this.__plugin_names.has(plugin.name)
     }
 
-    get_added_plugins() {
+    getAddedPlugins() {
         return iter(this.__plugin_registry)
+            // @ts-expect-error
             .filter_map(p => p.downcast_ref())
             .collect()
     }
 
-    is_building_plugins() {
+    isBuildingPlugins() {
         return this.__plugin_build_depth > 0;
     }
 
     /**
      * Return the state of this `Subapp`s plugins.
      */
-    plugins_state() {
+    pluginsState() {
         let state = this.__plugins_state
         if (PluginsState.Adding === state) {
             state = PluginsState.Ready;
             const plugins = this.__plugin_registry;
             this.__plugin_registry = [];
-            this.run_as_app(app => {
+            this.runAsApp(app => {
                 for (let i = 0; i < plugins.length; i++) {
                     const plugin = plugins[i];
                     if (!plugin.ready(app)) {
@@ -262,7 +269,7 @@ export class SubApp {
     finish() {
         const plugins = this.__plugin_registry;
         this.__plugin_registry = [];
-        this.run_as_app(app => {
+        this.runAsApp(app => {
             for (let i = 0; i < plugins.length; i++) {
                 const plugin = plugins[i];
                 plugin.finish(app);
@@ -272,11 +279,10 @@ export class SubApp {
         this.__plugins_state = PluginsState.Finished;
     }
 
-
     cleanup() {
         const plugins = this.__plugin_registry;
         this.__plugin_registry = [];
-        this.run_as_app(app => {
+        this.runAsApp(app => {
             for (let i = 0; i < plugins.length; i++) {
                 const plugin = plugins[i];
                 plugin.cleanup(app);
@@ -290,7 +296,7 @@ export class SubApp {
 export class SubApps {
     #main: SubApp;
     #sub_apps: Map<AppLabel, SubApp>;
-    constructor(main: SubApp, sub_apps: Map<any, any>) {
+    constructor(main: SubApp = new SubApp(), sub_apps: Map<any, any> = new Map()) {
         this.#main = main;
         this.#sub_apps = sub_apps;
     }
@@ -299,19 +305,19 @@ export class SubApps {
         return this.#sub_apps;
     }
 
-    main() {
+    get main() {
         return this.#main;
     }
 
     update() {
-        this.#main.run_default_schedule();
+        this.#main.runDefaultSchedule();
 
         for (const [_label, sub_app] of this.#sub_apps.entries()) {
-            sub_app.extract(this.#main.world());
+            sub_app.extract(this.#main.world);
             sub_app.update();
         }
 
-        this.#main.world().clear_trackers();
+        this.#main.world.clearTrackers();
     }
 
     iter(): Iterator<SubApp> {
@@ -322,10 +328,10 @@ export class SubApps {
         return this.iter();
     }
 
-    update_sub_app_by_label(label: AppLabel) {
+    updateSubAppByLabel(label: AppLabel) {
         const sub_app = this.#sub_apps.get(label);
         if (sub_app) {
-            sub_app.extract(this.#main.world());
+            sub_app.extract(this.#main.world);
             sub_app.update()
         }
     }

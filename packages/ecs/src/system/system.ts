@@ -1,157 +1,200 @@
 import { v4 } from "uuid";
-import { NodeId } from "../schedule/graph";
-import { World } from "../world";
-import { Access } from "../query";
-import { Condition, ScheduleGraph, Tick } from "..";
-import { unit } from "../util";
-import { ErrorExt, Option } from "joshkaposh-option";
-import { InternedSystemSet, IntoSystemSet, SystemSet, SystemTypeSet } from "../schedule/set";
-import { IntoSystemConfigs, NodeConfig, NodeConfigs, SystemConfig, SystemConfigs } from "../schedule/config";
+import { ErrorExt, Option, Result } from "joshkaposh-option";
 import { TODO } from "joshkaposh-iterator/src/util";
+import { DeferredWorld, World } from "../world";
+import { Access } from "../query";
+import { SystemParamValidationError, check_tick, ParamBuilder, relative_to, Tick, MAX_CHANGE_AGE, Condition } from "..";
+import { unit } from "../util";
+import { InternedSystemSet, IntoSystemSet, SystemSet, SystemTypeSet } from "../schedule/set";
+import { ScheduleConfig, ScheduleConfigs } from "../schedule/config";
+import { ProcessScheduleConfig, ScheduleGraph } from "../schedule/schedule";
+import { Ambiguity, NodeId } from "../schedule/graph";
+export type SystemIn<S> = S extends System<infer In, any> ? In : never;
 
-export type SystemIn<T> = any;
-
-export abstract class System<In, Out> implements IntoSystemConfigs<unit> {
-    static readonly type_id: UUID;
-
-    /**
-     * A system is fallible if it returns a value
-     */
-    abstract readonly fallible: boolean;
-
-    abstract is_send(): boolean;
-    abstract is_exclusive(): boolean;
-    abstract has_deferred(): boolean;
-
-    abstract type_id(): UUID;
-    abstract name(): string;
-    abstract initialize(world: World): void;
-
-    abstract component_access(): Access;
-    abstract archetype_component_access(): Access;
-
-    abstract run_unsafe(input: SystemIn<System<In, Out>>, world: World): Out;
-    abstract validate_param_unsafe(world: World): boolean
-
-    abstract apply_deferred(world: World): void;
-    abstract queue_deferred(world: World): void;
-
-    abstract update_archetype_component_access(world: World): void;
-
-    abstract check_change_tick(change_tick: Tick): void;
-
-    abstract get_last_run(): Tick;
-    abstract set_last_run(last_run: Tick): void;
-
-    process_config(schedule_graph: ScheduleGraph, config: SystemConfig) {
-        const id = schedule_graph.add_system_inner(config);
-        if (!(id instanceof NodeId)) {
-            throw id;
-        }
-        return id;
-    }
-
-    chain() {
-        return this.into_configs();
-    }
+export type SystemFn<P, Out, Fallible extends boolean = false> = (...args: P extends any[] ? P : P extends ParamBuilder<infer Args> ? Args : never) => Fallible extends false ? Out : boolean;
 
 
-    run(input: SystemIn<System<In, Out>>, world: World) {
-        this.update_archetype_component_access(world);
-        const ret = this.run_unsafe(input, world);
-        this.apply_deferred(world);
-        return ret;
-    }
-
-    validate_param(world: World): boolean {
-        this.update_archetype_component_access(world);
-        return this.validate_param_unsafe(world);
-    }
-
-    default_system_sets(): InternedSystemSet[] {
-        return [];
-
-    }
-
-    // pipe<Bin extends SystemInput, Bout, Bmarker, B extends IntoSystemTrait<Bin, Bout, Bmarker>>(system: B) {
-    //     TODO('System.pipe()')
-    //     // @ts-expect-error
-    //     return IntoPipeSystem.new(this, this)
-    // }
-
-    // map<T>(fn: (output: Out) => T) {
-    //     TODO('System.map()')
-    //     // @ts-expect-error
-    //     IntoAdaperSystem.new(fn, this)
-    // }
-
-    system_type_id() {
-        return this.type_id();
-    }
-
-    //* IntoSystem impl
-
-    into_system() {
-        return this;
-    }
-
-    //* IntoSystemConfigs impl
-
-    into_configs(): SystemConfigs {
-        return this.fallible ?
-            NodeConfigs.new_system((this)) :
-            NodeConfigs.new_system(this as System<In, void>)
-    }
-
-    run_if(condition: Condition<any>) {
-        return this.into_configs().run_if(condition)
-    }
-
-    before<M>(other: IntoSystemSet<M>) {
-        return this.into_configs().before(other);
-    }
-
-    after<M>(other: IntoSystemSet<M>) {
-        return this.into_configs().after(other);
-    }
-
-    //* IntoSystemSet impl
-    into_system_set() {
-        return new SystemTypeSet(this) as SystemSet;
-    }
-
-    [Symbol.toPrimitive]() {
-        return `System {
-            name: ${this.name()},
-            is_exclusive: ${this.is_exclusive()},
-            is_send: ${this.is_send()}
-        }`
-    }
-
-    [Symbol.toStringTag]() {
-        return `System {
-            name: ${this.name()},
-            is_exclusive: ${this.is_exclusive()},
-            is_send: ${this.is_send()}
-        }`
-    }
-
-};
-
-export function check_system_change_tick(last_run: Tick, this_run: Tick, system_name: string) {
-    if (last_run.check_tick(this_run)) {
-        const age = this_run.relative_to(last_run).get();
-        console.warn(`System ${system_name} has not run for ${age} ticks. Changed older than ${Tick.MAX.get() - 1} will not be detected.`)
-    }
+export interface IntoSystem<In, Out> {
+    intoSystem(): System<In, Out>;
 }
 
-interface IntoSystem<In, Out, Marker> {
-    into_system(): System<In, Out>;
+export interface System<In, Out> extends IntoSystemSet<any>, IntoSystem<In, Out>, ProcessScheduleConfig {
+    /**
+     * Property indicating if this system returns a boolean.
+     */
+    readonly fallible: boolean;
+
+    /**
+     * The `type_id` unique to this system.
+     */
+    readonly type_id: UUID;
+
+    /**
+     * The `type_id` unique to this system.
+     */
+    readonly system_type_id: UUID;
+
+    /**
+     * The name of this system. This can be configured via `.set_name` if the provided function to create this system was anonymous
+     * to provide a more descriptive name.
+     */
+    readonly name: string;
+
+    /**
+     * @returns true if this system has any deferred parameters such as [`Commands`]. These parameters will be queued for later execution.
+     */
+    readonly has_deferred: boolean;
+
+    /**
+     * @returns true if this system cannot be executed in parallel.
+     */
+    readonly is_exclusive: boolean;
+
+    /**
+     * @returns true if this system can be sent across threads.
+     */
+    readonly is_send: boolean;
+
+    /**
+     * Sets the name for this system. This is useful if the function this system was created with was anonymous
+     * and you wish to use a more descriptive name.
+     */
+    setName(new_name: string): System<In, Out>;
+
+    /**
+     * Initializes this system and its parameters.
+     * 
+     * @throws This method will throw an Error if conflicting access occurs.
+     */
+    initialize(world: World): void;
+
+    /**
+     * @returns the tick this system was last run.
+     */
+    getLastRun(): Tick;
+
+    /**
+     * Overwrites the tick indicating the last time this system ran.
+     * 
+     * **Warning**
+     * This is a complex and error-prone operation, that can have unexpected consequences on any system relying on this code.
+     * However, it can be an essential escape hatch when
+     * you are trying to synchronize representations using change detection and need to avoid infinite recursion.
+     */
+    setLastRun(tick: Tick): void;
+
+    /**
+     * Checks any [`Tick`]s stored on this system and wraps their value if they get too old.
+     * 
+     * This method must be called periodically to ensure that change detection behaves correctly.
+     * When using the ecs' default configuration, this will be called for you as needed.
+     */
+    checkChangeTick(tick: Tick): void;
+
+    /**
+     * @returns the [`Component`] access for this system.
+     */
+    componentAccess(): Access;
+
+    /**
+     * @returns the Archetypal [`Component`] access for this system.
+     */
+    archetypeComponentAccess(): Access;
+
+    /**
+     * Updates the system's archetype component [`Access`].
+     * 
+     * **Note for implementers**
+     * `world` must only be used to access metadata.
+     */
+    updateArchetypeComponentAccess(world: World): void;
+
+    /**
+     * Executes the system with the given input in the world. Unlike [`System.run`], this method
+     * can be called in parallel with other systems.
+     * 
+     * **Safety**
+     * 
+     * - The caller must ensure that any permissions registered in `archetype_component_access` do not conflict.
+     * 
+     * - The method [`System.update_archetype_component_access`] must be called at some point before this one, with the same exact [`World`].
+     * If [`System.update_archetype_component_access`] throws (or otherwise does not return for any reason),
+     * this method must not be called.
+     */
+    runUnsafe(input: In, world: World): Out;
+
+    /**
+     * Executes the system with the given input in the world.
+     * 
+     * Unlike [`System.run_unsafe`], this will apply deferred parameters *immediately*.
+     */
+    run(input: In, world: World): Out;
+
+    /**
+     * Executes the system with the given input in the world.
+     */
+    runWithoutApplyingDeferred(input: In, world: World): Out
+
+    /**
+     * Applies any deferred parameters such as [`Commands`].
+     */
+    applyDeferred(world: World): void;
+
+    /**
+     * Queues any deferred parameters such as [`Commands`] to be later executed.
+     */
+    queueDeferred(world: DeferredWorld): void;
+
+    /**
+     * Validates that all parameters can be acquired and that system can run without throwing an error.
+     * Built-in executors use this to prevent invalid systems from running.
+     * 
+     * However calling and respecting [`System.validate_param_unsafe`] or it's safe variant is not a strict requirement,
+     * both [`System.run`] and [`System.run_unsafe`] should provide their own safety mechanism to prevent undefined behaviour.
+     * 
+     * This method has to be called directly before [`System.run_unsafe`] with no other (relevant) world mutations in-between.
+     * Otherwise, while it won't lead to undefined behaviour, the validity of the param may change.
+     * 
+     * **Safety**
+     * 
+     * - The caller must ensure that no conflicting access occur.
+     * - The method [`System.update_archetype_component_access`] must be called at some point before this one, with the same exact [`World`].
+     * If [`System.update_archetype_component_access`] throws (or does not return for any reason), this method must not be called.
+     * 
+     * 
+     * @returns nothing if this system does not have any conflicting accesses.
+     */
+    validateParamUnsafe(world: World): Result<Option<void>, SystemParamValidationError>;
+
+    /**
+     * Safe version of [`System.validate_param_unsafe`]
+     * that runs on exclusive, single-threaded `world` pointer.
+     * @returns nothing if this system does not have any conflicting accesses.
+     */
+    validateParam(world: World): Result<Option<void>, SystemParamValidationError>;
+
+    /**
+     * @returns the system's default system sets.
+     * Each system will create a default system set that contains the system.
+     */
+    defaultSystemSets(): InternedSystemSet[];
+
+    [Symbol.toPrimitive](): string;
+    [Symbol.toStringTag](): string;
+}
+
+export function check_system_change_tick(last_run: Tick, this_run: Tick, system_name: string) {
+    if (check_tick(last_run, this_run)) {
+        const age = relative_to(this_run, last_run);
+        console.warn(`System ${system_name} has not run for ${age} ticks. Changes older than ${MAX_CHANGE_AGE - 1} will not be detected.`)
+        return relative_to(this_run, Tick.MAX);
+    }
+    return this_run;
 }
 
 export type RunSystemOnce = {
-    run_system_once<Out, Marker, T extends IntoSystem<unit, Out, Marker>>(system: T): void;
-    run_system_once_with<Out, Marker, T extends IntoSystem<any, Out, Marker>>(system: T): void;
+    run_system_once<Out, T extends IntoSystem<unit, Out>>(system: T): void;
+    run_system_once_with<Out, T extends IntoSystem<any, Out>>(system: T): void;
 }
 
 export type RunSystemError = ErrorExt<string>;
@@ -164,99 +207,166 @@ export const RunSystemError = {
 export type BoxedSystem<In extends any[] = any[], Out = void | boolean> = System<In, Out>;
 export type SystemId = number;
 
-export class AnonymousSet implements SystemSet {
-    #id: NodeId;
-    constructor(id: NodeId) {
-        this.#id = id;
-    }
-
-    process_config(schedule_graph: ScheduleGraph, config: NodeConfig<InternedSystemSet>): NodeId {
-        const id = schedule_graph.configure_set_inner(config);
-        if (!(id instanceof NodeId)) {
-            throw id;
-        }
-        return id;
-    }
-
-    system_type(): Option<UUID> {
-        return
-    }
-
-    is_anonymous(): boolean {
-        return true;
-    }
-}
 
 export function assert_is_system(system: System<any, any>) {
     const world = new World();
     system.initialize(world);
 }
 
-export class ApplyDeferred extends System<unit, unit> {
+export class ApplyDeferred implements System<unit, unit> {
     static readonly type_id: UUID = v4() as UUID;
+
     readonly fallible = false;
 
-    type_id(): UUID {
-        return ApplyDeferred.type_id;
+    readonly name = 'joshkaposh-ecs: apply_deferred';
+    readonly is_send = false;
+    readonly is_exclusive = true;
+    readonly has_deferred = false;
+
+    readonly system_type_id = ApplyDeferred.type_id;
+    readonly type_id = ApplyDeferred.type_id;
+
+    setName(_new_name: string): System<typeof unit, typeof unit> {
+        console.warn('Cannot customize ApplyDeferred name')
+        return this;
     }
 
-    name(): string {
-        return 'joshkaposh-ecs: apply_deferred';
+
+    processConfig(schedule_graph: ScheduleGraph, config: ScheduleConfigs): NodeId {
+        return schedule_graph.addSystemInner(config as any) as any;
     }
 
-    component_access(): Access {
+    intoConfig(): ScheduleConfigs {
+        const sets = this.defaultSystemSets();
+        return new ScheduleConfig(
+            this as any,
+            {
+                hierarchy: sets,
+                dependencies: [],
+                ambiguous_with: Ambiguity.default()
+            },
+            []
+        )
+    }
+
+    intoSystem(): System<typeof unit, typeof unit> {
+        return this
+    }
+
+    inSet(set: SystemSet): ScheduleConfigs {
+        return this.intoConfig().inSet(set)
+        // throw new Error('ApplyDeferred cannot be configured. This methods are implemented for consistency across types.')
+    }
+
+    before<M>(set: IntoSystemSet<M>): ScheduleConfigs {
+        return this.intoConfig().before(set)
+    }
+
+    beforeIgnoreDeferred<M>(set: IntoSystemSet<M>): ScheduleConfigs {
+        return this.intoConfig().beforeIgnoreDeferred(set)
+    }
+
+    after<M>(set: IntoSystemSet<M>): ScheduleConfigs {
+        return this.intoConfig().after(set)
+    }
+
+    afterIgnoreDeferred<M>(set: IntoSystemSet<M>): ScheduleConfigs {
+        return this.intoConfig().afterIgnoreDeferred(set)
+    }
+
+    distributiveRunIf<M>(condition: Condition<M, boolean>): ScheduleConfigs {
+        return this.intoConfig().distributiveRunIf(condition)
+    }
+
+    runIf<M>(condition: Condition<M, boolean>): ScheduleConfigs {
+        return this.intoConfig().runIf(condition)
+    }
+
+    ambiguousWith<M>(set: IntoSystemSet<M>): ScheduleConfigs {
+        return this.intoConfig().ambiguousWith(set)
+    }
+
+    ambiguousWithAll(): ScheduleConfigs {
+        return this.intoConfig().ambiguousWithAll()
+    }
+
+    chain(): ScheduleConfigs {
+        return this.intoConfig().chain();
+    }
+
+    chainIgnoreDeferred(): ScheduleConfigs {
+        return this.intoConfig().chainIgnoreDeferred();
+    }
+
+    componentAccess(): Access {
         return TODO('class ApplyDeferred.component_access()')
     }
 
-    archetype_component_access(): Access {
+    archetypeComponentAccess(): Access {
         return TODO('class ApplyDeferred.archetype_component_access()')
     }
 
-    is_send(): boolean {
-        return false
+    run(input: unit, world: World): unit {
+        const ret = this.runWithoutApplyingDeferred(input, world);
+        this.applyDeferred(world);
+        return ret as unit;
     }
 
-    is_exclusive(): boolean {
-        return true
-    }
-
-    has_deferred(): boolean {
-        return false
-    }
-
-    run_unsafe(_input: SystemIn<System<unit, unit>>, _world: World): unit {
+    runUnsafe(_input: SystemIn<System<unit, unit>>, _world: World): unit {
         return unit;
     }
 
-    run(_input: SystemIn<System<unit, unit>>, _world: World): unit {
-        return unit
+    runWithoutApplyingDeferred(input: unit, world: World): unit {
+        this.updateArchetypeComponentAccess(world);
+
+        return this.runUnsafe(input, world);
     }
 
-    apply_deferred(_world: World): void { }
+    applyDeferred(_world: World): void { }
 
-    queue_deferred(_world: World): void { }
+    queueDeferred(_world: DeferredWorld): void { }
 
-    validate_param_unsafe(_world: World): boolean {
-        return true
+    validateParamUnsafe(_world: World): Result<Option<void>, SystemParamValidationError> {
+
+    }
+
+    validateParam(_world: World): Result<Option<void>, SystemParamValidationError> {
+
     }
 
     initialize(_world: World): void { }
 
-    update_archetype_component_access(_world: World): void { }
+    updateArchetypeComponentAccess(_world: World): void { }
 
-    check_change_tick(_change_tick: Tick): void { }
+    checkChangeTick(_change_tick: Tick): void { }
 
-    default_system_sets(): InternedSystemSet[] {
-        return [];
+    defaultSystemSets(): InternedSystemSet[] {
+        return [new SystemTypeSet(this as any)];
     }
 
-    get_last_run(): Tick {
-        return Tick.MAX
+    getLastRun(): Tick {
+        return MAX_CHANGE_AGE;
     }
 
-    set_last_run(_last_run: Tick): void { }
+    setLastRun(_last_run: Tick): void { }
 
-    into_system_set() {
-        return new SystemTypeSet(this);
+    intoSystemSet() {
+        return new SystemTypeSet(this as any);
+    }
+
+    [Symbol.toPrimitive]() {
+        return `System {
+            name: ${this.name},
+            is_exclusive: ${this.is_exclusive},
+            is_send: ${this.is_send}
+        }`
+    }
+
+    [Symbol.toStringTag]() {
+        return `System {
+            name: ${this.name},
+            is_exclusive: ${this.is_exclusive},
+            is_send: ${this.is_send}
+        }`
     }
 }

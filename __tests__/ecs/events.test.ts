@@ -1,9 +1,10 @@
 import { assert, expect, test } from 'vitest'
 import { Events, EventCursor } from 'ecs';
+import { defineEvent } from 'define';
 
-class TestEvent {
+const TestEvent = defineEvent(class TestEvent {
     constructor(public i: number) { }
-}
+})
 
 test('events', () => {
     const events = new Events(TestEvent);
@@ -55,7 +56,7 @@ test('events', () => {
     }
 })
 
-class E { constructor(public value: number) { } }
+const E = defineEvent(class E { constructor(public value: number) { } })
 
 function events_clear_and_read_impl(clear_func: (events: Events<typeof E>) => void) {
     const events = new Events(E);

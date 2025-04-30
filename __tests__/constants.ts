@@ -1,1 +1,4 @@
-export const skip_large = true;
+export const skip = {
+    large: true,
+    perf: false,
+}

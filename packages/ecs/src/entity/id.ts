@@ -5,12 +5,12 @@ const MAX = u32.MAX;
 const index_mask = 0b00000000_00000000_11111111_11111111;
 const generation_mask = 0b11111111_11111111_00000000_00000000;
 
-export function index(bits: number) {
-    return bits & index_mask
+export function index(id: number) {
+    return id & index_mask
 }
 
-export function generation(bits: number) {
-    return (bits & generation_mask) >> 16;
+export function generation(id: number) {
+    return (id & generation_mask) >> 16;
 }
 
 export function id(index: number, generation = 1) {

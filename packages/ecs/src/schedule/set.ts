@@ -1,33 +1,40 @@
 import { Option } from "joshkaposh-option";
 import { Chain, ScheduleGraph } from "./schedule";
-import { Configs, NodeConfig, SystemSetConfigs } from "./config";
+import { Configs, IntoScheduleConfig, Schedulable, ScheduleConfigs, SystemConfig } from "./config";
 import { NodeId } from "./graph";
-import { define_type } from "define";
-import { $is_system, System } from "../system";
+import { defineType, TypeId } from "define";
+import { System } from "../system";
+import { Condition } from "./condition";
 
 export const $is_system_set = Symbol('SYSTEM SET');
 
 export type InternedSystemSet = SystemSet;
 
 export interface SystemSet {
-    process_config(schedule_graph: ScheduleGraph, config: NodeConfig<InternedSystemSet>): NodeId;
+    readonly systemType: Option<UUID>;
+    readonly isAnonymous: boolean;
 
-    system_type(): Option<UUID>;
-
-    is_anonymous(): boolean;
+    processConfig(schedule_graph: ScheduleGraph, config: ScheduleConfigs): NodeId;
 
 }
 
 export class SystemTypeSet implements SystemSet {
-    #phantom_data: { type_id(): UUID };
-    constructor(phantom_data: { type_id(): UUID }) {
+    #phantom_data: TypeId;
+    constructor(phantom_data: TypeId) {
         this.#phantom_data = phantom_data;
+
+        this.systemType = phantom_data.type_id;
+        this.isAnonymous = false;
     }
 
     [$is_system_set] = true;
 
-    process_config(schedule_graph: ScheduleGraph, config: NodeConfig<SystemSet>): NodeId {
-        const id = schedule_graph.configure_set_inner(config);
+    intoConfig(): Configs<Schedulable<SystemSet, Chain>> {
+        throw new Error('configuring system type sets is not allowed')
+    }
+
+    processConfig(schedule_graph: ScheduleGraph, config: SystemConfig): NodeId {
+        const id = schedule_graph.configureSetInner(config);
         if (!(id instanceof NodeId)) {
             throw id;
         }
@@ -38,13 +45,9 @@ export class SystemTypeSet implements SystemSet {
         return new SystemTypeSet(this.#phantom_data);
     }
 
-    is_anonymous(): boolean {
-        return false;
-    }
+    readonly isAnonymous: boolean;
+    readonly systemType: Option<UUID>;
 
-    system_type(): Option<UUID> {
-        return this.#phantom_data.type_id();
-    }
 
     [Symbol.toPrimitive]() {
         return `${this.#phantom_data}`;
@@ -59,38 +62,40 @@ export class AnonymousSet implements SystemSet {
 
     [$is_system_set] = true;
 
+    intoConfig() {
+        return new Configs(
+            this,
+            [],
+            [],
+            Chain.Unchained
+        )
+    }
 
-    process_config(schedule_graph: ScheduleGraph, config: NodeConfig<InternedSystemSet>): NodeId {
-        const id = schedule_graph.configure_set_inner(config);
+    processConfig(schedule_graph: ScheduleGraph, config: SystemConfig): NodeId {
+        const id = schedule_graph.configureSetInner(config);
         if (!(id instanceof NodeId)) {
             throw id
         }
         return id;
     }
 
-    system_type(): Option<UUID> {
+    get systemType(): Option<UUID> {
         return
     }
 
-    is_anonymous() {
+    get isAnonymous() {
         return true
     }
 }
 
 export interface IntoSystemSet<M> {
-    into_system_set(): SystemSet;
+    intoSystemSet(): SystemSet;
 }
 
-const SetRegistry = new Map() as Map<string, SystemSetConfigs>;
+const SetRegistry = new Map() as Map<string, ScheduleConfigs>;
 
 function get_hash_of_systems_inner(system_sets: any) {
-    let h = '';
-    if (system_sets[$is_system_set]) {
-        h += `set${system_sets.into_configs().chained}:${system_sets.type_id()}`;
-    } else if (system_sets[$is_system]) {
-        h += system_sets.type_id();
-    }
-    return h;
+    return `${system_sets[$is_system_set] ? 'set:' : ''}` + system_sets.typeId;
 }
 
 function get_hash_of_systems(s: any) {
@@ -101,15 +106,15 @@ function get_hash_of_systems(s: any) {
     return h;
 }
 
-export function set<const S extends readonly (System<any, any> | SystemSet)[]>(...system_sets: S): SystemSet & SystemSetConfigs {
+export function set<const S extends readonly (System<any, any> | SystemSet)[]>(...system_sets: S): SystemSet & IntoSystemSet<SystemSet> & ScheduleConfigs {
     const hash = get_hash_of_systems(system_sets);
 
     const set = SetRegistry.get(hash);
     if (set) {
-        return set as SystemSet & SystemSetConfigs;
+        return set as SystemSet & IntoSystemSet<SystemSet> & ScheduleConfigs;
     }
 
-    class SystemSetImpl implements SystemSet {
+    class SystemSetImpl implements SystemSet, IntoScheduleConfig<Schedulable<SystemSet, Chain>> {
         #id: string;
         #sets: SystemSet[];
         constructor(sets: SystemSet[], id: string) {
@@ -119,54 +124,87 @@ export function set<const S extends readonly (System<any, any> | SystemSet)[]>(.
 
         [$is_system_set] = true;
 
-        type_id() {
+        get typeId() {
             return this.#id;
         }
 
-        system_type(): Option<UUID> {
+        get systemType(): Option<UUID> {
             return;
         }
 
-        is_anonymous() {
+        get isAnonymous() {
             return false;
         }
 
-        into_configs(): SystemSetConfigs {
+        intoConfig() {
             return new Configs(
                 this,
                 // @ts-expect-error
-                this.#sets.map(s => s.into_configs()),
+                this.#sets.map(s => s.intoConfig()),
                 [],
                 Chain.Unchained
             )
         }
 
-        process_config(schedule_graph: ScheduleGraph, config: NodeConfig<SystemSetImpl>) {
-            const id = schedule_graph.configure_set_inner(config);
+        intoSystemSet() {
+            return this;
+        }
+
+        processConfig(schedule_graph: ScheduleGraph, config: SystemConfig) {
+            const id = schedule_graph.configureSetInner(config);
             if (!(id instanceof NodeId)) throw new Error(`Expected ${config} to be a NodeId`)
             return id
         }
 
         chain() {
-            return this.into_configs().chain();
+            return this.intoConfig().chain();
+        }
+
+        chainIgnoreDeferred(): ScheduleConfigs {
+            return this.intoConfig().chainIgnoreDeferred();
         }
 
         before<M>(set: IntoSystemSet<M>) {
-            return this.into_configs().before(set);
+            return this.intoConfig().before(set);
+        }
+
+        beforeIgnoreDeferred<M>(set: IntoSystemSet<M>): ScheduleConfigs {
+            return this.intoConfig().beforeIgnoreDeferred(set)
         }
 
         after<M>(set: IntoSystemSet<M>) {
-            return this.into_configs().after(set);
+            return this.intoConfig().after(set);
         }
 
-        in_set(set: SystemSet) {
-            return this.into_configs().in_set(set);
+        afterIgnoreDeferred<M>(set: IntoSystemSet<M>): ScheduleConfigs {
+            return this.intoConfig().afterIgnoreDeferred(set);
         }
+
+        inSet(set: SystemSet) {
+            return this.intoConfig().inSet(set);
+        }
+
+        runIf(condition: Condition<any>): ScheduleConfigs {
+            return this.intoConfig().runIf(condition);
+        }
+
+        distributiveRunIf(condition: Condition<any>): ScheduleConfigs {
+            return this.intoConfig().distributiveRunIf(condition);
+        }
+
+        ambiguousWith<M>(set: IntoSystemSet<M>): ScheduleConfigs {
+            return this.intoConfig().ambiguousWith(set);
+        }
+
+        ambiguousWithAll(): ScheduleConfigs {
+            return this.intoConfig().ambiguousWithAll();
+        }
+
     }
 
-    define_type(SystemSetImpl);
+    defineType(SystemSetImpl);
 
-    const system_set = new SystemSetImpl(system_sets as unknown as SystemSet[], hash) as unknown as SystemSet & SystemSetConfigs;
+    const system_set = new SystemSetImpl(system_sets as unknown as SystemSet[], hash) as unknown as SystemSet & ScheduleConfigs;
     SetRegistry.set(hash, system_set);
-    return system_set;
+    return system_set as any;
 }

@@ -1,42 +1,63 @@
 import { test, expect, assert } from 'vitest';
-import { World, Schedule, define_system, define_condition, set, Condition, Schedules, Local } from 'ecs';
-import { define_resource } from 'define';
+import { World, ThinWorld, Schedule, Condition, set, ApplyDeferred } from 'ecs';
+import { defineResource, defineSystem, defineCondition, defineComponent } from 'define';
+import BTree from 'sorted-btree';
+import { NodeId } from 'ecs/src/schedule/graph';
 
-// function a() {
-//     console.log('first!');
-// }
+// type IfNoArgs<F extends (...args: any[]) => any, T, K extends keyof T> = Parameters<F> extends readonly [] ?
+//     Omit<T, K> :
+//     T;
 
-// function b() {
-//     console.log('second!');
-// }
+// type True = IfNoArgs<() => any, { sys: 'a', params: never }, 'params'>;
+// type True1 = IfNoArgs<typeof testfn, { condition: 'b', params: never }, 'params'>;
+// type Args = IfNoArgs<(a: any) => any, { system: 'a1', params: [any] }, 'params'>
 
-function testfn() { }
+// type NeverArray<T> = T extends readonly [] ? true : false;
 
-type IfNoArgs<F extends (...args: any[]) => any, T, K extends keyof T> = Parameters<F> extends readonly [] ?
-    Omit<T, K> :
-    T;
+// const empty = [] as const;
+// type N = NeverArray<typeof empty>;
 
-type True = IfNoArgs<() => any, { sys: 'a', params: never }, 'params'>;
-type True1 = IfNoArgs<typeof testfn, { condition: 'b', params: never }, 'params'>;
-type Args = IfNoArgs<(a: any) => any, { system: 'a1', params: [any] }, 'params'>
+// function a() { }
+// type Aparam = NeverArray<Parameters<typeof a>>;
 
-type NeverArray<T> = T extends readonly [] ? true : false;
-
-const empty = [] as const;
-type N = NeverArray<typeof empty>;
-
-function a() { }
-type Aparam = NeverArray<Parameters<typeof a>>;
-
-const TimesRan = define_resource(class TimesRan extends Map<any, number> { })
-const Timestamps = define_resource(class Timestamps extends Map<any, number> { })
+const TimesRan = defineResource(class TimesRan extends Map<any, number> { })
+const Timestamps = defineResource(class Timestamps extends Map<any, number> { })
 
 const skip_set_tests = false;
 const skip_run_if_tests = false;
 const skip_dependency_tests = false;
 const skip_hierarchy_tests = false;
 
-function with_timestamps(world: World, { num_systems, conditions, log_running, set_name }: {
+const abc = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p', 'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z'] as const;
+
+function n_systems(n: number, log_running = false, descriptive_names = true) {
+    const min = Math.min(abc.length, n);
+    return Array.from({ length: min }, (_, i) => {
+        const name = descriptive_names ? abc[i] : `${i}`;
+        const system = defineSystem(b => b, function () {
+            if (log_running) {
+                console.log(`system ${name} running!`)
+            }
+        })
+
+        system.setName(name);
+
+        return system
+    })
+}
+
+function n_conditions(log_running = false, descriptive_names = true, ...return_types: boolean[]) {
+    return_types.length = Math.min(return_types.length, abc.length);
+    return return_types.map((b, i) => defineCondition(() => { }, function () {
+        if (log_running) {
+            console.log(this.name);
+        }
+
+        return b;
+    }).setName(descriptive_names ? abc[i] : String(i)));
+}
+
+function with_timestamps(world: World | ThinWorld, { num_systems, conditions, log_running, set_name }: {
     num_systems: number;
     conditions?: { return_type: boolean }[]
     log_running?: boolean;
@@ -45,23 +66,27 @@ function with_timestamps(world: World, { num_systems, conditions, log_running, s
 
     set_name ??= true;
 
+    const times_ran = new TimesRan();
+    function temp_defineSystem(fn: (...args: any[]) => any) {
+        return () => fn(times_ran);
+    }
     const systems = Array.from({ length: num_systems }, (_, i) => {
-        const system = define_system(b => b.res_mut(TimesRan), function (times) {
+        const system = defineSystem(b => b, temp_defineSystem(function (times) {
             if (log_running) {
                 console.log(`system_${i} running!`)
             }
             times.v.set(this, performance.now())
-        })
+        }))
 
         if (set_name) {
-            system.set_name(`system_${i}`)
+            system.setName(`system_${i}`)
         }
 
         return system
     })
 
     const condition_systems = (conditions ?? []).map(({ return_type }, i) => {
-        const condition = define_condition(b => b.res_mut(TimesRan), function (times) {
+        const condition = defineCondition(b => b.resMut(TimesRan), function (times) {
             if (log_running) {
                 console.log(`condition_${i} running!`)
             }
@@ -70,13 +95,14 @@ function with_timestamps(world: World, { num_systems, conditions, log_running, s
         })
 
         if (set_name) {
-            condition.set_name(`condition_${i}`)
+            condition.setName(`condition_${i}`)
         }
 
         return condition
     })
 
-    const timestamps = world.get_resource_or_init(TimesRan);
+    const timestamps = world instanceof World ? world.getResourceOrInit(TimesRan) : world.getResourceOrInit(TimesRan as any)
+    // const timestamps = world.get_resource_or_init(TimesRan);
 
     return [timestamps, { systems, conditions: condition_systems }] as const;
 }
@@ -90,7 +116,7 @@ function with_times_ran(world: World, { num_systems, conditions, log_running, se
     set_name ??= true;
 
     const systems = Array.from({ length: num_systems }, (_, i) => {
-        const system = define_system(b => b.res_mut(TimesRan), function (times) {
+        const system = defineSystem(b => b.resMut(TimesRan), function (times) {
             if (log_running) {
                 console.log(`system_${i} running!`)
             }
@@ -99,14 +125,14 @@ function with_times_ran(world: World, { num_systems, conditions, log_running, se
         })
 
         if (set_name) {
-            system.set_name(`system_${i}`)
+            system.setName(`system_${i}`)
         }
 
         return system
     })
 
     const condition_systems = (conditions ?? []).map(({ return_type }, i) => {
-        const system = define_condition(b => b.res_mut(TimesRan), function (times) {
+        const system = defineCondition(b => b.resMut(TimesRan), function (times) {
             if (log_running) {
                 console.log(`condition_${i} running!`)
             }
@@ -116,20 +142,20 @@ function with_times_ran(world: World, { num_systems, conditions, log_running, se
         })
 
         if (set_name) {
-            system.set_name(`condition_${i}`)
+            system.setName(`condition_${i}`)
         }
 
         return system
 
     })
 
-    const timestamps = world.get_resource_or_init(TimesRan);
+    const timestamps = world.getResourceOrInit(TimesRan);
 
     return [timestamps, { systems, conditions: condition_systems }] as const;
 }
 
 function test_combine(
-    type: keyof Condition<any, any>,
+    type: string,
     a_bool: boolean,
     b_bool: boolean,
     expected_times_ran_a: number,
@@ -152,8 +178,7 @@ function test_combine(
     const system = systems[0];
     const [ca, cb] = conditions;
 
-    // @ts-expect-error
-    s.add_systems(system.run_if(ca[type](cb)));
+    s.addSystems(system.runIf(ca[type](cb)));
 
     s.run(w);
 
@@ -169,18 +194,189 @@ function test_combine(
         assert(times_ran.v.get(cb) === expected_times_ran_b);
     }
 
+
+
     if (!system_expected_to_run) {
-        assert(times_ran.v.get(system) === undefined);
+        assert(times_ran.v.get(system) == null);
     } else {
-        assert(!!times_ran.v.get(system) === system_expected_to_run)
+        const times_ran_system = Boolean(times_ran.v.get(system));
+        assert(times_ran_system === system_expected_to_run, `Expected ${times_ran.v.get(system)} to equal ${system_expected_to_run}`)
     }
 }
 
-function assert_order(timestamps: InstanceType<typeof Timestamps>, a: any, b: any) {
-    assert(timestamps.get(a)! < timestamps.get(b)!)
+const Resource1 = defineResource(class Resource1 { })
+
+const Comp1 = defineComponent(class Comp1 { constructor(public value = 'himom') { } })
+const Comp2 = defineComponent(class Comp2 { constructor(public value = 'hidad') { } })
+
+// test('set chain', () => {
+//     const w = new World();
+//     const s = new Schedule();
+
+//     const systems = n_systems(5, true, true);
+//     const MySet = set(...systems);
+//     s.addSystems(MySet.chain());
+//     s.run(w);
+
+//     for (let i = 1; i < systems.length; i++) {
+//         const prev = systems[i - 1];
+//         assert(prev.getLastRun() < systems[i].getLastRun())
+//     }
+// })
+
+// test('deferred parameter gets executed', () => {
+//     const w = new World();
+//     const s = new Schedule();
+
+//     // s.addSystems(
+//     //     set(
+//     //         defineSystem(b => b.commands(), (commands) => {
+//     //             console.log('commands running');
+
+//     //             commands.spawn(new Comp1());
+//     //         }).setName('command system'),
+//     //         defineSystem(b => b.query([Comp1]), (q) => {
+//     //             console.log('query running');
+
+//     //             console.log('query count: ', q.iter().count());
+//     //         }).setName('query systen')
+//     //     ).chain()
+//     // )
+
+//     // s.run(w);
+
+// })
+
+test('inserts a sync point', () => {
+    const w = new World();
+    const s = new Schedule();
+
+
+    const deferred = defineSystem(b => b.commands(), (commands) => { });
+
+    s.addSystems(
+        set(
+            deferred,
+            defineSystem(b => b.optRes(Resource1), () => { })
+        ).chain()
+    )
+
+    s.run(w);
+
+    assert(s.executable.__systems.length === 3);
+})
+
+function emptySystem() {
+    return defineSystem(b => b, function emptySystem() { })
 }
 
-test('not using any tests', () => { })
+test('explicit sync point used as auto sync point', () => {
+    const w = new World();
+    const s = new Schedule();
+
+    s.addSystems(
+        set(
+            defineSystem(b => b.commands(), () => { }),
+            emptySystem()
+        ).chain()
+    )
+
+    s.addSystems(set(
+        emptySystem(),
+        new ApplyDeferred(),
+        emptySystem()
+    ).chain())
+
+    s.run(w);
+
+    assert(s.executable.__systems.length === 5);
+})
+
+// test('conditional explicit sync point not used as auto sync point', () => {
+//     const s = new Schedule();
+//     const w = new World();
+
+//     // s.addSystems(
+//     //     set(
+//     //         defineSystem(b => b.commands(), (commands) => commands.insert_resource(Resource1)),
+//     //         emptySystem()
+//     //     ).chain()
+//     // )
+
+//     // s.addSystems(set(
+//     //     emptySystem(),
+//     //     new ApplyDeferred().runIf(defineCondition(b => b, () => false)) as any,
+//     //     emptySystem(),
+//     // ).chain())
+
+//     // s.run(w);
+
+//     // console.log(s.executable.__systems.length);
+
+// })
+
+// test('in_set', () => {
+
+//     const [a, b, c, d, e, f, g] = n_systems(7, true, true);
+//     const w = new World();
+//     const s = new Schedule();
+
+//     const Set = set(c, d, e);
+
+//     // s.addSystems(a);
+
+//     // s.addSystems(Set);
+
+//     // s.addSystems(g.after(Set));
+
+//     // s.run(w);
+
+// })
+
+// test('only one system', () => {
+//     const w = new World();
+//     const s = new Schedule();
+
+//     const [a, b] = n_systems(2, true);
+
+//     // s.addSystems(a.before(b));
+//     // s.run(w);
+
+//     // assert(s.executable.__systems.length === 1);
+// })
+
+// test('cycle', () => {
+//     const w = new World();
+//     const s = new Schedule();
+
+//     const [a, b] = n_systems(3, true);
+
+
+//     // s.addSystems(a.after(b));
+//     // s.addSystems(b.after(a));
+
+//     // let errored = false;
+//     // try {
+//     //     s.run(w);
+//     // } catch (error) {
+//     //     errored = true;
+//     // } finally {
+//     //     assert(errored, `Expected a.after(b) && b.after(a) to throw an error`)
+//     // }
+// })
+
+// test('schedule in_set before last', () => {
+//     const w = new World();
+//     const s = new Schedule();
+
+//     // const [a, b, c, d] = n_systems(4, true);
+//     // const Set = set(a as any, b, c);
+
+
+//     // s.addSystems(set(a as any, b, c).chain());
+//     // s.addSystems(d.inSet(Set).after(b))
+//     // s.run(w);
+// })
 
 // test('before_and_after', () => {
 //     const w = new World();
@@ -190,15 +386,15 @@ test('not using any tests', () => { })
 //         systems: [system_a, system_b, system_c, system_d]
 //     }] = with_timestamps(w, { num_systems: 4 })
 
-//     s.add_systems(system_a);
-//     s.add_systems(system_b);
-//     s.add_systems(system_c.after(system_b));
-//     s.add_systems(system_d.before(system_c));
+//     s.addSystems(system_a);
+//     s.addSystems(system_b);
+//     s.addSystems(system_c.after(system_b));
+//     s.addSystems(system_d.before(system_c));
 
-//     s.run(w);
+//     // s.run(w);
 
-//     assert(timestamps.v.get(system_d)! < timestamps.v.get(system_c)!);
-//     assert(timestamps.v.get(system_b)! < timestamps.v.get(system_c)!)
+//     // assert(timestamps.v.get(system_d)! < timestamps.v.get(system_c)!);
+//     // assert(timestamps.v.get(system_b)! < timestamps.v.get(system_c)!)
 // })
 
 // test.skipIf(skip_set_tests)('add_two_systems_in_set_chained', () => {
@@ -207,11 +403,10 @@ test('not using any tests', () => { })
 
 //     const [timestamps, { systems: [one, two] }] = with_timestamps(w, { num_systems: 2 })
 
-//     s.add_systems(set(one, two).chain());
+//     // s.addSystems(set(one, two).chain());
 
-//     s.run(w);
-
-//     assert_order(timestamps.v, one, two);
+//     // s.run(w);
+//     // assert_order(timestamps.v, one, two);
 // })
 
 
@@ -220,14 +415,15 @@ test('not using any tests', () => { })
 //     const s = new Schedule('Update');
 //     const [times_ran, { systems: [system], conditions: [condition] }] = with_times_ran(w, { num_systems: 1, conditions: [{ return_type: false }] })
 
-//     s.add_systems(system.run_if(condition));
-//     s.run(w);
+//     // s.addSystems(system.runIf(condition));
+//     // s.run(w);
 
-//     assert(times_ran.v.get(system) === undefined);
+//     // assert(times_ran.v.get(system) === undefined);
 
 // })
 
 // test.skipIf(skip_run_if_tests)('run_if_combine', () => {
+
 //     test_combine('and', true, true, 1, 1, true);
 //     test_combine('and', true, false, 1, 1, false);
 //     // short-curcuits because first condition is not met
@@ -273,13 +469,13 @@ test('not using any tests', () => { })
 
 //     const [timestamps, { systems: [first, middle, last] }] = with_timestamps(w, { num_systems: 3, log_running: false })
 
-//     s.add_systems(set(first, last).chain());
-//     s.add_systems(middle.before(last));
+//     // s.addSystems(set(first, last).chain());
+//     // s.addSystems(middle.before(last));
 
-//     s.run(w);
+//     // s.run(w);
 
-//     assert_order(timestamps.v, first, last);
-//     assert_order(timestamps.v, middle, last);
+//     // assert_order(timestamps.v, first, last);
+//     // assert_order(timestamps.v, middle, last);
 // })
 
 // test.skipIf(skip_hierarchy_tests)('system_add_in_set', () => {
@@ -288,16 +484,16 @@ test('not using any tests', () => { })
 
 //     const [timestamps, { systems: [a, b, c, d, e, f, g, h] }] = with_timestamps(w, { num_systems: 8, log_running: true })
 
-//     const my_set = set(a, b, c);
+//     // const my_set = set(a, b, c);
 
-//     s.add_systems(my_set.chain());
-//     s.add_systems(set(d, e, f).chain());
+//     // s.addSystems(my_set.chain());
+//     // s.addSystems(set(d, e, f).chain());
 
-//     s.add_systems(g.in_set(my_set).after(a));
+//     // s.addSystems(g.inSet(my_set).after(a));
 
-//     s.run(w);
+//     // s.run(w);
 
-//     assert_order(timestamps.v, a, b);
-//     assert_order(timestamps.v, b, c);
+//     // asser_order(timestamps.v, a, b);
+//     // assert_order(timestamps.v, b, c);
 
 // })

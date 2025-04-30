@@ -1,0 +1,16 @@
+{
+  "name": "ecs-ui",
+  "version": "0.0.1",
+  "description": "ecs related Systems, Resources, and Components",
+  "keywords": [
+    "ui"
+  ],
+  "license": "MIT",
+  "author": "",
+  "type": "module",
+  "main": "src/index.ts",
+  "scripts": {
+    "test": "vitest"
+  },
+  "devDependencies": {}
+}

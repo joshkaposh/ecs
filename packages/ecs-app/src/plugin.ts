@@ -1,9 +1,13 @@
 import { App } from "./app";
-import { ErrorExt, is_error } from "joshkaposh-option";
+import { ErrorExt } from "joshkaposh-option";
 import { v4 } from "uuid";
 
 export abstract class Plugin {
+    constructor() {
+        this.name = this.constructor.name;
+    }
 
+    readonly name: string
     static readonly type_id: UUID;
 
     abstract build(app: App): void;
@@ -16,9 +20,6 @@ export abstract class Plugin {
 
     cleanup(_app: App) { }
 
-    name(): string {
-        return this.constructor.name;
-    }
 
     /**
      * @description
@@ -30,12 +31,20 @@ export abstract class Plugin {
     }
 
     add_to_app(app: App) {
-        const err = app.add_plugin(this);
+        const err = app.addPlugin(this);
         if (err instanceof ErrorExt) {
             const plugin_name = err.get();
             throw new Error(`Error adding plugin ${plugin_name} : plugin was already added in application`)
         };
 
+    }
+}
+
+export function plugin(build: (app: App) => void) {
+    return class extends Plugin {
+        build(app: App): void {
+            build(app);
+        }
     }
 }
 
@@ -51,11 +60,9 @@ export class PlaceholderPlugin extends Plugin {
     build() { }
 }
 
-
-export type Plugins = {
-    add_to_app(app: App): void;
+export interface Plugins {
+    addToApp(app: App): void;
 }
-
 
 export function PluginFromFn(fn: (app: App) => void): typeof Plugin {
     class PluginFn extends Plugin {
@@ -66,7 +73,5 @@ export function PluginFromFn(fn: (app: App) => void): typeof Plugin {
         }
     }
 
-
     return PluginFn
 }
-

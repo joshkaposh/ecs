@@ -1,14 +1,15 @@
 import { Option } from "joshkaposh-option";
 import { FixedBitSet } from "fixed-bit-set";
-import { World } from "../world";
-import { Condition, System, ApplyDeferred } from "../system";
+import { ThinWorld, World } from "../world";
+import { System, ApplyDeferred } from "../system";
+import { Condition } from "../schedule";
 import { NodeId } from "../schedule/graph";
 
 export type SystemExecutor = {
     kind(): ExecutorKind;
     init(schedule: SystemSchedule): void;
-    run(schedule: SystemSchedule, world: World, skip_system: Option<FixedBitSet>): void;
-    set_apply_final_deferred(value: boolean): void;
+    run(schedule: SystemSchedule, world: World | ThinWorld, skip_system: Option<FixedBitSet>): void;
+    setApplyFinalDeferred(value: boolean): void;
 }
 
 export type ExecutorKind = typeof ExecutorKind[keyof typeof ExecutorKind]
@@ -20,8 +21,8 @@ export const ExecutorKind = {
 
 export class SystemSchedule {
     __systems: System<any, any>[];
-    __system_conditions: Array<Condition<any>>[];
-    __set_conditions: Array<Condition<any>>[];
+    __system_conditions: Array<Condition<any, any>>[];
+    __set_conditions: Array<Condition<any, any>>[];
     __system_ids: NodeId[];
     __set_ids: NodeId[];
     __system_dependencies: number[];
@@ -30,15 +31,15 @@ export class SystemSchedule {
     __systems_in_sets_with_conditions: FixedBitSet[];
 
     constructor(
-        systems: System<any, any>[],
-        system_conditions: Array<Condition<any>>[],
-        set_conditions: Array<Condition<any>>[],
-        system_ids: NodeId[],
-        set_ids: NodeId[],
-        system_dependencies: number[],
-        system_dependents: Array<number>[],
-        sets_with_conditions_of_systems: FixedBitSet[],
-        systems_in_sets_with_conditions: FixedBitSet[]
+        systems: System<any, any>[] = [],
+        system_conditions: Array<Condition<any, any>>[] = [],
+        set_conditions: Array<Condition<any, any>>[] = [],
+        system_ids: NodeId[] = [],
+        set_ids: NodeId[] = [],
+        system_dependencies: number[] = [],
+        system_dependents: Array<number>[] = [],
+        sets_with_conditions_of_systems: FixedBitSet[] = [],
+        systems_in_sets_with_conditions: FixedBitSet[] = []
     ) {
         this.__systems = systems;
         this.__system_conditions = system_conditions;
@@ -50,41 +51,23 @@ export class SystemSchedule {
         this.__sets_with_conditions_of_systems = sets_with_conditions_of_systems;
         this.__systems_in_sets_with_conditions = systems_in_sets_with_conditions;
 
-        // console.log('SystemSchedule ctor', this);
     }
 
-    copy_from(schedule: SystemSchedule) {
-        // console.log('SystemSchedule copy_from()', this, schedule);
-
-        this.__systems = schedule.__systems;
-        this.__system_conditions = schedule.__system_conditions;
-        this.__set_conditions = schedule.__set_conditions;
-        this.__system_ids = schedule.__system_ids;
-        this.__set_ids = schedule.__set_ids;
-        this.__system_dependencies = schedule.__system_dependencies;
-        this.__system_dependents = schedule.__system_dependents;
-        this.__sets_with_conditions_of_systems = schedule.__sets_with_conditions_of_systems;
-        this.__systems_in_sets_with_conditions = schedule.__systems_in_sets_with_conditions;
+    cloneFrom(src: SystemSchedule) {
+        this.__systems = src.__systems;
+        this.__system_conditions = src.__system_conditions;
+        this.__set_conditions = src.__set_conditions;
+        this.__system_ids = src.__system_ids;
+        this.__set_ids = src.__set_ids;
+        this.__system_dependencies = src.__system_dependencies;
+        this.__system_dependents = src.__system_dependents;
+        this.__sets_with_conditions_of_systems = src.__sets_with_conditions_of_systems;
+        this.__systems_in_sets_with_conditions = src.__systems_in_sets_with_conditions;
     }
-
-    static default() {
-        return new SystemSchedule(
-            [],
-            [],
-            [],
-            [],
-            [],
-            [],
-            [],
-            [],
-            []
-        )
-    }
-
 
 }
 
 
 export function is_apply_deferred(system: System<any, any>): boolean {
-    return system.type_id() === ApplyDeferred.type_id
+    return system.type_id === ApplyDeferred.type_id
 }
