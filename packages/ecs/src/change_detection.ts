@@ -1,5 +1,5 @@
 import { type Option, u32 } from "joshkaposh-option";
-import { type Component, type ComponentId, type Resource, type SystemMeta, type World, is_newer_than, SystemParamValidationError, Tick } from 'ecs';
+import { type Component, type ComponentId, type Resource, type SystemMeta, type World, defineParam, is_newer_than, SystemParamValidationError, Tick } from 'ecs';
 import type { DeepReadonly, Instance } from "./util";
 import { assert } from "joshkaposh-iterator/src/util";
 
@@ -229,7 +229,7 @@ export class Mut<T> extends DetectChangesMut<T> {
     }
 }
 
-export class Res<T> extends DetectChanges<T> {
+class Res<T> extends DetectChanges<T> {
     v: Instance<T>;
     ticks: Ticks;
 
@@ -261,7 +261,6 @@ export class Res<T> extends DetectChanges<T> {
     }
 
     static validate_param(component_id: ComponentId, _system_meta: SystemMeta, world: World) {
-
         if (world.storages.resources.get(component_id)?.isPresent) {
             return
         } else {
@@ -280,10 +279,6 @@ export class Res<T> extends DetectChanges<T> {
         return new Res<T>(ptr as Instance<T>, new Ticks(ticks.added, ticks.changed, system_meta.last_run, change_tick))
     }
 
-    static new_archetype() { }
-
-    static queue() { }
-
     hasChangedSince(tick: Tick) {
         const ticks = this.ticks;
         return is_newer_than(ticks.changed, tick, ticks.this_run);
@@ -294,7 +289,11 @@ export class Res<T> extends DetectChanges<T> {
     }
 }
 
-export const OptRes = {
+(await (import('./system/system-param'))).defineParam(Res);
+
+export { Res }
+
+const OptRes = {
     init_state<T extends Resource>(world: World, system_meta: SystemMeta, type: T) {
         return Res.init_state(world, system_meta, type)
     },
@@ -308,13 +307,13 @@ export const OptRes = {
         const [ptr, ticks] = tuple;
         return new Res(ptr, new Ticks(ticks.added, ticks.changed, system_meta.last_run, change_tick));
     },
+};
 
-    validate_param(_component_id: ComponentId, _system_meta: SystemMeta, _world: World) {
+(await (import('./system/system-param'))).defineParam(OptRes);
 
-    },
-}
+export { OptRes }
 
-export class ResMut<T> extends DetectChangesMut<T> {
+class ResMut<T> extends DetectChangesMut<T> {
     v: Instance<T>;
     ticks: TicksMut;
     constructor(type: Instance<T>, ticks: TicksMut) {
@@ -354,7 +353,6 @@ export class ResMut<T> extends DetectChangesMut<T> {
         const [ptr, ticks] = tuple;
 
         return new ResMut(ptr as Instance<T>, new TicksMut(ticks.added, ticks.changed, system_meta.last_run, change_tick))
-        // return new Res<T>(ptr as Instance<T>, new Ticks(ticks.added, ticks.changed, system_meta.last_run, change_tick))
     }
 
 
@@ -363,13 +361,13 @@ export class ResMut<T> extends DetectChangesMut<T> {
     }
 }
 
-export const OptResMut = {
+(await (import('./system/system-param'))).defineParam(ResMut);
+
+export { ResMut }
+
+const OptResMut = {
     init_state(world: World, system_meta: SystemMeta, resource: Resource) {
         return ResMut.init_state(world, system_meta, resource);
-    },
-
-    validate_param(_component_id: ComponentId, _system_meta: SystemMeta, _world: World) {
-
     },
 
     get_param<T>(component_id: ComponentId, system_meta: SystemMeta, world: World, change_tick: Tick): ResMut<T> {
@@ -382,7 +380,8 @@ export const OptResMut = {
 
         return new ResMut(v as Instance<T>, new TicksMut(ticks.added, ticks.changed, system_meta.last_run, change_tick))
     },
-}
+};
 
+(await (import('./system/system-param'))).defineParam(OptResMut);
 
-
+export { OptResMut }

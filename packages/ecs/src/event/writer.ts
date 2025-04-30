@@ -1,13 +1,29 @@
 import type { Events, SendBatchIds } from "./collections";
 import type { Event, EventId } from "./base";
 import type { Iterator } from "joshkaposh-iterator";
+import { defineParam, SystemMeta } from "../system";
+import { ResMut } from "../change_detection";
+import { World } from "../world";
+import { ComponentId, Tick } from "../component";
 
-// TODO: use ResMut<Events<E>>
-export class EventWriter<E extends Event> {
+class EventWriter<E extends Event> {
     #events: Events<E>;
 
     constructor(events: Events<E>) {
         this.#events = events;
+    }
+
+    static init_state<E extends Event>(world: World, system_meta: SystemMeta, event: E) {
+        // @ts-expect-error
+        return ResMut.init_state(world, system_meta, event.ECS_EVENTS_TYPE)
+    }
+
+    static validate_param(component_id: ComponentId, _system_meta: SystemMeta, world: World) {
+        return ResMut.validate_param(component_id, _system_meta, world);
+    }
+
+    static get_param(component_id: ComponentId, system_meta: SystemMeta, world: World, change_tick: Tick) {
+        return ResMut.get_param(component_id, system_meta, world, change_tick);
     }
 
     send(event: InstanceType<E>) {
@@ -22,3 +38,8 @@ export class EventWriter<E extends Event> {
         return this.#events.send_default();
     }
 }
+
+defineParam(EventWriter);
+
+export { EventWriter }
+

@@ -339,26 +339,4 @@ export function defineResource<R extends Class>(ty: R & Partial<ComponentMetadat
     return ty as Resource<R>
 }
 
-export const ECS_EVENTS_TYPE = 'ECS_EVENTS_TYPE';
-
-export function defineEvent<E extends Class>(type: E): Event<E> {
-    defineResource(type);
-    // @ts-expect-error;
-    const type_id = type.type_id;
-    class EventDefinition extends Events<Event<E>> {
-        static readonly storage_type = 1;
-        static readonly type_id = type_id;
-        constructor() {
-            super(type as unknown as Event<E>);
-        }
-
-        static from_world() {
-            return new EventDefinition();
-        }
-    }
-    // @ts-expect-error
-    type[ECS_EVENTS_TYPE] = EventDefinition;
-    return type as Event<E>;
-}
-
-export { defineSystem, defineCondition } from 'ecs';
+export { defineSystem, defineCondition, defineEvent } from 'ecs';

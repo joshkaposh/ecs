@@ -3,10 +3,10 @@ import { Entity } from "../entity";
 import { QueryData } from "../query";
 import { World } from "../world";
 import { SystemMeta, SystemState } from "./function-system";
-import { Local, SystemChangeTick, SystemParam } from "./system-param";
+import { Local, SystemChangeTick, SystemParam, SystemParamState } from "./system-param";
 import { Component, Resource, Tick } from "../component";
 import { Commands } from "./commands";
-import { OptRes, Res, ResMut, OptResMut, Ticks, TicksMut } from "../change_detection";
+import { OptRes, Res, ResMut, OptResMut } from "../change_detection";
 import { Query, ThinQuery } from "./query";
 import { Event, EventReader, Events, EventWriter } from "../event";
 import { TODO } from "joshkaposh-iterator/src/util";
@@ -51,9 +51,8 @@ export class ParamBuilder<P extends any[] = []> {
         return this;
     }
 
-    build<Param extends SystemParam>(world: World, meta: SystemMeta, _param?: Param): Param['State'] {
-        return this.#uninitialized.map(([_, ctor]) => ctor(world, meta))
-        // return this.#params;
+    build<Param extends SystemParam>(world: World, meta: SystemMeta, _param?: Param): SystemParamState<Param> {
+        return this.#uninitialized.map(([_, ctor]) => ctor(world, meta)) as SystemParamState<Param>;
     }
 
     buildState<Param extends SystemParam>(world: World, param: Param): SystemState<Param> {
@@ -62,9 +61,7 @@ export class ParamBuilder<P extends any[] = []> {
     }
 
     world(): PRet<P, World> {
-        console.log('ParamBuilder: ', World);
-
-        return this.#add_param(World, (w) => w);
+        return this.#add_param(World, (w, meta) => World.init_state(w, meta));
     }
 
     array<T>(array: T[]): PRet<P, T[]> {

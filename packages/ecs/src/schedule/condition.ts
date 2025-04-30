@@ -15,7 +15,7 @@ export interface Condition<In, Out extends boolean = boolean> extends System<In,
      * 
      * Short-curcuits: Condition `other` will not run if `this` condition returns false.
      */
-    and<C extends Condition<any>>(other: C): And<Condition<In, Out>, C>;
+    and<C extends Condition<any>>(other: C): AndCondition<Condition<In, Out>, C>;
 
     /**
      * Combines `this` condition and `other` into a new condition.
@@ -26,7 +26,7 @@ export interface Condition<In, Out extends boolean = boolean> extends System<In,
      * 
      * Short-curcuits: Condition `other` will not run if `this` condition returns true.
      */
-    nand<C extends Condition<any>>(other: C): Nand<Condition<In, Out>, C>;
+    nand<C extends Condition<any>>(other: C): NandCondition<Condition<In, Out>, C>;
 
     /**
      * Combines `this` condition and `other` into a new condition.
@@ -38,7 +38,7 @@ export interface Condition<In, Out extends boolean = boolean> extends System<In,
      * Short-curcuits: Condition `other` will not run if `this` condition returns true.
      */
 
-    or<C extends Condition<any>>(other: C): Or<Condition<In, Out>, C>;
+    or<C extends Condition<any>>(other: C): OrCondition<Condition<In, Out>, C>;
 
     /**
      * Combines `this` condition and `other` into a new condition.
@@ -49,7 +49,7 @@ export interface Condition<In, Out extends boolean = boolean> extends System<In,
      * 
      * Short-curcuits: Condition `other` may not run if `this` condition returns false.
      */
-    nor<C extends Condition<any>>(other: C): Nor<Condition<In, Out>, C>;
+    nor<C extends Condition<any>>(other: C): NorCondition<Condition<In, Out>, C>;
 
     /**
      * Combines `this` condition and `other` into a new condition.
@@ -60,7 +60,7 @@ export interface Condition<In, Out extends boolean = boolean> extends System<In,
      * 
      * Both conditions will always run.
      */
-    xor<C extends Condition<any, boolean>>(other: C): Xor<Condition<In, Out>, C>;
+    xor<C extends Condition<any, boolean>>(other: C): XorCondition<Condition<In, Out>, C>;
 
     /**
      * Combines `this` condition and `other` into a new condition.
@@ -71,7 +71,7 @@ export interface Condition<In, Out extends boolean = boolean> extends System<In,
      * 
      * Both conditions will always run.
      */
-    xnor<C extends Condition<any>>(other: C): Xnor<Condition<In, Out>, C>;
+    xnor<C extends Condition<any>>(other: C): XnorCondition<Condition<In, Out>, C>;
 }
 
 export class AndMarker implements Combine<System<any, any>, System<any, any>> {
@@ -110,9 +110,9 @@ export class XorMarker implements Combine<System<any, any>, System<any, any>> {
     }
 }
 
-export type And<A extends System<any, any>, B extends System<any, any>> = CombinatorSystem<AndMarker, A, B>
-export type Nand<A extends System<any, any>, B extends System<any, any>> = CombinatorSystem<NandMarker, A, B>
-export type Nor<A extends System<any, any>, B extends System<any, any>> = CombinatorSystem<NorMarker, A, B>
-export type Or<A extends System<any, any>, B extends System<any, any>> = CombinatorSystem<OrMarker, A, B>
-export type Xnor<A extends System<any, any>, B extends System<any, any>> = CombinatorSystem<XnorMarker, A, B>
-export type Xor<A extends System<any, any>, B extends System<any, any>> = CombinatorSystem<XorMarker, A, B>
+export type AndCondition<A extends System<any, any>, B extends System<any, any>> = CombinatorSystem<AndMarker, A, B>
+export type NandCondition<A extends System<any, any>, B extends System<any, any>> = CombinatorSystem<NandMarker, A, B>
+export type NorCondition<A extends System<any, any>, B extends System<any, any>> = CombinatorSystem<NorMarker, A, B>
+export type OrCondition<A extends System<any, any>, B extends System<any, any>> = CombinatorSystem<OrMarker, A, B>
+export type XnorCondition<A extends System<any, any>, B extends System<any, any>> = CombinatorSystem<XnorMarker, A, B>
+export type XorCondition<A extends System<any, any>, B extends System<any, any>> = CombinatorSystem<XorMarker, A, B>

@@ -12,8 +12,8 @@ import { QueryState, ThinQueryState, RemapQueryTupleToQueryData, RemapQueryTuple
 import { RemovedComponentEvents } from "../removal-detection";
 import type { Event, EventId, SendBatchIds } from "../event";
 import { type BundleInput, EntityRef, EntityWorldMut } from './entity-ref'
-import { RawCommandQueue } from "./command_queue";
-import { RunSystemError, System, SystemMeta } from "../system";
+import { RawCommandQueue } from "./command-queue";
+import { defineParam, RunSystemError, System, SystemMeta } from "../system";
 import { type Instance, type MutOrReadonlyArray, unit, debug_assert } from "../util";
 import { CHECK_TICK_THRESHOLD, Mut, Ref, Ticks, TicksMut } from "../change_detection";
 import { type ScheduleLabel, Schedule, Schedules } from "../schedule";
@@ -646,7 +646,7 @@ export class ThinWorld {
     }
 }
 
-export class World {
+class World {
     #id: WorldId;
     #entities: Entities;
     #components: Components;
@@ -716,8 +716,6 @@ export class World {
     static get_param(_state: any, _system: SystemMeta, world: World, _change_tick: Tick) {
         return world;
     }
-
-    static validate_param() { }
 
     get id() {
         return this.#id;
@@ -1655,6 +1653,10 @@ export class World {
         return new EntityWorldMut(this, location, entity);
     }
 }
+
+defineParam(World);
+
+export { World }
 
 export function fetchTable(world: World, location: EntityLocation) {
     return world.storages.tables.get(location.table_id);

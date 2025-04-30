@@ -4,18 +4,14 @@ import { relative_to, Tick } from "../tick";
 import { Access, FilteredAccessSet } from "../query";
 import { DeferredWorld, World, WorldId } from "../world";
 import { SystemParam, SystemParamItem } from "./system-param";
-import { ErrorExt, Option, Result } from "joshkaposh-option";
-// import { SystemInput } from "./input";
-// import { SystemTypeSet } from "../schedule/set";
+import { Option, Result } from "joshkaposh-option";
 import { ParamBuilder } from "./param-builder";
-// import { check_system_change_tick } from "./system";
-import { MAX_CHANGE_AGE } from "../change_detection";
-import { check_system_change_tick, System, SystemParamValidationError } from "./system";
+import { check_system_change_tick, System } from "./system";
 import { InternedSystemSet, SystemSet, SystemTypeSet } from "../schedule/set";
-import { unit } from "../util";
-import { ScheduleBuildError, ScheduleGraph } from "../schedule";
-import { Schedulable, ScheduleConfig, ScheduleConfigs } from "../schedule/config";
+import { ScheduleGraph } from "../schedule";
+import { Schedulable, ScheduleConfig } from "../schedule/config";
 import { NodeId } from "../schedule/graph";
+import { SystemParamValidationError } from "./system-param";
 
 /**
  * The metadata of a [`System`].
@@ -150,7 +146,7 @@ export class SystemState<Param extends SystemParam> {
         TODO('SystemState.from_builder()')
     }
 
-    static apply(world: World) {
+    static exec(world: World) {
         // this.#param.apply(this.#param_state, this.#meta, world);
     }
 
@@ -206,7 +202,7 @@ export class SystemState<Param extends SystemParam> {
 
         const archetype_range = archetypes.inner;
         for (let i = old_generation; i < archetype_range.length; i++) {
-            this.#params.forEach((p, j) => p.new_archetype(this.#param_states[j], archetype_range[i], this.#meta))
+            this.#params.forEach((p, j) => p.new_archetype(this.#param_states[j], archetype_range[i], this.#meta));
         }
     }
 

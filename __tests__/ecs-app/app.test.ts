@@ -1,6 +1,6 @@
 import { test, assert } from "vitest";
-import { App } from '../../packages/ecs-app'
-import { defineEvent } from "../../packages/define";
+import { defineEvent } from "ecs";
+import { App } from 'ecs-app'
 
 const MyEvent = defineEvent(class MyEvent { constructor(public value = 'event instance!') { } });
 

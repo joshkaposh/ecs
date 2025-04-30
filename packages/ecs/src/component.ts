@@ -10,6 +10,7 @@ import { Entity } from "./entity";
 import { debug_assert, entry, is_class } from "./util";
 import { Tick } from "./tick";
 import { SystemMeta } from "./system";
+import { v4 } from "uuid";
 
 export * from './tick';
 
@@ -825,4 +826,18 @@ export class ThinComponents {
     [Symbol.iterator]() {
         return this.iter();
     }
+}
+
+export function defineComponent<T>(ty: T, storage_type: StorageType = 0): T & Prettify<ComponentMetadata> {
+    // @ts-expect-error
+    ty.type_id = v4()
+    // @ts-expect-error
+    ty.storage_type = storage_type;
+    return ty as T & ComponentMetadata;
+}
+
+export function defineMarker(): Component {
+    const marker = class { }
+    defineComponent(marker, 1);
+    return marker as Component
 }

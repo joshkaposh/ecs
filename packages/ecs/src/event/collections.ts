@@ -5,8 +5,12 @@ import { type Option, u32 } from "joshkaposh-option";
 import { EventCursor } from "./event_cursor";
 import { Instance } from "../util";
 import { Default } from "../default";
+import { defineParam, SystemMeta } from "../system";
+import { World } from "../world";
+import { ResMut } from "../change_detection";
+import { ComponentId, Tick } from "../component";
 
-export class Events<E extends Event> {
+class Events<E extends Event> {
     __events_a: EventSequence<E>;
     __events_b: EventSequence<E>;
     #event_count: number;
@@ -22,6 +26,15 @@ export class Events<E extends Event> {
         this.__events_b = events_b;
         this.#ty = ty;
         this.#event_count = event_count;
+    }
+
+    static init_state<E extends Event>(world: World, system_meta: SystemMeta, event: E) {
+        // @ts-expect-error
+        return ResMut.init_state(world, system_meta, event.ECS_EVENTS_TYPE)
+    }
+
+    static get_param(component_id: ComponentId, system_meta: SystemMeta, world: World, change_tick: Tick) {
+        return ResMut.get_param(component_id, system_meta, world, change_tick);
     }
 
     get event_count(): number {
@@ -207,6 +220,10 @@ export class Events<E extends Event> {
 
 
 }
+
+defineParam(Events);
+
+export { Events };
 
 export interface EventSequence<E extends Event> {
     events: EventInstance<E>[];

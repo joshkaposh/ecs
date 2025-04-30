@@ -61,7 +61,6 @@ export class SpawnBatchIter extends ExactSizeIterator<Entity> {
     }
 }
 
-
 export class ThinSpawnManyIter extends ExactSizeIterator<Entity> {
     #inner: ThinBundle[];
     #spawner: ThinBundleSpawner;

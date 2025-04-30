@@ -24,7 +24,9 @@ export function check_tick_and_assign(self: number, tick: number) {
 
 export type Tick = number;
 export const Tick = {
-    MAX: MAX_CHANGE_AGE
+    get MAX() {
+        return MAX_CHANGE_AGE;
+    }
 } as const;
 
 export class ComponentTicks {

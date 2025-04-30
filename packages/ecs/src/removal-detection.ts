@@ -6,9 +6,8 @@ import type { SystemMeta } from "./system";
 import type { World } from "./world";
 import type { Archetype } from "./archetype";
 import { type StorageType, SparseSet } from "./storage";
-import { type EventId, EventCursor, Events } from "./event";
+import { type EventId, EventCursor, Events, defineEvent } from "./event";
 import { unit } from "./util";
-import { defineEvent } from "define";
 
 class RemovedComponentEntity {
     static readonly type_id: UUID;
@@ -23,7 +22,7 @@ class RemovedComponentEntity {
         return this.entity;
     }
 }
-defineEvent(RemovedComponentEntity)
+await defineEvent(RemovedComponentEntity);
 
 export class RemovedComponentEvents {
     State!: unit;

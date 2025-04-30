@@ -1,6 +1,6 @@
-import { ResMut, Entity, EventReader, defineSystem } from "ecs";
+import { defineSystem, defineEvent } from "ecs";
 import { ButtonInput, ButtonState } from "./button_input";
-import { defineEvent, defineResource } from "define";
+import { defineResource } from "define";
 
 export type MouseButton = 0 | 1 | 2 | 3 | 4 | (number & {})
 export const MouseButton = {
@@ -80,7 +80,7 @@ export const MouseButtonInput = ButtonInput<MouseButton>();
 //     }
 // }
 
-export const MouseMotion = defineEvent(class MouseMotion {
+export const MouseMotion = await defineEvent(class MouseMotion {
     x: number;
     y: number;
     constructor(x: number, y: number) {

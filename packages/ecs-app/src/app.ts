@@ -2,18 +2,17 @@ import { ErrorExt, Option } from "joshkaposh-option";
 import { Component, Resource } from "ecs/src/component";
 import { PlaceholderPlugin, Plugin, Plugins, PluginsState } from "./plugin";
 import { Schedule, ScheduleBuildSettings, ScheduleLabel } from "ecs/src/schedule";
-import { Event, EventCursor, Events } from "ecs/src/event";
+import { Event, EventCursor, Events, defineEvent } from "ecs/src/event";
 import { IntoScheduleConfig, Schedulable } from "ecs/src/schedule/config";
 import { SubApp, SubApps } from "./sub_app";
 import { $First, $Main, MainSchedulePlugin } from "./main_schedule";
-import { defineEvent } from "define";
 import { event_update_condition, event_update_system, EventUpdates } from "ecs/src/event/update";
 import { IntoSystem, SystemInput } from "ecs";
 import { SystemSet } from "ecs/src/schedule/set";
 import { Chain } from "ecs/src/schedule/schedule";
 
-export type AppExit = InstanceType<typeof AppExit>;
-export const AppExit = defineEvent(class AppExit {
+type AppExit = InstanceType<typeof AppExit>;
+const AppExit = await defineEvent(class AppExit {
     #ty: 0 | 1;
     // @ts-ignore
     #err?: number;
@@ -50,6 +49,8 @@ export const AppExit = defineEvent(class AppExit {
     }
 
 });
+
+export { AppExit }
 
 export type AppLabel = string;
 

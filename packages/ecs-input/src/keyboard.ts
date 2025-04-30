@@ -1,6 +1,4 @@
-import { ResMut, EventReader } from "ecs";
 import { ButtonInput, ButtonState } from "./button_input";
-import { defineResource } from "define";
 
 
 export type Key = keyof typeof Key;

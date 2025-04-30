@@ -21,10 +21,13 @@ import { Event } from '../event';
 import { With } from '../query';
 
 export * from './system-param';
-export { ParamBuilder } from './param-builder'
+export * from './param-builder'
 export * from './input';
 export * from './system';
 export * from './function-system';
+export * from './pipe';
+export * from './combinator';
+export * from './commands';
 export * from './query';
 
 export const $is_system = Symbol('SYSTEM');
