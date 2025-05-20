@@ -1,7 +1,6 @@
-import { expect, test, assert, describe, it } from "vitest";
-import { index, generation, Entities, EntityMap } from "ecs";
+import { test, assert } from "vitest";
+import { index, generation, Entities } from "ecs";
 import { Identifier, IdKind } from "ecs/src/identifier";
-import { skip } from '../constants'
 
 test('id_construction', () => {
     const id = new Identifier(12, 55, IdKind.Entity);

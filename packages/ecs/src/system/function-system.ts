@@ -7,11 +7,12 @@ import { SystemParam, SystemParamItem } from "./system-param";
 import { Option, Result } from "joshkaposh-option";
 import { ParamBuilder } from "./param-builder";
 import { check_system_change_tick, System } from "./system";
-import { InternedSystemSet, SystemSet, SystemTypeSet } from "../schedule/set";
-import { ScheduleGraph } from "../schedule";
-import { Schedulable, ScheduleConfig } from "../schedule/config";
-import { NodeId } from "../schedule/graph";
+import { InternedSystemSet, IntoSystemSet, SystemSet, SystemTypeSet } from "../schedule/set";
+import { Condition, ScheduleGraph } from "../schedule";
+import { Schedulable, ScheduleConfig, ScheduleConfigs } from "../schedule/config";
+import { Ambiguity, NodeId } from "../schedule/graph";
 import { SystemParamValidationError } from "./system-param";
+import { PipeSystem } from "./combinator";
 
 /**
  * The metadata of a [`System`].
@@ -110,10 +111,11 @@ type ParamState<T> = T extends SystemParam<infer State> ? State : never;
 type ParamItem<T> = T extends SystemParam<any, infer Item> ? Item : never;
 
 
-export class SystemState<Param extends SystemParam> {
+export class SystemState<Param extends Required<SystemParam>> {
     #meta: SystemMeta;
     #params: Param[];
     #param_states: ParamState<Param>[];
+    #param_items: ParamItem<Param>[];
     #world_id: WorldId;
     #archetype_generation: ArchetypeGeneration;
 
@@ -127,11 +129,12 @@ export class SystemState<Param extends SystemParam> {
         this.#meta = meta;
         this.#params = params;
         this.#param_states = param_states;
+        this.#param_items = [] as ParamItem<Param>[];
         this.#world_id = world_id;
         this.#archetype_generation = archetype_generation;
     }
 
-    static new<Param extends SystemParam>(world: World, params: Param[]): SystemState<Param> {
+    static new<Param extends Required<SystemParam>>(world: World, params: Param[]): SystemState<Param> {
         // TODO: check what this is
         // @ts-expect-error
         const name = params.name;
@@ -142,20 +145,27 @@ export class SystemState<Param extends SystemParam> {
 
     }
 
-    static fromBuilder<Param extends SystemParam>(world: World, builder: ParamBuilder<any[]>) {
-        TODO('SystemState.from_builder()')
+    // @ts-expect-error
+    static fromBuilder<Param extends Required<SystemParam>>(world: World, builder: ParamBuilder<any[]>) {
+        TODO('SystemState.from_builder()', world, builder)
     }
 
-    static exec(world: World) {
-        // this.#param.apply(this.#param_state, this.#meta, world);
-    }
+    // static exec(world: World) {
+    //     TODO('SystemState.exec', world)
+    //     // this.#param.apply(this.#param_state, this.#meta, world);
+    // }
 
-    static validate_param(world: World) {
-        // return this.#param.validate_param(this.#param_state, this.#meta, world);
-    }
+    // static validate_param(world: World) {
+    //     TODO('SystemState.validate_param', world)
+    //     // return this.#param.validate_param(this.#param_state, this.#meta, world);
+    // }
 
     get meta(): SystemMeta {
         return this.#meta;
+    }
+
+    get param(): Required<SystemParam>[] {
+        return this.#params;
     }
 
     build_any_system<Marker, Fn extends SystemParamFunction<Marker>>(marker: Marker, func: Fn) {
@@ -179,7 +189,7 @@ export class SystemState<Param extends SystemParam> {
 
     get_mut(world: World) {
         this.validate_world(world.id);
-        // this.update_archetypes(world);
+        this.update_archetypes(world);
         return this.get_unchecked_manual(world);
     }
 
@@ -228,12 +238,12 @@ export class SystemState<Param extends SystemParam> {
     }
 
     fetch(world: World, change_tick: Tick) {
-        const params = this.#params.map((p, i) => {
-            return p.get_param(this.#param_states[i], this.#meta, world, change_tick)
+        for (let i = 0; i < this.#params.length; i++) {
+            this.#param_items[i] = this.#params[i].get_param(this.#param_states[i], this.#meta, world, change_tick);
+        }
 
-        })
         this.#meta.last_run = change_tick;
-        return params;
+        return this.#param_items;
     }
 
     get param_state() {
@@ -252,7 +262,7 @@ export class SystemState<Param extends SystemParam> {
 interface SystemParamFunction<Marker> {
     In: any;
     Out: any;
-    Param: SystemParam;
+    Param: Required<SystemParam>;
 
     run(input: SystemParamFunction<Marker>['In'], param_value: SystemParamItem<SystemParamFunction<Marker>['Param']>): SystemParamFunction<Marker>['Out'];
 };
@@ -308,6 +318,67 @@ export class FunctionSystem<Marker, F extends SystemParamFunction<Marker>> imple
         return this.system_meta.name;
     }
 
+    pipe<Bin, Bout>(b: System<Bin, Bout>): System<any, Bout> {
+        return new PipeSystem(this, b);
+    }
+
+    intoConfig(): ScheduleConfigs<Schedulable<any, any>> {
+        const sets = this.defaultSystemSets!();
+        return new ScheduleConfig(
+            this as any,
+            {
+                hierarchy: sets,
+                dependencies: [],
+                ambiguous_with: Ambiguity.default()
+            },
+            []
+        )
+    }
+
+    inSet(set: SystemSet): ScheduleConfigs<Schedulable<any, any>> {
+        return this.intoConfig().inSet(set);
+    }
+
+    before<M>(set: IntoSystemSet<M>): ScheduleConfigs<Schedulable<any, any>> {
+        return this.intoConfig().before(set);
+    }
+
+    beforeIgnoreDeferred<M>(set: IntoSystemSet<M>): ScheduleConfigs<Schedulable<any, any>> {
+        return this.intoConfig().beforeIgnoreDeferred(set);
+    }
+
+    after<M>(set: IntoSystemSet<M>): ScheduleConfigs<Schedulable<any, any>> {
+        return this.intoConfig().after(set);
+    }
+
+    afterIgnoreDeferred<M>(set: IntoSystemSet<M>): ScheduleConfigs<Schedulable<any, any>> {
+        return this.intoConfig().afterIgnoreDeferred(set);
+    }
+
+    runIf(condition: Condition<any>): ScheduleConfigs<Schedulable<any, any>> {
+        return this.intoConfig().runIf(condition);
+    }
+
+    distributiveRunIf(condition: Condition<any>): ScheduleConfigs<Schedulable<any, any>> {
+        return this.intoConfig().distributiveRunIf(condition);
+    }
+
+    ambiguousWith<M>(set: IntoSystemSet<M>): ScheduleConfigs<Schedulable<any, any>> {
+        return this.intoConfig().ambiguousWith(set);
+    }
+
+    ambiguousWithAll(): ScheduleConfigs<Schedulable<any, any>> {
+        return this.intoConfig().ambiguousWithAll();
+    }
+
+    chain(): ScheduleConfigs<Schedulable<any, any>> {
+        return this.intoConfig().chain();
+    }
+
+    chainIgnoreDeferred(): ScheduleConfigs<Schedulable<any, any>> {
+        return this.intoConfig().chainIgnoreDeferred();
+    }
+
     withName(new_name: string) {
         this.system_meta.setName(new_name);
         return this;
@@ -353,11 +424,11 @@ export class FunctionSystem<Marker, F extends SystemParamFunction<Marker>> imple
     }
 
     run(input: any, world: World) {
-        TODO('FunctionSystem.run()')
+        TODO('FunctionSystem.run()', input, world)
     }
 
     runWithoutApplyingDeferred(input: any, world: World) {
-        TODO('FunctionSystem.runWithoutApplyingDeferred()')
+        TODO('FunctionSystem.runWithoutApplyingDeferred()', input, world)
 
     }
 
@@ -367,7 +438,7 @@ export class FunctionSystem<Marker, F extends SystemParamFunction<Marker>> imple
             throw new Error(ERROR_NOT_INITIALIZED);
         }
 
-        this.func.Param.apply(param_state, this.system_meta, world);
+        this.func.Param.exec!(param_state, this.system_meta, world);
     }
 
     queueDeferred(world: DeferredWorld): void {

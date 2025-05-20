@@ -9,14 +9,6 @@ export type SystemInput = {
     wrap(): SystemInput;
 } | unit;
 
-const SystemInputUnit = {
-    Param: unit,
-    Inner: unit,
-
-    wrap() {
-        return unit;
-    }
-}
 
 export class In<T> {
     Param!: In<T>;

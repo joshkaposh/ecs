@@ -1,6 +1,6 @@
 import { Option } from "joshkaposh-option";
 import { TableRow } from "./index";
-import { check_tick, check_tick_and_assign, ComponentTicks, Tick } from "../../tick";
+import { check_tick_and_assign, ComponentTicks, Tick } from "../../tick";
 import { swap, swap_remove } from "../../array-helpers";
 import { debug_assert } from "../../util";
 
@@ -29,18 +29,21 @@ function swapRemoveUncheckedNonoverlapping(data: any[], index_to_remove: number,
 
 export class Column {
     data: {}[];
-    added_ticks: Tick[];
-    changed_ticks: Tick[];
+    ticks: ComponentTicks[]
+    // added_ticks: Tick[];
+    // changed_ticks: Tick[];
 
 
     constructor(
         data: {}[] = [],
-        added_ticks: Tick[] = [],
-        changed_ticks: Tick[] = []
+        ticks: ComponentTicks[] = []
+        // added_ticks: Tick[] = [],
+        // changed_ticks: Tick[] = []
     ) {
         this.data = data;
-        this.added_ticks = added_ticks;
-        this.changed_ticks = changed_ticks;
+        this.ticks = ticks;
+        // this.added_ticks = added_ticks;
+        // this.changed_ticks = changed_ticks;
     }
 
     /**
@@ -59,8 +62,9 @@ export class Column {
 
     private __push(ptr: {}, ticks: ComponentTicks) {
         this.data.push(ptr);
-        this.added_ticks.push(ticks.added);
-        this.changed_ticks.push(ticks.changed);
+        this.ticks.push(ticks);
+        // this.added_ticks.push(ticks.added);
+        // this.changed_ticks.push(ticks.changed);
     }
 
     getDataSlice(_len: number) {
@@ -68,19 +72,22 @@ export class Column {
         // return this.data.slice(0, len);
     }
 
-    getAddedTicksSlice(_len: number) {
-        return this.added_ticks;
-        // return this.added_ticks.slice(0, len);
+    getTicksSlice(_len: number) {
+        return this.ticks;
     }
+    // getAddedTicksSlice(_len: number) {
+    //     return this.added_ticks;
+    //     // return this.added_ticks.slice(0, len);
+    // }
 
-    getChangedTicksSlice(_len: number) {
-        return this.changed_ticks;
-        // return this.changed_ticks.slice(0, len);
-    }
+    // getChangedTicksSlice(_len: number) {
+    //     return this.changed_ticks;
+    //     // return this.changed_ticks.slice(0, len);
+    // }
 
     get(row: TableRow): Option<[{}, ComponentTicks]> {
         if (row < this.data.length) {
-            return [this.data[row], new ComponentTicks(this.added_ticks[row], this.changed_ticks[row])]
+            return [this.data[row], this.ticks[row]]
         } else {
             return null;
         }
@@ -100,11 +107,11 @@ export class Column {
     }
 
     getAddedTick(row: number): Option<Tick> {
-        return this.added_ticks[row];
+        return this.ticks[row]?.added;
     }
 
     getChangedTick(row: number): Option<Tick> {
-        return this.changed_ticks[row]
+        return this.ticks[row]?.changed;
     }
 
     getWithTicks(row: number): Option<[{}, ComponentTicks]> {
@@ -123,44 +130,57 @@ export class Column {
     }
 
     getTicksUnchecked(row: number) {
-        return new ComponentTicks(this.added_ticks[row], this.changed_ticks[row]);
+        return this.ticks[row];
     }
 
-    private __swapRemoveUnchecked(row: TableRow): Option<[{}, Tick, Tick]> {
+    // @ts-ignore
+    private __swapRemoveUnchecked(row: TableRow): Option<[{}, ComponentTicks]> {
         const d = swap_remove(this.data, row)
-        const a = swap_remove(this.added_ticks, row)
-        const c = swap_remove(this.changed_ticks, row);
-        return d == null ? undefined : [d, a!, c!];
+        const t = swap_remove(this.ticks, row);
+
+        // const a = swap_remove(this.added_ticks, row)
+        // const c = swap_remove(this.changed_ticks, row);
+        // return d == null ? undefined : [d, a!, c!];
+        return d == null ? undefined : [d, t!];
+
     }
 
+    // @ts-expect-error
     private pop(last_element_index: number) {
         this.data.pop();
-        this.added_ticks.pop();
-        this.changed_ticks.pop();
+        this.ticks.pop();
+        // this.added_ticks.pop();
+        // this.changed_ticks.pop();
     }
 
     private __swapRemoveAndDropUncheckedNonoverlapping(last_element_index: number, row: TableRow) {
         swapRemoveUncheckedNonoverlapping(this.data, row, last_element_index);
-        swapRemoveUncheckedNonoverlapping(this.added_ticks, row, last_element_index);
-        swapRemoveUncheckedNonoverlapping(this.changed_ticks, row, last_element_index);
+        swapRemoveUncheckedNonoverlapping(this.ticks, row, last_element_index);
+        // swapRemoveUncheckedNonoverlapping(this.added_ticks, row, last_element_index);
+        // swapRemoveUncheckedNonoverlapping(this.changed_ticks, row, last_element_index);
     }
 
+    // @ts-expect-error
     private __swapRemoveAndForgetUnchecked(last_element_index: number, row: TableRow) {
-        swapRemoveUnchecked(this.data, row, last_element_index)
-        swapRemoveUnchecked(this.added_ticks, row, last_element_index)
-        swapRemoveUnchecked(this.changed_ticks, row, last_element_index)
+        swapRemoveUnchecked(this.data, row, last_element_index);
+        swapRemoveUnchecked(this.ticks, row, last_element_index);
+
+        // swapRemoveUnchecked(this.added_ticks, row, last_element_index)
+        // swapRemoveUnchecked(this.changed_ticks, row, last_element_index)
     }
 
     /**
      * Call to expand / shrink the memory allocation for this Column
      * The caller should make sure their saved capacity is updated to new_capacity after this operation
      */
+    // @ts-expect-error
     private __realloc(current_capacity: number, new_capacity: number) {
         // realloc(this.data, current_capacity, new_capacity)
         // realloc(this.added_ticks, current_capacity, new_capacity)
         // realloc(this.changed_ticks, current_capacity, new_capacity)
     }
 
+    // @ts-expect-error
     private __alloc(new_capacity: number) {
         // alloc(this.data, new_capacity)
         // alloc(this.added_ticks, new_capacity)
@@ -172,45 +192,55 @@ export class Column {
      * Assumes the slot in uninitialized
      * To overwrite existing initialized value, use Column.replace() instead
      */
+    // @ts-expect-error
     private __initialize(row: TableRow, data: {}, change_tick: Tick) {
         this.data[row] = data;
-        this.added_ticks[row] = change_tick;
-        this.changed_ticks[row] = change_tick;
+        this.ticks[row] = new ComponentTicks(change_tick, change_tick);
+        // this.added_ticks[row] = change_tick;
+        // this.changed_ticks[row] = change_tick;
     }
 
     private __replace(row: TableRow, data: {}, change_tick: Tick) {
         this.data[row] = data;
-        this.changed_ticks[row] = change_tick;
-        // this.changed_ticks[row].set(change_tick.get());
+        const ticks = this.ticks[row];
+        ticks.added = change_tick;
+        ticks.changed = change_tick;
     }
 
     /**
      * Removes the element from `other` at `src_row` and inserts it
      * into the current column to initialize the values at `dst_row`
      */
+    // @ts-expect-error
+
     private __initializeFromUnchecked(other: Column, other_last_element_index: number, src_row: TableRow, dst_row: TableRow) {
         // Init data
-        const src_val = swap_remove(other.data, src_row)!;
-        this.data[dst_row] = src_val;
-        const added_tick = swap_remove(other.added_ticks, src_row)!;
-        this.added_ticks[dst_row] = added_tick;
-        const changed_tick = swap_remove(other.changed_ticks, src_row)!;
-        this.changed_ticks[dst_row] = changed_tick;
+
+        this.data[dst_row] = swap_remove(other.data, src_row)!;
+        this.ticks[dst_row] = swap_remove(other.ticks, src_row)!
+        // const added_tick = swap_remove(other.added_ticks, src_row)!;
+        // this.added_ticks[dst_row] = added_tick;
+        // const changed_tick = swap_remove(other.changed_ticks, src_row)!;
+        // this.changed_ticks[dst_row] = changed_tick;
     }
 
     checkChangeTicks(len: number, change_tick: Tick) {
+        const ticks = this.ticks;
         for (let i = 0; i < len; i++) {
-            this.added_ticks[i] = check_tick_and_assign(this.added_ticks[i], change_tick);
-            this.changed_ticks[i] = check_tick_and_assign(this.changed_ticks[i], change_tick);
+            const tick = ticks[i];
+            tick.added = check_tick_and_assign(tick.added, change_tick);
+            tick.changed = check_tick_and_assign(tick.changed, change_tick);
         }
     }
 
     clear() {
         this.data.length = 0;
-        this.added_ticks.length = 0;
-        this.changed_ticks.length = 0;
+        this.ticks.length = 0;
+        // this.added_ticks.length = 0;
+        // this.changed_ticks.length = 0;
     }
 
+    // @ts-expect-error
     private __reserve_exact(additional: number) {
         // reserve(this.data,ca additional);
     }

@@ -1,37 +1,29 @@
-import { Iterator, iter } from "joshkaposh-iterator";
-import { TODO } from "joshkaposh-iterator/src/util";
-import { type Option, type Result, u32, is_none } from 'joshkaposh-option';
 import { v4 } from "uuid";
-import type { ThinComponent, TypeId, ThinResource, ComponentRecord, Class, SpawnManyInput } from "define";
-import { type Archetype, type ArchetypeComponentId, type ArchetypeId, Archetypes } from "../archetype";
+import { iter, Iterator } from "joshkaposh-iterator";
+import { TODO } from "joshkaposh-iterator/src/util";
+import { type Option, type Result, u32, is_none, ErrorExt } from 'joshkaposh-option';
+import { ThinComponent, ThinResource, ComponentRecord, SpawnManyInput } from "define";
+import { type ArchetypeComponentId, Archetypes } from "../archetype";
 import { type Component, type ComponentId, type ComponentInfo, Components, type Resource, type ResourceId, ComponentTicks, Tick, relative_to, ThinComponents, ComponentMetadata, ThinComponentInfo } from "../component";
 import { Storages, StorageType, ThinStorages } from "../storage";
 import { type Entity, Entities, EntityDoesNotExistDetails, EntityLocation, index } from "../entity";
 import { type Bundle, BundleInserter, Bundles, BundleSpawner, define_thin_bundle, InsertMode, ThinBundle, ThinBundles, ThinBundleSpawner } from "../bundle";
 import { QueryState, ThinQueryState, RemapQueryTupleToQueryData, RemapQueryTupleToQueryFilter, Access, FilteredAccess } from "../query";
-import { RemovedComponentEvents } from "../removal-detection";
+import { RemovedComponentEntity, RemovedComponentEvents } from "../removal-detection";
 import type { Event, EventId, SendBatchIds } from "../event";
 import { type BundleInput, EntityRef, EntityWorldMut } from './entity-ref'
 import { RawCommandQueue } from "./command-queue";
-import { defineParam, RunSystemError, System, SystemMeta } from "../system";
+import { type System, type SystemMeta, RunSystemError, defineParam } from "../system";
 import { type Instance, type MutOrReadonlyArray, unit, debug_assert } from "../util";
 import { CHECK_TICK_THRESHOLD, Mut, Ref, Ticks, TicksMut } from "../change_detection";
 import { type ScheduleLabel, Schedule, Schedules } from "../schedule";
 import { TryInsertBatchError, TryRunScheduleError } from "./error";
 import { Commands } from '../system/commands';
-import { DeferredWorld, type FromWorld } from ".";
+import { ON_ADD, ON_INSERT, ON_REMOVE, ON_REPLACE } from "./deferred-world";
+import type { FromWorld } from "./world.types";
+import type { TypeId, Class } from "../util";
+
 export type WorldId = number;
-
-export type ON_ADD = typeof ON_ADD;
-export const ON_ADD = 0;
-export type ON_INSERT = typeof ON_INSERT;
-export const ON_INSERT = 1;
-export type ON_REPLACE = typeof ON_REPLACE;
-export const ON_REPLACE = 2;
-export type ON_REMOVE = typeof ON_REMOVE;
-export const ON_REMOVE = 3;
-
-type ObserverId = ON_ADD | ON_INSERT | ON_REPLACE | ON_REMOVE;
 
 export class OnAdd {
     static readonly type_id = v4() as UUID;
@@ -97,37 +89,39 @@ export class ThinWorld {
 
     #changeTick: Tick;
     #lastChangeTick: Tick;
+    // @ts-expect-error
     #lastCheckTick: Tick;
+    // @ts-expect-error
     #lastTriggerId: number;
 
     #command_queue: RawCommandQueue;
 
     constructor(
-        id: WorldId = 0,
-        entities: Entities = new Entities(),
-        components: ThinComponents = new ThinComponents(),
-        archetypes: Archetypes = new Archetypes(),
-        storages: ThinStorages = new ThinStorages(),
-        bundles: ThinBundles = new ThinBundles(),
-        removed_components: RemovedComponentEvents = new RemovedComponentEvents(),
-        change_tick: number = 0,
-        last_change_tick: Tick = 0,
-        last_check_tick: Tick = 0,
-        last_trigger_id: number = 0,
-        command_queue: RawCommandQueue = new RawCommandQueue()
+        id?: WorldId,
+        entities?: Entities,
+        components?: ThinComponents,
+        archetypes?: Archetypes,
+        storages?: ThinStorages,
+        bundles?: ThinBundles,
+        removed_components?: RemovedComponentEvents,
+        change_tick?: number,
+        last_change_tick?: Tick,
+        last_check_tick?: Tick,
+        last_trigger_id?: number,
+        command_queue?: RawCommandQueue
     ) {
-        this.#id = id;
-        this.#entities = entities;
-        this.#components = components;
-        this.#archetypes = archetypes;
-        this.#storages = storages;
-        this.#bundles = bundles;
-        this.#removed_components = removed_components;
-        this.#changeTick = change_tick;
-        this.#lastChangeTick = last_change_tick;
-        this.#lastCheckTick = last_check_tick;
-        this.#lastTriggerId = last_trigger_id;
-        this.#command_queue = command_queue;
+        this.#id = id ?? 0;
+        this.#entities = entities ?? new Entities();
+        this.#components = components ?? new ThinComponents();
+        this.#archetypes = archetypes ?? new Archetypes(components as any);
+        this.#storages = storages ?? new ThinStorages();
+        this.#bundles = bundles ?? new ThinBundles();
+        this.#removed_components = removed_components ?? new RemovedComponentEvents();
+        this.#changeTick = change_tick ?? 0;
+        this.#lastChangeTick = last_change_tick ?? 0;
+        this.#lastCheckTick = last_check_tick ?? 0;
+        this.#lastTriggerId = last_trigger_id ?? 0;
+        this.#command_queue = command_queue ?? new RawCommandQueue();
 
 
         this.#bootstrap();
@@ -212,7 +206,7 @@ export class ThinWorld {
         const tuple = this.#storages.resources.get(component_id)?.getWithTicks();
         if (tuple) {
             const [ptr, _ticks] = tuple;
-            const ticks = TicksMut.fromTickCells(_ticks, this.#lastChangeTick, this.#changeTick);
+            const ticks = new TicksMut(_ticks, this.#lastChangeTick, this.#changeTick);
             return new Mut<R>(ptr as Instance<R>, ticks);
         }
         return;
@@ -235,7 +229,7 @@ export class ThinWorld {
         return data.getMut(last_change_tick, change_tick)!;
     }
 
-    insertResourceById(component_id: ComponentId, value: TypeId) {
+    insertResourceById(component_id: ComponentId, value: {}) {
         this.__initializeResourceInternal(component_id).set(value, this.#changeTick);
     }
 
@@ -246,7 +240,7 @@ export class ThinWorld {
         const component_id = this.registerResource(resource);
         if (!this.#storages.resources.get(component_id)?.isPresent) {
             const value = resource.from_world(this as unknown as World) as InstanceType<R>;
-            this.insertResourceById(component_id, value as TypeId)
+            this.insertResourceById(component_id, value)
         }
 
         const data = this.#storages.resources.get<R>(component_id)!;
@@ -283,11 +277,11 @@ export class ThinWorld {
         return new EntityWorldMut(this as unknown as World, entity_location, entity);
     }
 
-    spawnMany<B extends SpawnManyInput<ComponentRecord[]>>(batch: B) {
+    spawnMany<B extends SpawnManyInput<ComponentRecord[]>>(_batch: B) {
         // return new ThinSpawnManyIter(this, batch as any);
     }
 
-    despawn(entity: Entity): boolean {
+    despawn(_entity: Entity): boolean {
         // const e = this.getEntityMut(entity);
         // if (e) {
         //     e.despawn();
@@ -433,7 +427,7 @@ export class ThinWorld {
         if (!r || !r.isPresent) {
             const ptr = new resource();
             // const v = resource.from_world(this);
-            this.insertResourceById(component_id, ptr as TypeId);
+            this.insertResourceById(component_id, ptr);
         }
         return component_id;
     }
@@ -473,8 +467,8 @@ export class ThinWorld {
         if (!tuple) {
             return
         }
-        const [ptr, tick_cells] = tuple;
-        const ticks = Ticks.fromTickCells(tick_cells, this.#lastChangeTick, this.#changeTick);
+        const [ptr, cells] = tuple;
+        const ticks = new Ticks(cells, this.#lastChangeTick, this.#changeTick);
         return new Ref<R>(ptr as InstanceType<R>, ticks)
     }
 
@@ -646,6 +640,11 @@ export class ThinWorld {
     }
 }
 
+function schedule_run<T extends Schedule>(world: World, schedule: T) {
+    schedule.run(world);
+    return schedule;
+}
+
 class World {
     #id: WorldId;
     #entities: Entities;
@@ -665,7 +664,7 @@ class World {
         id: number = 0,
         entities: Entities = new Entities(),
         components: Components = new Components(),
-        archetypes: Archetypes = new Archetypes(),
+        archetypes: Archetypes = new Archetypes(components),
         storages: Storages = new Storages(),
         bundles: Bundles = new Bundles(),
         removed_components: RemovedComponentEvents = new RemovedComponentEvents(),
@@ -887,35 +886,43 @@ class World {
         if (!location) {
             return null
         }
-        // ! Safety: if the Entity is invalid, the function returns early.
-        // ! Additionally, Entities.get() returns the correct EntityLocation if the Entity exists.
-        // UnsafeEntityCell // { self.as_unsafe_world_cell_readonly, entity, location }
         return new EntityWorldMut(this, location, entity);
     }
 
+    /**
+     * Spawns a new entity and returns a [`EntityWorldMut`] reference.
+     * If you intend spawn an Entity with components you should use `World.spawn` as this reduces `Archetype` insertion(s)/removal(s).
+     * This method is useful when allocating an Entity that will later have it's components inserted.
+     * @returns a [`EntityWorldMut`] reference.
+     */
     spawnEmpty() {
         this.flush();
         const entity = this.#entities.alloc();
         return this.#spawnAtEmptyInternal(entity);
     }
 
+    /**
+     * Spawns a new Entity with the provided [`Component`]s.
+     * Spawns should be as infrequent and as batched as possible. `World.spawnBatch` is optimized for spawning many entities at once
+     * and should be used instead of calling `spawn` in a loop.
+     * @returns a [`EntityWorldMut`] reference.
+     */
     spawn(...bundle: InstanceType<Component>[] | Bundle[]): EntityWorldMut {
-        bundle = Bundles.dynamicBundle(bundle) as unknown as Bundle[]
-
         this.flush();
         const change_tick = this.#change_tick;
         const entity = this.#entities.alloc();
+        bundle = Bundles.dynamicBundle(bundle) as unknown as Bundle[]
         const bundle_spawner = BundleSpawner.new(bundle as unknown as Bundle, this, change_tick)
         let entity_location = bundle_spawner.spawnNonExistent(entity, bundle as unknown as Bundle);
         if (!this.#command_queue.is_empty()) {
             this.flush();
-            entity_location = this.#entities.get(entity) ?? EntityLocation.INVALID
+            entity_location = this.#entities.get(entity) ?? EntityLocation.INVALID;
         }
 
         return new EntityWorldMut(this, entity_location, entity);
     }
 
-    spawnBatch(batch: BundleInput) {
+    spawnBatch(batch: BundleInput): Entity[] {
         this.flush();
         const change_tick = this.#change_tick;
 
@@ -927,30 +934,26 @@ class World {
         const spawner = BundleSpawner.new(bundle, this, change_tick);
         spawner.reserveStorage(length);
 
-        function get_components(index: number) {
+
+        let index = -1;
+        bundle.getComponents = function (func: (storage_type: StorageType, ptr: object) => void) {
+            index++;
             const components = batch[index];
-            bundle.getComponents = function (func: (storage_type: StorageType, ptr: object) => void) {
-                // @ts-expect-error
-                for (let i = 0; i < components.length; i++) {
-                    // @ts-expect-error
-                    const type = components[i];
-                    func(type.storage_type ?? type.constructor.storage_type, type)
-                }
+            for (let i = 0; i < components.length; i++) {
+                const type = components[i];
+                func(type.storage_type ?? type.constructor.storage_type, type)
             }
         }
 
-        return batch.map((b, i) => {
-            get_components(i);
-            return spawner.spawn(bundle);
-        })
-        // for (let i = 0; i < batch.length; i++) {
-        //     get_components(i);
-        //     spawner.spawn(bundle as Bundle);
-        // }
+        const ret = new Array(batch.length);
+        for (let i = 0; i < batch.length; i++) {
+            ret[i] = spawner.spawn(bundle);
+        }
+        return ret;
     }
 
-    tryInsertBatchIfNew<B extends any[] | Bundle>(batch: MutOrReadonlyArray<[Entity, B]>) {
-        return this.tryInsertBatch(batch, InsertMode.Keep)
+    tryInsertBatchIfNew<B extends any[] | Bundle>(...batch: MutOrReadonlyArray<[Entity, B]>) {
+        return this.tryInsertBatch(InsertMode.Keep, ...batch)
     }
 
     /**
@@ -968,13 +971,8 @@ class World {
      * 
      * For the panicking version, see `World.insert_batch`.
      */
-    tryInsertBatch<B extends any[] | Bundle>(batch: MutOrReadonlyArray<[Entity, B]>, insert_mode: InsertMode): Result<undefined, TryInsertBatchError> {
-        const bundle_type = Bundles.dynamicBundle(batch[0])
-
-        type InserterArchetypeCache = {
-            inserter: BundleInserter;
-            archetype_id: ArchetypeId;
-        }
+    tryInsertBatch<B extends any[] | Bundle>(insert_mode: InsertMode, ...batch: MutOrReadonlyArray<[Entity, B]>): Result<undefined, TryInsertBatchError> {
+        const bundle_type = Bundles.dynamicBundle(batch[0]);
 
         this.flush();
         const change_tick = this.#change_tick;
@@ -982,23 +980,20 @@ class World {
         const invalid_entities: Entity[] = [];
         const batch_iter = iter(batch);
 
-        let cache: Option<InserterArchetypeCache>;
+        let cache: Record<string, any> = {};
         while (true) {
             const next_batch = batch_iter.next();
             if (!next_batch.done) {
                 const [first_entity, first_bundle] = next_batch.value;
                 const first_location = this.#entities.get(first_entity);
                 if (first_location) {
-                    cache = {
-                        inserter: BundleInserter.newWithId(
-                            this,
-                            first_location.archetype_id,
-                            bundle_id,
-                            change_tick
-                        ),
-                        archetype_id: first_location.archetype_id
-                    };
-
+                    cache.inserter = BundleInserter.newWithId(
+                        this,
+                        first_location.archetype_id,
+                        bundle_id,
+                        change_tick
+                    );
+                    cache.archetype_id = first_location.archetype_id;
                     cache.inserter.insert(
                         first_entity,
                         first_location,
@@ -1013,26 +1008,22 @@ class World {
             }
         }
 
-        if (cache) {
-            for (const [entity, bundle] of batch_iter) {
-                const location = cache.inserter.entities().get(entity);
-                if (location) {
-                    if (location.archetype_id !== cache.archetype_id) {
-                        cache = {
-                            inserter: BundleInserter.newWithId(
-                                this,
-                                location.archetype_id,
-                                bundle_id,
-                                change_tick
-                            ),
-                            archetype_id: location.archetype_id
-                        }
-                    }
-
-                    cache.inserter.insert(entity, location, bundle, insert_mode);
-                } else {
-                    invalid_entities.push(entity);
+        for (const [entity, bundle] of batch_iter) {
+            const location = cache.inserter.entities().get(entity);
+            if (location) {
+                if (location.archetype_id !== cache.archetype_id) {
+                    cache.inserter = BundleInserter.newWithId(
+                        this,
+                        location.archetype_id,
+                        bundle_id,
+                        change_tick
+                    );
+                    cache.archetype_id = location.archetype_id
                 }
+
+                cache.inserter.insert(entity, location, bundle, insert_mode);
+            } else {
+                invalid_entities.push(entity);
             }
         }
 
@@ -1044,16 +1035,10 @@ class World {
     }
 
     insertBatch<B extends MutOrReadonlyArray<any> | Bundle>(batch: MutOrReadonlyArray<[Entity, B]>[], insert_mode: InsertMode = InsertMode.Replace) {
-        type InserterArchetypeCache = {
-            inserter: BundleInserter;
-            archetype_id: ArchetypeId;
-        }
-
         this.flush();
         const bundle_type = Bundles.dynamicBundle(batch[0][1])
         const change_tick = this.#change_tick;
         const bundle_id = this.#bundles.registerInfo(bundle_type, this.#components, this.#storages);
-
 
         const batch_iter = iter(batch);
         const next_batch = batch_iter.next();
@@ -1062,7 +1047,7 @@ class World {
             const [first_entity] = next_batch.value;
             const first_location = this.#entities.get(first_entity);
             if (first_location) {
-                let cache: InserterArchetypeCache = {
+                let cache = {
                     inserter: BundleInserter.newWithId(
                         this,
                         first_location.archetype_id,
@@ -1083,16 +1068,10 @@ class World {
                     const location = cache.inserter.entities().get(entity);
                     if (location) {
                         if (location.archetype_id !== cache.archetype_id) {
-                            cache = {
-                                inserter: BundleInserter.newWithId(
-                                    this,
-                                    location.archetype_id,
-                                    bundle_id,
-                                    change_tick
-                                ),
-                                archetype_id: location.archetype_id
-                            }
+                            cache.inserter = BundleInserter.newWithId(this, location.archetype_id, bundle_id, change_tick);
+                            cache.archetype_id = location.archetype_id;
                         }
+
                         cache.inserter.insert(
                             entity,
                             location,
@@ -1114,6 +1093,10 @@ class World {
         this.insertBatch(batch, InsertMode.Keep)
     }
 
+    /**
+     * removes `entity` and all of its components
+     * @returns true if `entity` existed.
+     */
     despawn(entity: Entity): boolean {
         const e = this.getEntityMut(entity);
         if (e) {
@@ -1129,17 +1112,14 @@ class World {
      * Returns None if the entity does not have a ['Component'] of the given type.
      
     @example
-    import { registerComponent, World } from 'ecs'
-
-    class Position {
-    
+    const Position = defineComponent(class {
         constructor(public x: number, public y: number) {}
-    }
+    })
 
     const world = new World();
     const entity = world.spawn(new Position(0, 0)).id();
     const position = world.get(entity, Position);
-    console.log(position.x, position.y) // 0 0
+    console.log(position.x, position.y) // 0, 0
     */
     get<T extends Component>(entity: Entity, component: T): Option<InstanceType<T>> {
         return this.getEntity(entity)?.get(component);
@@ -1157,45 +1137,55 @@ class World {
         return this.getEntityMut(entity)?.getMutById<T>(component_id);
     }
 
+    /**
+     * @returns [`QueryState`] with no filter.
+     * This method is usually called when constructing a [`System`].
+     * @description
+     * queries by default are immutable. While there are no safeguards when changing a component value,
+     * change detection will **not** work. It is __highly__ recommended to use the `mut` modifier if you want to mutate any component(s).
+     * Systems are scheduled in such a way that any mutable access is safe in a multi-threaded environment. Not using `mut` can lead to undefined behaviour.
+     * 
+     * 
+     * @example
+     * world.query([ComponentA])
+     * // returns an Iterator of any Entity that has `ComponentA`.
+     * world.query([mut(ComponentA)])
+     * // returns an Iterator of any Entity that has `ComponentA`,
+     * // Change detection will update when component values are accessed and/or written to.
+     */
     query<const D extends readonly any[]>(data: D): QueryState<RemapQueryTupleToQueryData<D>> {
         return this.queryFiltered(data, []);
     }
+
+    /**
+ * @returns [`QueryState`] with a filter.
+ * This method is usually called when constructing a [`System`].
+ * @description
+ * queries by default are immutable. While there are no safeguards when changing a component value,
+ * change detection will **not** work. It is __highly__ recommended to use the `mut` modifier if you want to mutate any component(s).
+ * Systems are scheduled in such a way that any mutable access is safe in a multi-threaded environment. Not using `mut` can lead to undefined behaviour.
+ * 
+ * 
+ * @example
+ * world.queryFiltered([ComponentA], [With(ComponentB)])
+ * // returns an Iterator<[ComponentA]> for any Entity that has both `ComponentA` and `ComponentB`.
+ * 
+ * world.queryFiltered([ComponentA), [With(ComponentB), Without(ComponentC)])
+ * // returns an Iterator<[ComponentA]> for any Entity that has both `ComponentA` and `ComponentB` but not `ComponentC`.
+ */
 
     queryFiltered<const D extends readonly any[], const F extends readonly any[]>(data: D, filter: F): QueryState<RemapQueryTupleToQueryData<D>, RemapQueryTupleToQueryFilter<F>> {
         return QueryState.new(data, filter, this);
     }
 
-    removed(type: Component) {
+    removed(type: Component): Iterator<RemovedComponentEntity> {
         const id = this.#components.getId(type);
-        if (typeof id === 'number') {
-            return this.removedWithId(id);
-        }
-
-        return iter([])
+        return id != null ? this.removedWithId(id) : iter([]) as unknown as Iterator<RemovedComponentEntity>;
     }
 
-    removedWithId(component_id: ComponentId): Iterator<any> {
+    removedWithId(component_id: ComponentId): Iterator<RemovedComponentEntity> {
         const removed = this.#removed_components.get(component_id);
-
-        if (removed) {
-            return removed.iter_current_update_events()
-                .flatten()
-        }
-
-        return iter<any[]>([])
-    }
-
-    // @ts-ignore
-    triggerOnAdd(archetype: Archetype, entity: Entity, archetype_after_insert: any) { }
-    // @ts-ignore
-    triggerOnInsert(archetype: Archetype, entity: Entity, archetype_after_insert: any) { }
-    // @ts-ignore
-    triggerOnReplace(archetype: Archetype, entity: Entity, archetype_after_insert: any) { }
-    // @ts-ignore
-    triggerOnRemove(archetype: Archetype, entity: Entity, archetype_after_insert: any) { }
-    // @ts-ignore
-    triggerObservers(type: ObserverId, entity: Entity, archetype_after_insert: any) {
-
+        return removed ? removed.iter_current_update_events().flatten() : iter([]) as unknown as Iterator<RemovedComponentEntity>;
     }
 
     /**
@@ -1205,9 +1195,9 @@ class World {
      * If you insert a resource of a type that already exists,
      * you will overwrite any existing data.
      */
-    insertResource(value: Resource): void {
-        const component_id = this.#components.registerResource(value);
-        this.insertResourceById(component_id, value);
+    insertResource(resource: Resource): void {
+        const component_id = this.#components.registerResource(resource);
+        this.insertResourceById(component_id, resource.from_world(this));
     }
 
     removeResource<R extends Resource>(resource: R): Option<InstanceType<R>> {
@@ -1266,53 +1256,39 @@ class World {
 
     getResource<R extends Resource>(resource: R): Option<InstanceType<R>> {
         const id = this.#components.getResourceId(resource);
-        if (typeof id !== 'number') {
-            return
-        }
-
-        return this.getResourceById(id);
+        return id == null ? undefined : this.getResourceById(id)
     }
 
     getResourceRef<R extends Resource>(resource: R): Option<Ref<R>> {
         const component_id = this.#components.getResourceId(resource);
-        if (typeof component_id !== 'number') {
+
+        if (component_id == null) {
             return;
         }
 
         const tuple = this.getResourceWithTicks(component_id);
-        if (!tuple) {
-            return
-        }
-        const [ptr, tick_cells] = tuple;
-        const ticks = Ticks.fromTickCells(tick_cells, this.#last_change_tick, this.#change_tick);
-        return new Ref<R>(ptr as InstanceType<R>, ticks)
+        return !tuple ? undefined :
+            new Ref<R>(tuple[0] as InstanceType<R>, new Ticks(tuple[1], this.#last_change_tick, this.#change_tick))
     }
 
     getResourceMut<R extends Resource>(resource: R): Option<Mut<R>> {
         const id = this.#components.getResourceId(resource);
-        if (typeof id !== 'number') {
-            return
-        }
-
-        // return this.getResourceMutById<R>(id)
-        return this.#storages.resources.get(id)!.getMut(this.#last_change_tick, this.#change_tick) as Mut<R>;
+        return id == null ? undefined :
+            this.#storages.resources.get(id)!.getMut(this.#last_change_tick, this.#change_tick) as Mut<R>;
     }
 
     getResourceById<R extends Resource>(component_id: ComponentId): Option<InstanceType<R>> {
         return this.#storages
             .resources
             .get(component_id)
-            ?.getData() as Option<InstanceType<R>>
+            ?.getData() as InstanceType<R>
     }
 
     getResourceMutById<R extends Resource>(component_id: ComponentId): Option<Mut<R>> {
         const tuple = this.#storages.resources.get(component_id)?.getWithTicks();
-        if (tuple) {
-            const [ptr, _ticks] = tuple;
-            const ticks = TicksMut.fromTickCells(_ticks, this.#last_change_tick, this.#change_tick);
-            return new Mut<R>(ptr as Instance<R>, ticks);
-        }
-        return;
+        return tuple ?
+            new Mut<R>(tuple[0] as Instance<R>, new TicksMut(tuple[1], this.#last_change_tick, this.#change_tick)) :
+            undefined
     }
 
     getResourceWithTicks<R extends Resource>(component_id: ComponentId): Option<[InstanceType<R>, ComponentTicks]> {
@@ -1326,7 +1302,7 @@ class World {
 
         const data = this.__initializeResourceInternal<R>(component_id);
         if (!data.isPresent) {
-            data.set(func(), change_tick)
+            data.set(func(), change_tick);
         }
 
         return data.getMut(last_change_tick, change_tick)!;
@@ -1335,7 +1311,7 @@ class World {
     /**
      * Inserts a type esa
      */
-    insertResourceById(component_id: ComponentId, value: TypeId) {
+    insertResourceById<R extends Resource>(component_id: ComponentId, value: InstanceType<R>) {
         this.__initializeResourceInternal(component_id).set(value, this.#change_tick);
     }
 
@@ -1349,11 +1325,10 @@ class World {
         const component_id = this.registerResource(resource);
         if (!this.#storages.resources.get(component_id)?.isPresent) {
             const value = resource.from_world(this) as InstanceType<R>;
-            this.insertResourceById(component_id, value as TypeId)
+            this.insertResourceById(component_id, value as TypeId);
         }
 
-        const data = this.#storages.resources.get<R>(component_id)!;
-        return data.getMut(last_change_tick, change_tick)!;
+        return this.#storages.resources.get<R>(component_id)!.getMut(last_change_tick, change_tick)!;
     }
 
     iterResources() {
@@ -1375,12 +1350,11 @@ class World {
                 return
             }
             const [ptr, cells] = tuple;
-            const ticks = TicksMut.fromTickCells(cells,
+            return [component_info, new Mut(ptr, new TicksMut(
+                cells,
                 this.#last_change_tick,
                 this.readChangeTick()
-            )
-
-            return [component_info, new Mut(ptr, ticks)]
+            ))]
         })
     }
 
@@ -1392,11 +1366,6 @@ class World {
         return this.#storages.resources.getMut(component_id)?.deleteAndDrop() ?? unit;
     }
 
-    // @ts-ignore
-    insertOrSpawnBatch(iterable: Iterable<[Entity, Bundle]> & ArrayLike<[Entity, Bundle]>) {
-
-    }
-
     sendEvent<E extends Event>(type: E, event: InstanceType<E>): Option<EventId> {
         return this.sendEventBatch(type, event).next().value
     }
@@ -1405,7 +1374,7 @@ class World {
         return this.sendEvent(type, new event())
     }
 
-    sendEventBatch<E extends Event>(type: E, ...events: InstanceType<E>[]): SendBatchIds<E> {
+    sendEventBatch<E extends Event>(_type: E, ...events: InstanceType<E>[]): SendBatchIds {
         // const events_resource = this.get_resource(type);
         // events_resource.send_event()
         // const res = this.getResource(type.ECS_EVENTS_TYPE) as Events<E>;
@@ -1505,7 +1474,12 @@ class World {
         this.#storages.resources.clear()
     }
 
-    tryResourceScope<R extends Resource, U extends Mut<InstanceType<R>>>(resource: R, scope: (world: World, resource: U) => U): U | undefined {
+    tryResourceScope<R extends Resource, U extends Mut<InstanceType<R>>>(resource: R, scope: (world: World, resource: U) => U): Result<U, ErrorExt> {
+        const value = this.resourceScope(resource, scope);
+        return !value ? new ErrorExt(null, `Resource does not exist: ${resource.name}`) : value;
+    }
+
+    resourceScope<R extends Resource, U extends Mut<InstanceType<R>>>(resource: R, scope: (world: World, resource: U) => U): Option<U> {
         const last_change_tick = this.#last_change_tick;
         const change_tick = this.#change_tick;
 
@@ -1523,10 +1497,10 @@ class World {
         if (!tuple) {
             return;
         }
+
         const [ptr, ticks] = tuple;
         const value_mut = new Mut(ptr, new TicksMut(
-            ticks.added,
-            ticks.changed,
+            ticks,
             last_change_tick,
             change_tick
         )) as U
@@ -1538,25 +1512,20 @@ class World {
         return result;
     }
 
-    resourceScope<R extends Resource, U extends Mut<InstanceType<R>>>(resource: R, scope: (world: World, resource: U) => U): U {
-        const result = this.tryResourceScope(resource, scope);
-        if (result === undefined) {
-            throw new Error(`Resource does not exist: ${resource.name}`)
-        }
-        return result;
-    }
-
     add_schedule(schedule: Schedule) {
         this.getResourceOrInit(Schedules).v.insert(schedule);
     }
 
-    tryScheduleScope<R>(label: ScheduleLabel, scope: (world: World, schedule: Schedule) => R): Option<R> {
+    tryScheduleScope<R>(label: ScheduleLabel, scope: (world: World, schedule: Schedule) => R): Result<R, TryRunScheduleError> {
+        const result = this.scheduleScope(label, scope);
+        return !result ? new TryRunScheduleError(label) : result;
+    }
+
+    scheduleScope<R>(label: ScheduleLabel, scope: (world: World, schedule: Schedule) => R): Option<R> {
         const schedule = this.getResourceMut(Schedules)?.v.remove(label);
 
         if (!schedule) {
-            // console.log(`failed schedule scope: schedule ${label} does not exist`);
             return
-            // return new TryRunScheduleError(label);
         }
 
         const value = scope(this, schedule);
@@ -1565,33 +1534,16 @@ class World {
         if (old) {
             console.warn(`Schedule ${label} was inserted during a call to World.try_schedule_scope`);
         }
+
         return value;
     }
 
-    scheduleScope<R>(label: ScheduleLabel, scope: (world: World, schedule: Schedule) => R): R {
-        const res = this.tryScheduleScope(label, scope);
-        // console.log('scheduleScope: ', res);
-
-        if (!res) {
-            throw new TryRunScheduleError(label);
-        }
-
-        return res;
-    }
-
     tryRunSchedule(label: ScheduleLabel) {
-        return this.tryScheduleScope(label, (world, sched) => {
-            sched.run(world);
-            return sched;
-        })
+        return this.tryScheduleScope(label, schedule_run);
     }
 
     runSchedule(label: ScheduleLabel) {
-        // console.log('running schedule: ', label);
-        this.scheduleScope(label, (world, sched) => {
-            sched.run(world);
-            return sched;
-        })
+        this.scheduleScope(label, schedule_run);
     }
 
     runSystemOnce<In, Out>(system: System<In, Out>): Result<Out, RunSystemError> {

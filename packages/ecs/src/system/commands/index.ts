@@ -1,29 +1,44 @@
 import { TODO } from 'joshkaposh-iterator/src/util'
 import { Archetype } from '../../archetype';
 import { Bundle, InsertMode } from '../../bundle';
-import { Mut } from '../../change_detection';
+// import { Mut } from '../../change_detection';
 import { Component, ComponentId, Resource, Tick } from '../../component';
 import { Entities, Entity, EntityDoesNotExistDetails } from '../../entity';
-import { Event } from '../../event';
-import { ScheduleLabel } from '../../schedule';
-import { SystemIn } from '../system';
-import { Instance, MutOrReadonlyArray } from '../../util';
+// import { Event } from '../../event';
+// import { ScheduleLabel } from '../../schedule';
+// import { SystemIn } from '../system';
+import { MutOrReadonlyArray } from '../../util';
 import { CommandQueue, DeferredWorld, FromWorld, RawCommandQueue, World } from '../../world';
-import { BundleInput, EntityWorldMut } from '../../world/entity-ref';
+import {
+    BundleInput,
+    // EntityWorldMut
+} from '../../world/entity-ref';
 import { SystemMeta } from '../function-system';
-import { SystemParam, SystemParamClass, Deferred, SystemBuffer } from '../system-param';
+import { SystemParamClass, SystemBuffer, Deferred } from '../system-param';
 import {
     Command, init_resource, insert_batch, insert_resource, remove_resource,
     run_schedule,
+    send_event,
+    // run_schedule,
     // run_system, run_system_cached, run_system_cached_with, run_system_with,
-    send_event, spawn_batch,
+    // send_event,
+    spawn_batch,
     // trigger, trigger_targets, unregister_system, unregister_system_cached
 } from './command';
 import {
-    clear, despawn, EntityCommand, insert, insert_by_id, insert_if_new, log_components, move_components,
+    clear,
+    despawn,
+    // despawn,
+    EntityCommand, insert, insert_by_id, insert_if_new, log_components, move_components,
+    remove,
     // observe,
-    remove, remove_with_requires, retain
+    // remove,
+    remove_with_requires, retain
 } from './entity-command';
+import { CommandWithEntity, defineCommand, HandleError } from '../../error';
+import { Event } from '../../event';
+import { ScheduleLabel } from '../../schedule';
+import { Mut } from '../../change_detection';
 
 export * from './command';
 export * from './entity-command';
@@ -39,6 +54,9 @@ export class Commands implements SystemParamClass<typeof Commands> {
     #entities: Entities;
 
     constructor(queue: InternalQueue, entities: Entities) {
+        if (queue instanceof Commands) {
+            throw new Error('queue cannot be instance of commands')
+        }
         this.#queue = queue;
         this.#entities = entities;
     }
@@ -52,7 +70,7 @@ export class Commands implements SystemParamClass<typeof Commands> {
     }
 
     static new_from_entities(queue: CommandQueue, entities: Entities): Commands {
-        return TODO('Commands.new_from_entities()')
+        return TODO('Commands.new_from_entities()', queue, entities);
         // return new Commands(Deferred(queue), entities)
     }
 
@@ -65,41 +83,30 @@ export class Commands implements SystemParamClass<typeof Commands> {
         return [Deferred.init_state(
             world,
             system_meta,
-            Commands as unknown as SystemBuffer
+            CommandQueue as any
         ),
         world.entities
         ]
     }
 
     static new_archetype(state: FetchState, archetype: Archetype, system_meta: SystemMeta) {
-        state[0].new_archetype(state, archetype, system_meta);
-        state[1].new_archetype(state, archetype, system_meta)
+        Deferred.new_archetype(state[0] as any, archetype, system_meta);
     }
 
     static exec(state: FetchState, system_meta: SystemMeta, world: World) {
-        state[0].exec(state, system_meta, world);
-        state[1].exec(state, system_meta, world);
+        Deferred.exec(state[0] as unknown as SystemBuffer, system_meta, world);
     }
 
     static queue(state: FetchState, system_meta: SystemMeta, world: DeferredWorld) {
-        state[0].queue(state[0] as any, system_meta, world);
-        state[1].queue(state[1], system_meta, world);
+        Deferred.queue(state[0] as unknown as SystemBuffer, system_meta, world);
     }
 
     static validate_param(state: FetchState, system_meta: SystemMeta, world: World) {
-        // @ts-expect-error
-        return state[0].validate_param(state, system_meta, world) ??
-            // @ts-expect-error
-            state[1].validate_param(state, system_meta, world);
+        Deferred.validate_param(state[0] as unknown as SystemBuffer, system_meta, world);
     }
 
     static get_param(state: FetchState, _system_meta: SystemMeta, _world: World, _change_tick: Tick) {
-        return new Commands(state[0] as any, state[1]);
-    }
-
-
-    get() {
-        return this;
+        return new Commands(state[0] as unknown as InternalQueue, state[1]);
     }
 
     append(other: CommandQueue) {
@@ -113,16 +120,16 @@ export class Commands implements SystemParamClass<typeof Commands> {
         }
     }
 
-    spawn_empty() {
+    spawnEmpty() {
         return new EntityCommands(this.#entities.reserve_entity(), this);
     }
 
     spawn(...bundle: BundleInput) {
-        return this.spawn_empty().insert(bundle);
+        return this.spawnEmpty().insert(bundle);
     }
 
     entity(entity: Entity) {
-        const commands = this.get_entity(entity);
+        const commands = this.getEntity(entity);
         if (commands) {
             return new EntityCommands(entity, this);
         } else {
@@ -130,60 +137,43 @@ export class Commands implements SystemParamClass<typeof Commands> {
         }
     }
 
-    get_entity(entity: Entity) {
-        if (this.#entities.contains(entity)) {
-            return new EntityCommands(entity, this);
-        }
-
-        return;
+    getEntity(entity: Entity) {
+        return this.#entities.contains(entity) ? new EntityCommands(entity, this) : undefined;
     }
 
-    spawn_batch(bundles: BundleInput[]) {
+    spawnBatch(bundles: BundleInput[]) {
         this.queue(spawn_batch(bundles));
     }
 
-    queue<T, C extends Command<T> & HandleError<T>>(command: C) {
-        this.#queue_internal(command.handle_error());
+    queue(command: Command) {
+        this.#queue.push(command.handle_error());
     }
 
-    queue_handled<T, C extends Command<T> & HandleError<T>>(command: C, error_handler: (world: World, error: Error) => void) {
-        this.#queue_internal(command.handle_error_with(error_handler));
+    queueHandled(command: Command, error_handler: (world: World, error: Error) => void) {
+        this.#queue.push(command.handle_error_with(error_handler as any))
     }
 
-    #queue_internal(command: Command) {
-        this.#queue.push(command);
-    }
-
-    insert_or_spawn_batch(bundles: BundleInput[]) {
-        this.queue((world) => {
-            const invalid_entities = world.insert_or_spawn_batch(bundles);
-            if (invalid_entities) {
-                throw new Error(`Failed to "insert or spawn" bundle of type ${bundles[0]} into the following invalid entities: ${invalid_entities} `)
-            }
-        })
-    }
-
-    insert_batch(bundles: MutOrReadonlyArray<[Entity, Bundle][]>) {
+    insertBatch(bundles: MutOrReadonlyArray<[Entity, Bundle][]>) {
         this.queue(insert_batch(bundles, InsertMode.Replace))
     }
 
-    insert_batch_if_new(bundles: BundleInput[]) {
+    insertBatchIfNew(bundles: MutOrReadonlyArray<[Entity, Bundle][]>) {
         this.queue(insert_batch(bundles, InsertMode.Keep))
     }
 
-    try_insert_batch(bundles: MutOrReadonlyArray<[Entity, Bundle][]>) {
-        this.queue(insert_batch(bundles, InsertMode.Replace).handle_error_with(warn()))
+    tryInsertBatch(bundles: MutOrReadonlyArray<[Entity, Bundle][]>) {
+        this.queue(insert_batch(bundles, InsertMode.Replace).handle_error_with(console.warn))
     }
 
-    try_insert_batch_if_new(bundles: MutOrReadonlyArray<[Entity, Bundle][]>) {
-        this.queue(insert_batch(bundles, InsertMode.Keep).handle_error_with(warn()))
+    tryInsertBatchIfNew(bundles: MutOrReadonlyArray<[Entity, Bundle][]>) {
+        this.queue(insert_batch(bundles, InsertMode.Keep).handle_error_with(console.warn))
     }
 
-    init_resource<R extends Resource>(resource: R & FromWorld<R>) {
+    initResource<R extends Resource>(resource: R & FromWorld<R>) {
         this.queue(init_resource(resource))
     }
 
-    insert_resource<R extends Resource>(resource: R & FromWorld<R>) {
+    insertResource<R extends Resource>(resource: R & FromWorld<R>) {
         this.queue(insert_resource(resource))
     }
 
@@ -192,48 +182,48 @@ export class Commands implements SystemParamClass<typeof Commands> {
         this.queue(remove_resource(resource))
     }
 
-    run_system(id: SystemId) {
-        this.queue(run_system(id).handle_error_with(warn()))
-    }
+    // run_system(id: SystemId) {
+    //     this.queue(run_system(id).handle_error_with(warn()))
+    // }
 
-    run_system_with(id: SystemId, input: SystemIn<any>) {
-        this.queue(run_system_with(id, input).handle_error_with(warn()));
-    }
+    // run_system_with(id: SystemId, input: SystemIn<any>) {
+    //     this.queue(run_system_with(id, input).handle_error_with(warn()));
+    // }
 
-    register_system(system: IntoSystem<any, any>) {
-        const entity = this.spawn_empty().id;
-        const registered_system = RegisteredSystem.new(system.into_system());
-        this.entity(entity).insert(system);
-        return SystemId.from_entity(entity);
-    }
+    // register_system(system: IntoSystem<any, any>) {
+    //     const entity = this.spawn_empty().id;
+    //     const registered_system = RegisteredSystem.new(system.into_system());
+    //     this.entity(entity).insert(system);
+    //     return SystemId.from_entity(entity);
+    // }
 
-    unregister_system(system_id: SystemId) {
-        this.queue(unregister_system(system_id).handle_error_with(warn()))
-    }
+    // unregister_system(system_id: SystemId) {
+    //     this.queue(unregister_system(system_id).handle_error_with(warn()))
+    // }
 
-    unregister_system_cached(system_id: SystemId) {
-        this.queue(unregister_system_cached(system_id).handle_error_with(warn()))
-    }
+    // unregister_system_cached(system_id: SystemId) {
+    //     this.queue(unregister_system_cached(system_id).handle_error_with(warn()))
+    // }
 
-    run_system_cached(system: IntoSystem<any, any>) {
-        this.queue(run_system_cached(system).handle_error_with(warn()))
-    }
+    // run_system_cached(system: IntoSystem<any, any>) {
+    //     this.queue(run_system_cached(system).handle_error_with(warn()))
+    // }
 
-    run_system_cached_with(system: IntoSystem<any, any>, input: SystemIn<any>) {
-        this.queue(run_system_cached_with(system, input).handle_error_with(warn()))
-    }
+    // run_system_cached_with(system: IntoSystem<any, any>, input: SystemIn<any>) {
+    //     this.queue(run_system_cached_with(system, input).handle_error_with(warn()))
+    // }
 
-    trigger(event: Event) {
-        this.queue(trigger(event))
-    }
+    // trigger(event: Event) {
+    //     this.queue(trigger(event))
+    // }
 
-    trigger_targets(event: Event, targets: TriggerTargets) {
-        this.queue(trigger_targets(event, targets))
-    }
+    // trigger_targets(event: Event, targets: TriggerTargets) {
+    //     this.queue(trigger_targets(event, targets))
+    // }
 
-    add_observer(observer: IntoObserverSystem<Event, Bundle>) {
-        return this.spawn(Observer.new(observer));
-    }
+    // add_observer(observer: IntoObserverSystem<Event, Bundle>) {
+    //     return this.spawn(Observer.new(observer));
+    // }
 
     send_event(event: InstanceType<Event>) {
         this.queue(send_event(event));
@@ -241,7 +231,7 @@ export class Commands implements SystemParamClass<typeof Commands> {
     }
 
     run_schedule(label: ScheduleLabel) {
-        this.queue(run_schedule(label).handle_error_with(warn()))
+        this.queue(run_schedule(label).handle_error_with(console.warn))
     }
 }
 
@@ -258,89 +248,80 @@ export class EntityCommands {
         return this.#entity
     }
 
-    entry<T extends Component>(component: T): EntityEntryCommands {
+    entry<T extends Component>(component: T): EntityEntryCommands<T> {
         return new EntityEntryCommands(this, component)
     }
 
     insert(...bundle: BundleInput) {
-        return this.queue(insert(bundle));
+        return this.queue(insert(bundle) as any);
     }
 
-    insert_if(bundle: BundleInput, condition: () => boolean) {
+    insertIf(bundle: BundleInput, condition: () => boolean) {
         if (condition()) {
-            return this.insert(bundle)
+            return this.insert(bundle);
         }
         return this
     }
 
-    insert_if_new(bundle: BundleInput) {
-        return this.queue(insert_if_new(bundle));
+    insertIfNew(bundle: BundleInput) {
+        return this.queue(insert_if_new(bundle) as any);
     }
 
-    insert_if_new_and(bundle: BundleInput, condition: () => boolean) {
+    insertIfNewAnd(bundle: BundleInput, condition: () => boolean) {
         if (condition()) {
-            return this.queue(insert_if_new(bundle));
+            return this.queue(insert_if_new(bundle) as any);
         }
 
         return this;
     }
 
-    insert_by_id(component_id: ComponentId, value: InstanceType<Component>) {
-        return this.queue(insert_by_id(component_id, value));
+    insertById(component_id: ComponentId, value: InstanceType<Component>) {
+        return this.queue(insert_by_id(component_id, value) as any);
     }
 
-    // insert_by_id(component_id: ComponentId, value: InstanceType<Component>) {
-    //     return this.queue_handled(insert_by_id(component_id, value), silent());
-    // }
-
-    try_insert(bundle: BundleInput) {
-        return this.queue_handled(insert(bundle), silent());
+    tryInsert(bundle: BundleInput) {
+        return this.queueHandled(insert(bundle) as any, () => { });
     }
 
-    try_insert_if(bundle: BundleInput, condition: () => boolean) {
+    tryInsertIf(bundle: BundleInput, condition: () => boolean) {
         if (condition()) {
-            return this.try_insert(bundle)
+            return this.tryInsert(bundle)
         }
 
         return this;
     }
 
-    try_insert_if_new_and(bundle: BundleInput, condition: () => boolean) {
-        if (condition()) {
-            return this.try_insert_if_new(bundle)
-        }
+    tryInsertIfNewAnd(bundle: BundleInput, condition: () => boolean) {
+        return condition() ? this.tryInsertIfNew(bundle) : this;
+    }
 
-        return this;
+    tryInsertIfNew(bundle: BundleInput) {
+        return this.queueHandled(insert_if_new(bundle) as any, () => { })
     }
 
 
-    try_insert_if_new(bundle: BundleInput) {
-        return this.queue_handled(insert_if_new(bundle), silent())
+    removeWithRequires(bundle: BundleInput) {
+        return this.queue(remove_with_requires(bundle) as any)
     }
 
     remove(bundle: BundleInput) {
-        return this.queue_handled(remove(bundle), warn())
+        this.queue(remove(bundle) as any);
     }
 
-
-    try_remove(bundle: BundleInput) {
-        return this.queue_handled(remove(bundle), silent())
-    }
-
-    remove_with_requires(bundle: BundleInput) {
-        return this.queue(remove_with_requires(bundle))
+    tryRemove(bundle: BundleInput) {
+        return this.queueHandled(remove(bundle) as any, () => { })
     }
 
     clear() {
-        return this.queue(clear())
+        return this.queue(clear() as any)
     }
 
     despawn() {
-        return this.queue_handled(despawn(), warn());
+        return this.queueHandled(despawn() as any, console.warn);
     }
 
-    try_despawn() {
-        return this.queue_handled(despawn(), silent());
+    tryDespawn() {
+        return this.queueHandled(despawn() as any, () => { });
     }
 
     queue<T, M, C extends EntityCommand<T> & CommandWithEntity<M>>(command: C) {
@@ -348,27 +329,27 @@ export class EntityCommands {
         return this;
     }
 
-    queue_handled<T, M, C extends EntityCommand<T> & CommandWithEntity<M>>(command: C, error_handler: (world: World, error: Error) => void) {
-        this.#commands.queue_handled(command.with_entity(this.#entity) as any, error_handler);
+    queueHandled<T, M, C extends EntityCommand<T> & CommandWithEntity<M>>(command: C, error_handler: (world: World, error: Error) => void) {
+        this.#commands.queueHandled(command.with_entity(this.#entity) as any, error_handler);
         return this;
     }
 
     retain(bundle: BundleInput) {
-        return this.queue(retain(bundle));
+        return this.queue(retain(bundle) as any);
     }
 
-    log_components() {
-        return this.queue(log_components());
+    logComponents() {
+        return this.queue(log_components() as any);
     }
 
-    commands() {
+    get commands() {
         return this.#commands
     }
 
-    trigger(event: Event) {
-        this.#commands.trigger_targets(event, this.#entity);
-        return this;
-    }
+    // trigger(event: Event) {
+    //     this.#commands.trigger_targets(event, this.#entity);
+    //     return this;
+    // }
 
     // observer(observer: IntoObserverSystem<Event, Bundle>) {
     //     return this.queue(observe(observer))
@@ -392,11 +373,10 @@ export class EntityCommands {
     //     return this.queue(clone_components(target, bundle))
     // }
 
-    move_components(entity: Entity, bundle: BundleInput) {
-        return this.queue(move_components(entity, bundle))
+    moveComponents(entity: Entity, bundle: BundleInput) {
+        return this.queue(move_components(entity, bundle) as any)
     }
 }
-
 class EntityEntryCommands<T extends Component> {
     #entity_commands: EntityCommands;
     #type: T;
@@ -406,30 +386,31 @@ class EntityEntryCommands<T extends Component> {
         this.#type = type;
     }
 
-    and_modify(modify: (value: Mut<T>) => void) {
-        this.#entity_commands.queue((entity: EntityWorldMut) => {
-            const value = entity.get_mut(this.#type);
-            modify(value);
-        })
+    // and_modify(modify: (value: Mut<T>) => void) {
+    //     // @ts-expect-error
+    //     this.#entity_commands.queue(defineCommand(((entity) => {
+    //         const value = entity.getMut(this.#entity_commands.id, this.#type);
+    //         modify(value);
+    //     })))
+    //     return this;
+    // }
+
+    orInsert(type: InstanceType<T>) {
+        this.#entity_commands.insertIfNew(type);
         return this;
     }
 
-    or_insert(type: InstanceType<T>) {
-        this.#entity_commands.insert_if_new(type);
+    orTryInsert(type: InstanceType<T>) {
+        this.#entity_commands.tryInsertIfNew(type);
         return this;
     }
 
-    or_try_insert(type: InstanceType<T>) {
-        this.#entity_commands.try_insert_if_new(type);
-        return this;
-    }
-
-    or_insert_with(type: () => InstanceType<T>) {
-        return this.or_try_insert(type());
+    orInsertWith(type: () => InstanceType<T>) {
+        return this.orTryInsert(type());
     }
 
     or_default<D extends T extends new () => InstanceType<T> ? T : never>(this: EntityEntryCommands<D>) {
-        return this.or_insert(new this.#type() as InstanceType<T>)
+        return this.orInsert(new this.#type() as InstanceType<T>)
     }
 
     entity() {

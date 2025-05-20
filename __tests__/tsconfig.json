@@ -1,0 +1,27 @@
+{
+    "extends": "../tsconfig.json",
+    "include": [
+        "ecs",
+        "ecs-app",
+        "ecs-input",
+        "*.ts"
+    ],
+    "compilerOptions": {
+        "paths": {
+            "@packages/ecs": [
+                "../packages/ecs/src"
+            ],
+            "@packages/ecs-app": [
+                "../packages/ecs-app/src"
+            ],
+            "@packages/define": [
+                "../packages/define/src"
+            ],
+            "references": [
+                "../packages/define/src",
+                "../packages/ecs/src",
+                "../packages/ecs-app/src",
+            ]
+        },
+    }
+}

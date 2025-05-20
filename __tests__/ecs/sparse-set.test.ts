@@ -1,62 +1,60 @@
 import { assert, expect, test } from "vitest";
-import { SparseSet, SparseSets, ThinSparseSet } from "ecs/src/storage/sparse-set";
-import { ComponentId, id, index } from "../../src";
-import { Class } from "define";
-// import { is_none } from "joshkaposh-option";
-// import { StorageType } from "../src/ecs/storage";
-
-test('', () => { })
+import { defineComponent } from "define";
+import { StorageType, id, index, SparseSet, ThinSparseSet } from "ecs";
 
 class Foo { constructor(public value: number) { } }
 
-// class TestComponent1 { }
-// define_component(TestComponent1, StorageType.SparseSet)
-// class TestComponent2 { }
-// define_component(TestComponent2, StorageType.SparseSet)
+class TestComponent1 { }
+defineComponent(TestComponent1, StorageType.SparseSet)
+class TestComponent2 { }
+defineComponent(TestComponent2, StorageType.SparseSet)
 
-// const test_sets = <C extends Class, T extends InstanceType<C>>(set: SparseSet<T> | ThinSparseSet<T>, ty: C) => {
-//     const e0 = id(0);
-//     const e1 = id(1);
-//     const e2 = id(2);
-//     const e3 = id(3);
-//     const e4 = id(4);
+const test_sets = <T extends new (value: number) => any>(set: SparseSet<InstanceType<T>> | ThinSparseSet<InstanceType<T>>, ctor: (value: number) => InstanceType<T>) => {
+    const e0 = id(0);
+    const e1 = id(1);
+    const e2 = id(2);
+    const e3 = id(3);
+    const e4 = id(4);
 
-//     set.set(index(e1), new ty(1) as T)
-//     set.set(index(e2), new ty(2) as T)
-//     set.set(index(e3), new ty(3) as T)
+    set.set(index(e1), ctor(1));
+    set.set(index(e2), ctor(2));
+    set.set(index(e3), ctor(3));
 
-//     assert(set.get(index(e0)) == null);
-//     expect(set.get(index(e1))).toEqual(new Foo(1));
-//     expect(set.get(index(e2))).toEqual(new Foo(2));
-//     expect(set.get(index(e3))).toEqual(new Foo(3));
-//     assert(set.get(index(e4)) == null);
+    assert(set.get(index(e0)) == null);
+    expect(set.get(index(e1))).toEqual(ctor(1));
+    expect(set.get(index(e2))).toEqual(ctor(2));
+    expect(set.get(index(e3))).toEqual(ctor(3));
+    assert(set.get(index(e4)) == null);
 
-//     const iter_results = set.values().collect();
-//     expect(iter_results).toEqual([new Foo(1), new Foo(2), new Foo(3)]);
+    const iter_results = set.values().collect();
+    expect(iter_results).toEqual([ctor(1), ctor(2), ctor(3)]);
 
-//     expect(set.delete(index(e2))).toEqual(new Foo(2));
-//     assert(set.delete(index(e2)) == null)
-//     assert(set.get(index(e0)) == null);
-//     expect(set.get(index(e1))).toEqual(new Foo(1));
-//     assert(set.get(index(e2)) == null);
-//     expect(set.get(index(e3))).toEqual(new Foo(3));
-//     assert(set.get(index(e4)) == null);
+    expect(set.delete(index(e2))).toEqual(ctor(2));
+    assert(set.delete(index(e2)) == null)
+    assert(set.get(index(e0)) == null);
+    expect(set.get(index(e1))).toEqual(ctor(1));
+    assert(set.get(index(e2)) == null);
+    expect(set.get(index(e3))).toEqual(ctor(3));
+    assert(set.get(index(e4)) == null);
 
-//     expect(set.delete(index(e1))).toEqual(new Foo(1));
+    expect(set.delete(index(e1))).toEqual(ctor(1));
 
-//     assert(set.get(index(e0)) == null);
-//     assert(set.get(index(e1)) == null);
-//     assert(set.get(index(e2)) == null);
-//     expect(set.get(index(e3))).toEqual(new Foo(3));
-//     assert(set.get(index(e4)) == null);
+    assert(set.get(index(e0)) == null);
+    assert(set.get(index(e1)) == null);
+    assert(set.get(index(e2)) == null);
+    expect(set.get(index(e3))).toEqual(ctor(3));
+    assert(set.get(index(e4)) == null);
 
-//     set.set(index(e1), new Foo(10) as T);
-//     expect(set.get(index(e1))).toEqual(new Foo(10));
+    set.set(index(e1), ctor(10));
+    expect(set.get(index(e1))).toEqual(ctor(10));
 
-//     const f = set.getMut(index(e1)) as Foo;
-//     f.value = 11;
-//     expect(set.get(index(e1))).toEqual(new Foo(11));
-// }
+    const f = set.getMut(index(e1));
+    if (f) {
+        f.value = 11;
+    }
+
+    expect(set.get(index(e1))).toEqual(ctor(11));
+}
 
 // test('thin_sparse_set', () => {
 //     const set: ThinSparseSet<Foo> = new ThinSparseSet<Foo>();
@@ -108,55 +106,55 @@ class Foo { constructor(public value: number) { } }
 //     // expect(set.get(index(e1))).toEqual(new Foo(10));
 // })
 
-// test('sparse_set', () => {
-//     const set: SparseSet<Foo> = new SparseSet<Foo>();
-//     const e0 = id(0);
-//     const e1 = id(1);
-//     const e2 = id(2);
-//     const e3 = id(3);
-//     const e4 = id(4);
+test('sparse_set', () => {
+    const set: SparseSet<Foo> = new SparseSet<Foo>();
+    const e0 = id(0);
+    const e1 = id(1);
+    const e2 = id(2);
+    const e3 = id(3);
+    const e4 = id(4);
 
-//     set.set(index(e1), new Foo(1));
-//     set.set(index(e2), new Foo(2));
-//     set.set(index(e3), new Foo(3));
-
-
-
-//     set.get(0);
-//     assert(!set.get(0));
-//     set.get(1)
-//     set.get(2)
-//     set.get(3)
+    set.set(index(e1), new Foo(1));
+    set.set(index(e2), new Foo(2));
+    set.set(index(e3), new Foo(3));
 
 
-//     expect(set.get(1)).toEqual(new Foo(1));
-//     expect(set.get(2)).toEqual(new Foo(2));
-//     expect(set.get(3)).toEqual(new Foo(3));
 
-//     assert(set.get(index(e4)) == null);
+    set.get(0);
+    assert(!set.get(0));
+    set.get(1)
+    set.get(2)
+    set.get(3)
 
-//     let iter_results = set.values().collect();
-//     expect(iter_results).toEqual([new Foo(1), new Foo(2), new Foo(3)]);
-//     expect(set.delete(index(e2))).toEqual(new Foo(2));
-//     assert(set.delete(index(e2)) == null)
-//     assert(set.get(index(e0)) == null);
-//     expect(set.get(index(e1))).toEqual(new Foo(1));
-//     assert(set.get(index(e2)) == null);
-//     set.get(index(e3));
-//     expect(set.get(index(e3))).toEqual(new Foo(3));
-//     assert(set.get(index(e4)) == null);
 
-//     expect(set.delete(index(e1))).toEqual(new Foo(1));
+    expect(set.get(1)).toEqual(new Foo(1));
+    expect(set.get(2)).toEqual(new Foo(2));
+    expect(set.get(3)).toEqual(new Foo(3));
 
-//     assert(set.get(index(e0)) == null);
-//     assert(set.get(index(e1)) == null);
-//     assert(set.get(index(e2)) == null);
-//     expect(set.get(index(e3))).toEqual(new Foo(3));
-//     assert(set.get(index(e4)) == null);
+    assert(set.get(index(e4)) == null);
 
-//     set.set(index(e1), new Foo(10));
-//     expect(set.get(index(e1))).toEqual(new Foo(10));
-// })
+    let iter_results = set.values().collect();
+    expect(iter_results).toEqual([new Foo(1), new Foo(2), new Foo(3)]);
+    expect(set.delete(index(e2))).toEqual(new Foo(2));
+    assert(set.delete(index(e2)) == null)
+    assert(set.get(index(e0)) == null);
+    expect(set.get(index(e1))).toEqual(new Foo(1));
+    assert(set.get(index(e2)) == null);
+    set.get(index(e3));
+    expect(set.get(index(e3))).toEqual(new Foo(3));
+    assert(set.get(index(e4)) == null);
+
+    expect(set.delete(index(e1))).toEqual(new Foo(1));
+
+    assert(set.get(index(e0)) == null);
+    assert(set.get(index(e1)) == null);
+    assert(set.get(index(e2)) == null);
+    expect(set.get(index(e3))).toEqual(new Foo(3));
+    assert(set.get(index(e4)) == null);
+
+    set.set(index(e1), new Foo(10));
+    expect(set.get(index(e1))).toEqual(new Foo(10));
+})
 
 // test('thin sparse set', () => {
 //     const set: ThinSparseSet<Foo> = new ThinSparseSet<Foo>();

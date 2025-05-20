@@ -1,11 +1,11 @@
 import { iter, Iterator, Range } from "joshkaposh-iterator";
-import { is_none, u32, type Option } from 'joshkaposh-option'
-import type { ComponentId } from "./component";
+import { check, is_none, u32, type Option } from 'joshkaposh-option'
+import { ComponentId, Components } from "./component";
 import type { Entity, EntityLocation } from "./entity";
 import type { BundleId } from './bundle';
 import { type TableRow, TableId, SparseSet } from "./storage";
 import { StorageType } from "./storage";
-import { reserve, swap_remove, split_at, swap } from "./array-helpers";
+import { reserve, swap_remove, split_at } from "./array-helpers";
 import { entry } from "./util";
 import { World } from "./world";
 import { SystemMeta } from "./system";
@@ -31,13 +31,25 @@ export const ComponentStatus = {
 } as const;
 
 export class ArchetypeAfterBundleInsert implements BundleComponentStatus {
+    archetype_id: ArchetypeId;
+    bundle_status: ComponentStatus[];
+    required_components: any[];
+    added: ComponentId[];
+    existing: ComponentId[];
+
     constructor(
-        public archetype_id: ArchetypeId,
-        public bundle_status: ComponentStatus[],
-        public required_components: any[],
-        public added: ComponentId[],
-        public existing: ComponentId[],
-    ) { }
+        archetype_id: ArchetypeId,
+        bundle_status: ComponentStatus[],
+        required_components: any[],
+        added: ComponentId[],
+        existing: ComponentId[],
+    ) {
+        this.archetype_id = archetype_id
+        this.bundle_status = bundle_status
+        this.required_components = required_components
+        this.added = added
+        this.existing = existing
+    }
 
     iter_inserted(): Iterator<ComponentId> {
         return iter(this.added).chain(this.existing);
@@ -123,6 +135,7 @@ export interface InternalArchetypeEntity {
 
 export class ArchetypeEntity {
     private entity: Entity;
+    // @ts-expect-error
     private table_row: TableRow;
     constructor(entity: Entity, table_row: TableRow) {
         this.entity = entity;
@@ -149,17 +162,40 @@ export const ArchetypeRow = {
     INVALID: u32.MAX
 } as const;
 
+export type ArchetypeFlags = number;
+export const ArchetypeFlags = {
+    ON_ADD_HOOK: 1 << 0,
+    ON_INSERT_HOOK: 1 << 1,
+    ON_REPLACE_HOOK: 1 << 2,
+    ON_REMOVE_HOOK: 1 << 3,
+    ON_DESPAWN_HOOK: 1 << 4,
+    ON_ADD_OBSERVER: 1 << 5,
+    ON_INSERT_OBSERVER: 1 << 6,
+    ON_REPLACE_OBSERVER: 1 << 7,
+    ON_REMOVE_OBSERVER: 1 << 8,
+    ON_DESPAWN_OBSERVER: 1 << 9,
+    empty: 0
+} as const;
+
+class Observers {
+    updateArchetypeFlags(component_id: ComponentId, flags: ArchetypeFlags) {
+        return flags;
+    }
+};
+
 export class Archetype {
     #id: ArchetypeId;
     #table_id: TableId;
     #edges: Edges;
     #entities: InternalArchetypeEntity[];
     #components: SparseSet<ArchetypeComponentInfo>;
-    #table_components: ComponentId[];
-    #sparse_set_components: ComponentId[];
-
+    #table_components: readonly ComponentId[];
+    #sparse_set_components: readonly ComponentId[];
+    #flags: ArchetypeFlags;
     constructor(
+        components: Components,
         component_index: ComponentIndex,
+        observers: Observers,
         id: ArchetypeId,
         table_id: TableId,
         table_components: Iterator<[ComponentId, ArchetypeComponentId]>,
@@ -171,9 +207,16 @@ export class Archetype {
 
         const table_c = [];
         const sparse_c = [];
+        let flags: ArchetypeFlags = ArchetypeFlags.empty;
         for (const [idx, [component_id, archetype_component_id]] of table_components.enumerate()) {
             table_c.push(component_id);
 
+            const info = components.getInfo(component_id)!;
+
+            info.updateArchetypeFlags(flags);
+            observers.updateArchetypeFlags(component_id, flags);
+
+            archetype_components.set(component_id, { storage_type: StorageType.Table, archetype_component_id })
             archetype_components.set(component_id, {
                 storage_type: StorageType.Table,
                 archetype_component_id
@@ -184,6 +227,11 @@ export class Archetype {
 
         for (const [component_id, archetype_component_id] of sparse_set_components) {
             sparse_c.push(component_id);
+
+            const info = components.getInfo(component_id)!;
+
+            info.updateArchetypeFlags(flags);
+            observers.updateArchetypeFlags(component_id, flags);
 
             archetype_components.set(component_id, {
                 storage_type: StorageType.SparseSet,
@@ -200,6 +248,7 @@ export class Archetype {
         this.#table_components = table_c;
         this.#sparse_set_components = sparse_c;
         this.#edges = new Edges();
+        this.#flags = 0;
     }
 
     get id(): ArchetypeId {
@@ -217,6 +266,24 @@ export class Archetype {
         return this.#entities as unknown as ArchetypeEntity[];
     }
 
+    get length(): number {
+        return this.#entities.length;
+    }
+
+    /**
+     * @returns Returns true if and only if no `Component`s are in this `Archetype`
+     */
+    get isEmpty(): boolean {
+        return this.#entities.length === 0;
+    }
+
+    get component_count() {
+        return this.#components.length;
+    }
+
+    get flags() {
+        return this.#flags;
+    }
     /**
      * @description
      * Gets an iterator of all of the components stored in [`Table`]s.
@@ -253,10 +320,6 @@ export class Archetype {
         return this.#components.inner_keys() as ComponentId[];
     }
 
-    get component_count() {
-        return this.#components.length;
-    }
-
     __componentsWithArchetypeComponentId() {
         return this.#components.iter().map(([component_id, info]) => [component_id, info.archetype_component_id])
     }
@@ -270,17 +333,6 @@ export class Archetype {
      */
     edges(): Edges {
         return this.#edges;
-    }
-
-    get length(): number {
-        return this.#entities.length;
-    }
-
-    /**
-     * @returns Returns true if and only if no `Component`s are in this `Archetype`
-     */
-    get isEmpty(): boolean {
-        return this.#entities.length === 0;
     }
 
     /**
@@ -317,17 +369,40 @@ export class Archetype {
         this.#entities[row].table_row = table_row;
     }
 
-    hasAddObserver() {
-        return false
+    get hasAddHook() {
+        return check(this.#flags, ArchetypeFlags.ON_ADD_HOOK);
     }
-    hasInsertObserver() {
-        return false
+
+    get hasInsertHook() {
+        return check(this.#flags, ArchetypeFlags.ON_ADD_HOOK);
     }
-    hasReplaceObserver() {
-        return false
+
+    get hasReplaceHook() {
+        return check(this.#flags, ArchetypeFlags.ON_REPLACE_HOOK);
     }
-    hasRemoveObserver() {
-        return false
+    get hasRemoveHook() {
+        return check(this.#flags, ArchetypeFlags.ON_REMOVE_HOOK);
+    }
+
+    get hasDespawnHook() {
+        return check(this.#flags, ArchetypeFlags.ON_DESPAWN_HOOK);
+    }
+
+    get hasAddObserver() {
+        return check(this.#flags, ArchetypeFlags.ON_ADD_OBSERVER);
+    }
+    get hasInsertObserver() {
+        return check(this.#flags, ArchetypeFlags.ON_INSERT_OBSERVER);
+    }
+    get hasReplaceObserver() {
+        return check(this.#flags, ArchetypeFlags.ON_REPLACE_OBSERVER);
+    }
+    get hasRemoveObserver() {
+        return check(this.#flags, ArchetypeFlags.ON_REMOVE_OBSERVER);
+    }
+
+    get hasDespawnObserver() {
+        return check(this.#flags, ArchetypeFlags.ON_DESPAWN_OBSERVER);
     }
 
     /**
@@ -422,23 +497,22 @@ type ArchetypeRecord = {
 type ComponentIndex = Map<ComponentId, Map<ArchetypeId, ArchetypeRecord>>
 
 function hashByComponents(ident: ArchetypeComponents) {
-    return `Table:${ident.table_components.join(',')}, Sparse:${ident.sparse_set_components.join(',')}` as const
+    return `0:(${ident.table_components.join(',')})1:(${ident.sparse_set_components.join(',')})` as const
 }
 
 export class Archetypes {
     #archetypes: Archetype[];
     #archetype_component_count: number;
     #by_components: Map<ReturnType<typeof hashByComponents>, ArchetypeId>;
-    // #by_components: Map<ArchetypeComponents, ArchetypeId>;
     #by_component: ComponentIndex
 
-    constructor() {
+    constructor(components: Components) {
         this.#archetypes = [];
         this.#by_components = new Map();
         this.#by_component = new Map();
         this.#archetype_component_count = 0;
 
-        this.getIdOrSet(TableId.empty, [], [])
+        this.getIdOrSet(components, TableId.empty, [], [])
     }
 
     static init_state() { }
@@ -516,7 +590,7 @@ export class Archetypes {
      * 
      * [`TableId`] must exist in tables
      */
-    getIdOrSet(table_id: TableId, table_components: ComponentId[], sparse_set_components: ComponentId[]): ArchetypeId {
+    getIdOrSet(components: Components, table_id: TableId, table_components: ComponentId[], sparse_set_components: ComponentId[]): ArchetypeId {
 
         const archetype_identity: ArchetypeComponents = {
             sparse_set_components: structuredClone(sparse_set_components),
@@ -525,7 +599,6 @@ export class Archetypes {
 
         const archetypes = this.#archetypes;
         const component_index = this.#by_component;
-
         return entry(this.#by_components, hashByComponents(archetype_identity), () => {
             const { table_components, sparse_set_components } = archetype_identity;
             const id = archetypes.length;
@@ -537,7 +610,9 @@ export class Archetypes {
             this.#archetype_component_count += sparse_set_components.length;
             const sparse_set_archetype_components = new Range(sparse_start, this.#archetype_component_count);
             archetypes.push(new Archetype(
+                components,
                 component_index,
+                new Observers(),
                 id,
                 table_id,
                 iter(table_components).zip(table_archetype_components),

@@ -1,18 +1,16 @@
 import { ErrorExt, Option } from "joshkaposh-option";
-import { Component, Resource } from "ecs/src/component";
+import { defineEvent } from 'define';
+import type { Component, Resource } from "ecs/src/component";
+import { Event, EventCursor, Events } from "ecs/src/event";
+import type { Schedule, ScheduleBuildSettings, ScheduleLabel, SystemSet, Chain, IntoScheduleConfig, Schedulable } from "ecs/src/schedule";
+import type { IntoSystem, SystemInput } from "ecs/src/system";
 import { PlaceholderPlugin, Plugin, Plugins, PluginsState } from "./plugin";
-import { Schedule, ScheduleBuildSettings, ScheduleLabel } from "ecs/src/schedule";
-import { Event, EventCursor, Events, defineEvent } from "ecs/src/event";
-import { IntoScheduleConfig, Schedulable } from "ecs/src/schedule/config";
-import { SubApp, SubApps } from "./sub_app";
-import { $First, $Main, MainSchedulePlugin } from "./main_schedule";
-import { event_update_condition, event_update_system, EventUpdates } from "ecs/src/event/update";
-import { IntoSystem, SystemInput } from "ecs";
-import { SystemSet } from "ecs/src/schedule/set";
-import { Chain } from "ecs/src/schedule/schedule";
+import { SubApp, SubApps } from "./sub-app";
+import { $First, $Main, MainSchedulePlugin } from "./main-schedule";
+import { event_update_condition, event_update_system, EventUpdates } from "./update-events";
 
 type AppExit = InstanceType<typeof AppExit>;
-const AppExit = await defineEvent(class AppExit {
+const AppExit = defineEvent(class AppExit {
     #ty: 0 | 1;
     // @ts-ignore
     #err?: number;
@@ -30,6 +28,10 @@ const AppExit = await defineEvent(class AppExit {
 
     static error() {
         return AppExit.Error(1);
+    }
+
+    clone() {
+        return new AppExit(this.#ty, this.#err);
     }
 
     is_success() {
@@ -68,7 +70,6 @@ function run_once(app: App): AppExit {
     return app.shouldExit() ?? AppExit.Success();
 }
 
-
 export class App {
     #sub_apps: SubApps;
     #runner: (app: App) => AppExit
@@ -91,7 +92,7 @@ export class App {
 
         app.addPlugin(new MainSchedulePlugin());
         app.addSystems($First,
-            event_update_system.runIf(event_update_condition)
+            event_update_system.inSet(EventUpdates).runIf(event_update_condition)
             // event_update_system.inSet(EventUpdates)
             // .runIf(event_update_condition)
         )
@@ -125,6 +126,10 @@ export class App {
         this.#runner = run_once;
         const app = this;
 
+        app.finish();
+        app.cleanup();
+
+
         // const empty = new App();
 
         // app.#runner = empty.#runner;
@@ -133,7 +138,7 @@ export class App {
 
         // this.#runner(this);
         // this.#runner = run_once;
-        return (runner)(app);
+        return runner(app);
     }
 
     setRunner(runner: (app: App) => AppExit) {
@@ -202,7 +207,7 @@ export class App {
         return this;
     }
 
-    registerSystem<I extends SystemInput, O, M>(_input: I, system: IntoSystem<I, O>) {
+    registerSystem<I extends SystemInput, O>(_input: I, system: IntoSystem<I, O>) {
         return this.main.registerSystem(system);
     }
 
@@ -217,13 +222,11 @@ export class App {
     }
 
     getEvent<E extends Event>(type: E): Option<Events<E>> {
-        // @ts-expect-error
-        return this.world.getResource(type.ECS_EVENTS_TYPE);
+        return this.world.getResource(type);
     }
 
     event<E extends Event>(type: E): Events<E> {
-        // @ts-expect-error
-        const event = this.getResource(type.ECS_EVENTS_TYPE)
+        const event = this.getResource(type)
         if (!event) {
             throw new Error(`Expecting event ${type.name} to exist in World, but it does not. Did you forget to initialize this Resource? Resources are also implicitly added by App.add_event()`)
         }
@@ -369,7 +372,7 @@ export class App {
     }
 
     shouldExit(): Option<AppExit> {
-        const reader = new EventCursor();
+        const reader = new EventCursor(AppExit);
         const _events = this.world.getResource(AppExit);
 
         if (!_events) {

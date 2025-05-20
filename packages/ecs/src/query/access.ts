@@ -1,6 +1,6 @@
 import { iter, Iterator } from "joshkaposh-iterator";
 import { FixedBitSet } from "fixed-bit-set";
-import { type Option, type Result, ErrorExt, ErrorType } from "joshkaposh-option";
+import { type Option, type Result, ErrorType } from "joshkaposh-option";
 import { World } from "../world";
 
 export class Access {
@@ -1041,9 +1041,9 @@ export class AccessConflicts {
     format_conflict_list(world: World) {
         if (this.#type === 0) {
             // Individual
-            return this.#conflicts!.ones().map(index => {
-                return `${world.components.get_info(index)!.name()}`
-            }).collect().join(', ')
+            return this.#conflicts!.ones().map(
+                index => `${world.components.getInfo(index)!.name}`
+            ).intersperse(', ').sum()
         } else {
             // All
             return ''

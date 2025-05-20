@@ -1,10 +1,16 @@
 import { Iterator, done, item } from "joshkaposh-iterator";
-import { Archetype, ArchetypeEntity, Archetypes, AsQueryFetch, AsQueryItem, Entity, InternalArchetypeEntity, QueryData, QueryFilter, QueryState, StorageId, StorageIdArchetype, StorageIdTable, ThinQueryData, ThinQueryFilter, ThinQueryState, ThinWorld, Tick, World } from "ecs";
+import { Archetype, ArchetypeEntity, Archetypes, InternalArchetypeEntity } from "../archetype";
+import { AsQueryFetch, AsQueryItem, QueryData, ThinQueryData } from "./fetch";
+import { QueryState, StorageId, StorageIdArchetype, StorageIdTable, ThinQueryState } from "./state";
+import type { Entity } from "../entity";
 import { Table, Tables, ThinTable, ThinTables } from "../storage/table";
 import { type Option, u32 } from "joshkaposh-option";
 import { TODO } from "joshkaposh-iterator/src/util";
 import { debug_assert } from "../util";
-import { ComponentProxy } from "@packages/define";
+import { ComponentProxy } from "define";
+import { QueryFilter, ThinQueryFilter } from "./filter";
+import { ThinWorld, World } from "../world";
+import { Tick } from "../tick";
 
 export class QueryIter<D, F> extends Iterator<D> {
     #tables: Tables;
@@ -121,21 +127,23 @@ export class QueryIter<D, F> extends Iterator<D> {
         }
 
         debug_assert(row_end <= u32.MAX, 'too many entities');
+        const D = this.#D;
+        const F = this.#F;
+        const cursor = this.#cursor;
         // @ts-expect-error
-        this.#D.set_table(this.#cursor.__fetch, this.#query_state.__fetch_state, table);
+        D.set_table(cursor.__fetch, this.#query_state.__fetch_state, table);
         // @ts-expect-error
-        this.#F.set_table(this.#cursor.__filter, this.#query_state.__filter_state, table);
+        F.set_table(cursor.__filter, this.#query_state.__filter_state, table);
         const entities = table.entities;
+
         for (let row = row_start; row < row_end; row++) {
             const entity = entities[row];
-            const fetched = !this.#F.filter_fetch(this.#cursor.__filter, entity, row);
+            const fetched = !F.filter_fetch(cursor.__filter, entity, row);
             if (fetched) {
                 continue
             }
 
-            const elt = this.#D.fetch(this.#cursor.__fetch, entity, row);
-            accum = fold(accum, elt);
-
+            accum = fold(accum, this.#D.fetch(this.#cursor.__fetch, entity, row));
         }
 
         return accum;
@@ -182,12 +190,12 @@ export class QueryIter<D, F> extends Iterator<D> {
         for (let i = index_start; i < index_end; i++) {
             const archetype_entity = entities[i];
 
-            const fetched = !this.#F.filter_fetch(this.#cursor.__filter, archetype_entity.id(), archetype_entity.table_row)
+            const fetched = !this.#F.filter_fetch(this.#cursor.__filter, archetype_entity.entity, archetype_entity.table_row)
             if (fetched) {
                 continue
             }
 
-            const elt = this.#D.fetch(this.#cursor.__fetch, archetype_entity.id(), archetype_entity.table_row)
+            const elt = this.#D.fetch(this.#cursor.__fetch, archetype_entity.entity, archetype_entity.table_row)
             accum = fold(accum, elt)
         }
 
@@ -325,8 +333,8 @@ export class QueryIter<D, F> extends Iterator<D> {
         return [min_size, max_size]
     }
 
-    iter() {
-        return this
+    iter(): QueryIter<D, F> {
+        return this;
     }
 }
 
@@ -504,12 +512,12 @@ export class ThinQueryIter<D extends readonly any[], F extends readonly any[]> e
         for (let i = index_start; i < index_end; i++) {
             const archetype_entity = entities[i];
 
-            const fetched = !this.#F.filter_fetch(this.#cursor.filter, archetype_entity.id(), archetype_entity.table_row)
+            const fetched = !this.#F.filter_fetch(this.#cursor.filter, archetype_entity.entity, archetype_entity.table_row)
             if (fetched) {
                 continue
             }
 
-            const elt = this.#D.fetch(this.#cursor.fetch, archetype_entity.id(), archetype_entity.table_row)
+            const elt = this.#D.fetch(this.#cursor.fetch, archetype_entity.entity, archetype_entity.table_row)
             accum = fold(accum, elt)
         }
 
@@ -665,6 +673,102 @@ export class ThinQueryIter<D extends readonly any[], F extends readonly any[]> e
     }
 }
 
+const iterationDone = done<any>();
+
+function cursor_next_entity<D, F>(cursor: QueryIterationCursor<D, F>, state: QueryState<any, any>, tables: Tables, archetypes: Archetypes) {
+    const D = state.D;
+    const F = state.F;
+
+    if (cursor.is_dense) {
+        while (true) {
+            // we are on the beginning of the query, or finished processing a table, so skip to the next
+            if (cursor.__current_row === cursor.__current_len) {
+                cursor.__storage_id_index++;
+
+                if (cursor.__storage_id_index >= cursor.__storage_id_iter.length) {
+                    return iterationDone;
+                }
+
+                // @ts-expect-error
+                const table_id = cursor.__storage_id_iter[cursor.__storage_id_index].table_id;
+                const table = tables.get(table_id)!;
+                if (table.isEmpty) {
+                    continue
+                }
+
+                // SAFETY: table is from the world that fetch/filter were created for.
+                //  fetch_state / filter_state are the states that fetch/filter were initialized with
+                // @ts-expect-error
+                D.set_table(cursor.__fetch, state.__fetch_state, table)
+                // @ts-expect-error
+                F.set_table(cursor.__filter, state.__filter_state, table)
+                cursor.__table_entities = table.entities;
+                cursor.__current_len = table.entityCount;
+                cursor.__current_row = 0;
+            }
+
+            const entity = cursor.__table_entities[cursor.__current_row];
+            const row = cursor.__current_row;
+
+            if (!F.filter_fetch(cursor.__filter, entity, row)) {
+                cursor.__current_row += 1;
+                continue;
+            }
+
+            const elt = D.fetch(cursor.__fetch, entity, row);
+            cursor.__current_row += 1;
+            const item = cursor.__item;
+            item.value = elt;
+            return item;
+        }
+    } else {
+        while (true) {
+            if (cursor.__current_row === cursor.__current_len) {
+                cursor.__storage_id_index++;
+                if (cursor.__storage_id_index >= cursor.__storage_id_iter.length) {
+                    return iterationDone;
+                }
+
+                // @ts-expect-error
+                const archetype_id = cursor.__storage_id_iter[cursor.__storage_id_index].archetype_id;
+                const archetype = archetypes.get(archetype_id)!;
+                if (archetype.isEmpty) {
+                    continue
+                }
+
+                const table = tables.get(archetype.tableId)!;
+
+                // @ts-expect-error
+                D.set_archetype(cursor.__fetch, state.__fetch_state, archetype, table);
+                // @ts-expect-error
+                F.set_archetype(cursor.__filter, state.__filter_state, archetype, table);
+                cursor.__archetype_entities = archetype.entities;
+                cursor.__current_len = archetype.length;
+                cursor.__current_row = 0;
+            }
+
+            const archetype_entity = cursor.__archetype_entities[cursor.__current_row] as unknown as InternalArchetypeEntity;
+            if (!F.filter_fetch(
+                cursor.__filter,
+                archetype_entity.entity,
+                archetype_entity.table_row
+            )) {
+                cursor.__current_row += 1;
+                continue
+            }
+
+            const elt = D.fetch(cursor.__fetch, archetype_entity.entity, archetype_entity.table_row)
+
+            cursor.__current_row += 1;
+            const item = cursor.__item;
+            item.value = elt;
+            return item;
+        }
+    }
+}
+
+const LOG_TIME = true
+
 class QueryIterationCursor<D, F> {
     readonly is_dense: boolean;
     __table_entities: Entity[];
@@ -676,7 +780,7 @@ class QueryIterationCursor<D, F> {
     __fetch: AsQueryFetch<D>;
     __filter: AsQueryFetch<F>;
 
-    #item: IteratorResult<D>;
+    __item: IteratorResult<D>;
 
     constructor(
         fetch: AsQueryFetch<D>,
@@ -698,7 +802,7 @@ class QueryIterationCursor<D, F> {
         this.__current_len = current_len;
         this.__current_row = current_row;
         this.__storage_id_index = storage_id_index;
-        this.#item = { done: false, value: undefined } as IteratorResult<D>;
+        this.__item = { done: false, value: undefined } as IteratorResult<D>;
     }
 
     static init<D extends any, F extends any>(world: World, state: QueryState<QueryData, QueryFilter>, last_run: Tick, this_run: Tick) {
@@ -727,8 +831,6 @@ class QueryIterationCursor<D, F> {
 
     max_remaining(tables: Tables, archetypes: Archetypes): number {
         const ids = this.__storage_id_iter;
-        // const remaining_matched = this.is_dense ?
-
         const remaining_matched = this.is_dense ?
             // @ts-expect-error
             ids.reduce((acc, id) => acc += tables.get(id.table_id)!.entityCount, 0)
@@ -743,107 +845,116 @@ class QueryIterationCursor<D, F> {
         archetypes: Archetypes,
         query_state: QueryState<QueryData, QueryFilter>
     ): IteratorResult<D> {
-        const D = query_state.D;
-        const F = query_state.F;
+        // const D = query_state.D;
+        // const F = query_state.F;
 
-        if (this.is_dense) {
-            while (true) {
-                // we are on the beginning of the query, or finished processing a table, so skip to the next
-                if (this.__current_row === this.__current_len) {
-                    this.__storage_id_index++;
+        // if (LOG_TIME) {
+        //     console.time('cursor')
+        //     const entity = cursor_next_entity(this, query_state, tables, archetypes);
+        //     console.timeEnd('cursor')
+        //     return entity;
+        // }
 
-                    if (this.__storage_id_index >= this.__storage_id_iter.length) {
-                        return done();
-                    }
+        return cursor_next_entity(this, query_state, tables, archetypes);
+        // const self = this;
+        // if (self.is_dense) {
+        //     while (true) {
+        //         // we are on the beginning of the query, or finished processing a table, so skip to the next
+        //         if (self.__current_row === self.__current_len) {
+        //             self.__storage_id_index++;
 
-                    // @ts-expect-error
-                    const table_id = this.__storage_id_iter[this.__storage_id_index].table_id;
-                    const table = tables.get(table_id)!;
-                    if (table.isEmpty) {
-                        continue
-                    }
+        //             if (self.__storage_id_index >= self.__storage_id_iter.length) {
+        //                 return iterationDone;
+        //             }
 
-                    // SAFETY: table is from the world that fetch/filter were created for.
-                    //  fetch_state / filter_state are the states that fetch/filter were initialized with
-                    // @ts-expect-error
-                    D.set_table(this.__fetch, query_state.__fetch_state, table)
-                    // @ts-expect-error
-                    F.set_table(this.__filter, query_state.__filter_state, table)
-                    this.__table_entities = table.entities;
-                    this.__current_len = table.entityCount;
-                    this.__current_row = 0;
-                }
+        //             // @ts-expect-error
+        //             const table_id = self.__storage_id_iter[self.__storage_id_index].table_id;
+        //             const table = tables.get(table_id)!;
+        //             if (table.isEmpty) {
+        //                 continue
+        //             }
 
-                const entity = this.__table_entities[this.__current_row];
-                const row = this.__current_row;
+        //             // SAFETY: table is from the world that fetch/filter were created for.
+        //             //  fetch_state / filter_state are the states that fetch/filter were initialized with
+        //             // @ts-expect-error
+        //             D.set_table(self.__fetch, query_state.__fetch_state, table)
+        //             // @ts-expect-error
+        //             F.set_table(self.__filter, query_state.__filter_state, table)
+        //             self.__table_entities = table.entities;
+        //             self.__current_len = table.entityCount;
+        //             self.__current_row = 0;
+        //         }
 
-                if (!F.filter_fetch(this.__filter, entity, row)) {
-                    this.__current_row += 1;
-                    continue;
-                }
+        //         const entity = self.__table_entities[self.__current_row];
+        //         const row = self.__current_row;
 
-                const elt = D.fetch(this.__fetch, entity, row);
-                this.__current_row += 1;
-                const item = this.#item;
-                item.value = elt;
-                return item;
-            }
-        } else {
-            while (true) {
-                if (this.__current_row === this.__current_len) {
-                    this.__storage_id_index++;
-                    const sid = this.__storage_id_iter[this.__storage_id_index] as StorageIdArchetype;
-                    if (!sid) {
-                        return done()
-                    }
-                    const archetype_id = sid.archetype_id;
-                    const archetype = archetypes.get(archetype_id)!;
-                    if (archetype.isEmpty) {
-                        continue
-                    }
-                    const table = tables.get(archetype.tableId)!;
+        //         if (!F.filter_fetch(self.__filter, entity, row)) {
+        //             self.__current_row += 1;
+        //             continue;
+        //         }
 
-                    D.set_archetype(
-                        this.__fetch,
-                        // @ts-expect-error
-                        query_state.__fetch_state,
-                        archetype,
-                        table
-                    )
-                    F.set_archetype(
-                        this.__filter,
-                        // @ts-expect-error
-                        query_state.__filter_state,
-                        archetype,
-                        table
-                    )
-                    this.__archetype_entities = archetype.entities;
-                    this.__current_len = archetype.length;
-                    this.__current_row = 0;
-                }
+        //         const elt = D.fetch(self.__fetch, entity, row);
+        //         self.__current_row += 1;
+        //         const item = self.__item;
+        //         item.value = elt;
+        //         return item;
+        //     }
+        // } else {
+        //     while (true) {
+        //         if (self.__current_row === self.__current_len) {
+        //             self.__storage_id_index++;
+        //             const sid = self.__storage_id_iter[self.__storage_id_index] as StorageIdArchetype;
+        //             if (!sid) {
+        //                 return iterationDone
+        //             }
+        //             const archetype_id = sid.archetype_id;
+        //             const archetype = archetypes.get(archetype_id)!;
+        //             if (archetype.isEmpty) {
+        //                 continue
+        //             }
+        //             const table = tables.get(archetype.tableId)!;
 
-                const archetype_entity = this.__archetype_entities[this.__current_row] as unknown as InternalArchetypeEntity;
-                if (!F.filter_fetch(
-                    this.__filter,
-                    archetype_entity.id(),
-                    archetype_entity.table_row
-                )) {
-                    this.__current_row += 1;
-                    continue
-                }
+        //             D.set_archetype(
+        //                 self.__fetch,
+        //                 // @ts-expect-error
+        //                 query_state.__fetch_state,
+        //                 archetype,
+        //                 table
+        //             )
+        //             F.set_archetype(
+        //                 self.__filter,
+        //                 // @ts-expect-error
+        //                 query_state.__filter_state,
+        //                 archetype,
+        //                 table
+        //             )
+        //             self.__archetype_entities = archetype.entities;
+        //             self.__current_len = archetype.length;
+        //             self.__current_row = 0;
+        //         }
 
-                const elt = D.fetch(
-                    this.__fetch,
-                    archetype_entity.id(),
-                    archetype_entity.table_row
-                )
+        //         const archetype_entity = self.__archetype_entities[self.__current_row] as unknown as InternalArchetypeEntity;
+        //         if (!F.filter_fetch(
+        //             self.__filter,
+        //             archetype_entity.entity,
+        //             archetype_entity.table_row
+        //         )) {
+        //             self.__current_row += 1;
+        //             continue
+        //         }
 
-                this.__current_row += 1;
-                const item = this.#item;
-                item.value = elt;
-                return item;
-            }
-        }
+        //         const elt = D.fetch(
+        //             self.__fetch,
+        //             archetype_entity.entity,
+        //             archetype_entity.table_row
+        //         )
+
+        //         self.__current_row += 1;
+        //         const item = this.__item;
+        //         item.value = elt;
+        //         return item;
+        //     }
+        // }
     }
 
 }
@@ -998,7 +1109,7 @@ class ThinQueryIterationCursor<D extends readonly any[], F extends readonly any[
             //     const archetype_entity = this.archetype_entities[proxy.index];
             //     if (!F.filter_fetch(
             //         this.filter,
-            //         archetype_entity.id(),
+            //         archetype_entity.entity,
             //         archetype_entity.table_row
             //     )) {
             //         proxy.index += 1;
@@ -1007,7 +1118,7 @@ class ThinQueryIterationCursor<D extends readonly any[], F extends readonly any[
 
             //     const elt = D.fetch(
             //         this.fetch,
-            //         archetype_entity.id(),
+            //         archetype_entity.entity,
             //         archetype_entity.table_row
             //     )
 
@@ -1024,7 +1135,8 @@ class ThinQueryIterationCursor<D extends readonly any[], F extends readonly any[
         while (true) {
             this.storage_id_index++;
             if (this.storage_id_index >= storage_ids.length) {
-                return done();
+                return iterationDone
+                    ;
             }
 
             // @ts-expect-error
@@ -1064,7 +1176,7 @@ class ThinQueryIterationCursor<D extends readonly any[], F extends readonly any[
         while (true) {
             this.storage_id_index++;
             if (this.storage_id_index >= storage_ids.length) {
-                return done();
+                return iterationDone;
             }
 
             // @ts-expect-error
@@ -1133,7 +1245,7 @@ export class QueryCombinationIter<D extends readonly any[], F extends readonly a
     }
 
     next(): IteratorResult<AsQueryItem<D>> {
-        return done();
+        return iterationDone;
     }
 }
 
@@ -1155,7 +1267,7 @@ export class QueryManyIter<D extends readonly any[], F extends readonly any[]> e
     }
 
     next(): IteratorResult<AsQueryItem<D>> {
-        return done();
+        return iterationDone;
     }
 }
 
@@ -1178,6 +1290,6 @@ export class QueryManyUniqueIter<D extends readonly any[], F extends readonly an
     }
 
     next(): IteratorResult<AsQueryItem<D>> {
-        return done();
+        return iterationDone;
     }
 }

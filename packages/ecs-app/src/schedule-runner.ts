@@ -1,0 +1,88 @@
+import type { Option } from "joshkaposh-option";
+import { App, AppExit } from "./app";
+import { Plugin, PluginsState } from "./plugin";
+
+export type RunMode = { Once: number } | { Loop: Option<number> }
+
+export class ScheduleRunnerPlugin extends Plugin {
+    run_mode: RunMode;
+    private constructor(mode: RunMode) {
+        super()
+        this.run_mode = mode;
+    }
+
+    /**
+     * @returns a ScheduleRunner configured to be run only once.
+     */
+    static runOnce() {
+        return new ScheduleRunnerPlugin({ Once: 0 })
+    }
+
+    /**
+     * `duration` is in ms.
+     * @returns a ScheduleRunner configured to be looped.
+     */
+    static runLoop(duration?: number | null) {
+        return new ScheduleRunnerPlugin({ Loop: duration })
+    }
+
+
+    build(app: App): void {
+        const mode = this.run_mode;
+        const is_once = 'Once' in mode;
+        app.setRunner(() => {
+            const plugins_state = app.pluginsState();
+            if (plugins_state !== PluginsState.Cleaned) {
+                while (app.pluginsState() === PluginsState.Adding) {
+                }
+                app.finish();
+                app.cleanup();
+            }
+
+            if (is_once) {
+                app.update();
+                return app.shouldExit() ?? AppExit.Success();
+            } else {
+                const wait = mode.Loop;
+                const tick = (app: App, wait: Option<number>) => {
+                    const start_time = performance.now();
+                    app.update();
+                    const exit = app.shouldExit();
+                    if (exit) {
+                        console.log('exitting');
+                        return exit;
+                    }
+
+                    const end_time = performance.now();
+
+                    if (wait != null) {
+                        const execution_time = end_time - start_time;
+                        if (execution_time < wait) {
+                            return wait - execution_time;
+                        }
+                    }
+
+                    return
+                }
+
+                let animationId: number;
+                const tick_app = () => {
+                    const exit = tick(app, wait);
+                    if (exit) {
+                        console.log('should exit');
+
+                        cancelAnimationFrame(animationId);
+                        return exit;
+                    }
+                    animationId = requestAnimationFrame(tick_app);
+
+                }
+
+                const exit = tick_app();
+                return exit instanceof AppExit ? exit : AppExit.Success();
+            }
+
+
+        })
+    }
+}

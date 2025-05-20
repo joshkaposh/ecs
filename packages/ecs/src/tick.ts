@@ -1,7 +1,5 @@
-import { u32, type Option } from 'joshkaposh-option'
+import { u32 } from 'joshkaposh-option'
 import { MAX_CHANGE_AGE } from "./change_detection";
-
-export { MAX_CHANGE_AGE }
 
 export function relative_to(tick: number, other: number) {
     return u32.wrapping_sub(tick, other);

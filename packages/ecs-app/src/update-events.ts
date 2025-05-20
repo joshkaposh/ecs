@@ -1,6 +1,5 @@
-import { defineSystem, set } from "../define";
-import { defineCondition } from "../system";
-import { EventRegistry, ShouldUpdateEvents } from "./event_registry";
+import { ShouldUpdateEvents, EventRegistry } from "ecs";
+import { set, defineSystem, defineCondition } from "define";
 
 export const EventUpdates = set();
 

@@ -1,5 +1,5 @@
 import { FixedBitSet } from "fixed-bit-set";
-import { Archetype, ArchetypeGeneration, ArchetypeId, QueryData, QueryFilter, QueryIter, World, QueryDataTuple, All, Tick, Entity, QueryEntityError, EntitySet, QueryCombinationIter, ThinWorld, ThinQueryIter, ThinQueryData, ThinQueryFilter, AsQueryItem, AsQueryState, RemapQueryTupleToQueryData, RemapQueryTupleToQueryFilter } from "ecs";
+import { Archetype, ArchetypeGeneration, ArchetypeId, QueryData, QueryFilter, QueryIter, World, QueryDataTuple, All, Tick, Entity, QueryEntityError, QueryCombinationIter, ThinWorld, ThinQueryIter, ThinQueryData, ThinQueryFilter, AsQueryItem, AsQueryState, RemapQueryTupleToQueryData, RemapQueryTupleToQueryFilter } from "ecs";
 import { TableId } from "../storage/table";
 import { Access, FilteredAccess } from "./access";
 import { is_some, Result } from "joshkaposh-option";
@@ -479,6 +479,7 @@ export class QueryState<D extends QueryData, F extends QueryFilter = QueryFilter
     }
 
     iter_manual(world: World) {
+        return TODO('QueryState.iter_manual()', world);
         // return this.query_manual(world).iter_manual();
     }
 
@@ -516,46 +517,56 @@ export class QueryState<D extends QueryData, F extends QueryFilter = QueryFilter
         return TODO('QueryState.iter_many_mut', world, entities);
     }
 
-    iter_many_unique(world: World, entities: EntitySet): any {
+    iter_many_unique(world: World, entities: Set<Entity>): any {
         // return this.query(world).iter_many_unique_inner(entities);
         return TODO('QueryState.iter_many_unique', world, entities);
     }
 
-    iter_many_unique_manual(world: World, entities: EntitySet): any {
+    iter_many_unique_manual(world: World, entities: Set<Entity>): any {
         // return this.query_manual(world).iter_many_unique_inner(entities);
         return TODO('QueryState.iter_many_unique_manual', world, entities);
     }
 
-    iter_many_unique_mut(world: World, entities: EntitySet): any {
+    iter_many_unique_mut(world: World, entities: Set<Entity>): any {
         return TODO('QueryState.iter_many_unique_mut', world, entities);
         // return this.query_mut(world).iter_many_unique_inner(entities);
     }
 
     iter_combinations_unchecked<K extends number>(world: World, size: K) {
+        return TODO('QueryState.iter_combinations_unchecked()', world, size);
+
         // return this.query_unchecked(world).iter_combinations_inner(size);
     }
 
     single(world: World) {
+        return TODO('QueryState.single()', world);
+
         // return this.query(world).single_inner();
     }
 
     single_mut(world: World) {
+        return TODO('QueryState.single_mut()', world);
+
         // return this.query_mut(world).single_inner();
     }
 
     get_single(world: World) {
+        return TODO('QueryState.get_single()', world);
         // return this.query(world).get_single_inner();
     }
 
     get_single_mut(world: World) {
+        return TODO('QueryState.get_single_mut()', world);
         // return this.query_mut(world).get_single_inner();
     }
 
     get_single_unchecked(world: World) {
+        return TODO('QueryState.get_single_unchecked()', world);
         // return this.query_unchecked(world).get_single_inner();
     }
 
     get_single_unchecked_manual(world: World, last_run: Tick, this_run: Tick) {
+        return TODO('QueryState.get_single_unchecked_manual()', world, last_run, this_run);
         // return this.query_unchecked_manual_with_ticks(world, last_run, this_run).get_single_inner();
     }
 
@@ -976,7 +987,7 @@ export class ThinQueryState<D extends ThinQueryData, F extends ThinQueryFilter =
             console.warn('You have tried to join queries with different archetype generations. This could lead to unpredictable results.')
         }
 
-        const is_dense = this.is_dense && other.is_dense;
+        // const is_dense = this.is_dense && other.is_dense;
 
         const matched_tables = this.__matched_tables.clone()
         const matched_archetypes = this.__matched_archetypes.clone()
@@ -984,15 +995,15 @@ export class ThinQueryState<D extends ThinQueryData, F extends ThinQueryFilter =
         matched_tables.intersect_with(other.__matched_tables);
         matched_archetypes.intersect_with(other.__matched_archetypes);
 
-        const matched_storage_ids: StorageId[] = is_dense ?
-            matched_tables
-                .ones()
-                .map(id => ({ table_id: id }))
-                .collect() :
-            matched_archetypes
-                .ones()
-                .map(id => ({ archetype_id: id }))
-                .collect();
+        // const matched_storage_ids: StorageId[] = is_dense ?
+        //     matched_tables
+        //         .ones()
+        //         .map(id => ({ table_id: id }))
+        //         .collect() :
+        //     matched_archetypes
+        //         .ones()
+        //         .map(id => ({ archetype_id: id }))
+        //         .collect();
 
         return TODO('ThinQueryState.join_filtered');
         // return new ThinQueryState<NewD, NewF>(
@@ -1097,50 +1108,50 @@ export class ThinQueryState<D extends ThinQueryData, F extends ThinQueryFilter =
         return TODO('QueryState.iter_many_mut', world, entities);
     }
 
-    iter_many_unique(world: World, entities: EntitySet): any {
+    iter_many_unique(world: World, entities: Set<Entity>): any {
         // return this.query(world).iter_many_unique_inner(entities);
         return TODO('QueryState.iter_many_unique', world, entities);
     }
 
-    iter_many_unique_manual(world: World, entities: EntitySet): any {
+    iter_many_unique_manual(world: World, entities: Set<Entity>): any {
         // return this.query_manual(world).iter_many_unique_inner(entities);
         return TODO('QueryState.iter_many_unique_manual', world, entities);
 
     }
 
-    iter_many_unique_mut(world: World, entities: EntitySet): any {
+    iter_many_unique_mut(world: World, entities: Set<Entity>): any {
         return TODO('QueryState.iter_many_unique_mut', world, entities);
         // return this.query_mut(world).iter_many_unique_inner(entities);
     }
 
-    iter_combinations_unchecked<K extends number>(world: World, size: K) {
-        // return this.query_unchecked(world).iter_combinations_inner(size);
-    }
+    // iter_combinations_unchecked<K extends number>(world: World, size: K) {
+    //     // return this.query_unchecked(world).iter_combinations_inner(size);
+    // }
 
-    single(world: World) {
+    // single(world: World) {
 
-        // return this.query(world).single_inner();
-    }
+    //     // return this.query(world).single_inner();
+    // }
 
-    single_mut(world: World) {
-        // return this.query_mut(world).single_inner();
-    }
+    // single_mut(world: World) {
+    //     // return this.query_mut(world).single_inner();
+    // }
 
-    get_single(world: World) {
-        // return this.query(world).get_single_inner();
-    }
+    // get_single(world: World) {
+    //     // return this.query(world).get_single_inner();
+    // }
 
-    get_single_mut(world: World) {
-        // return this.query_mut(world).get_single_inner();
-    }
+    // get_single_mut(world: World) {
+    //     // return this.query_mut(world).get_single_inner();
+    // }
 
-    get_single_unchecked(world: World) {
-        // return this.query_unchecked(world).get_single_inner();
-    }
+    // get_single_unchecked(world: World) {
+    //     // return this.query_unchecked(world).get_single_inner();
+    // }
 
-    get_single_unchecked_manual(world: World, last_run: Tick, this_run: Tick) {
-        // return this.query_unchecked_manual_with_ticks(world, last_run, this_run).get_single_inner();
-    }
+    // get_single_unchecked_manual(world: World, last_run: Tick, this_run: Tick) {
+    //     // return this.query_unchecked_manual_with_ticks(world, last_run, this_run).get_single_inner();
+    // }
 
     #new_archetype_internal(archetype: Archetype) {
         if (

@@ -1,15 +1,34 @@
 import { drain, iter, range } from "joshkaposh-iterator";
 import { TODO, assert, resize } from "joshkaposh-iterator/src/util";
-import { Err, ErrorExt, Option, Result, is_error, u32, u8 } from 'joshkaposh-option';
+import { Option, u32 } from 'joshkaposh-option';
 import { ArchetypeId, ArchetypeRow } from "../archetype";
 import { TableId, TableRow } from "../storage/table";
 import { extend, reserve, swap_remove } from "../array-helpers";
-import { IdKind, Identifier, IdentifierError, IdentifierErrorType, IdentifierMask } from "../identifier";
-import { generation, id, index } from "./id";
-import { SystemMeta } from "../system";
-import { World } from "../world";
+import { type SystemMeta, defineParam } from "../system";
+import type { World } from "../world";
 
-export type EntityId = number;
+export type Entity = number;
+
+const MAX = u32.MAX;
+
+const index_mask = 0b00000000_00000000_11111111_11111111;
+const generation_mask = 0b11111111_11111111_00000000_00000000;
+
+export function index(id: number) {
+    return id & index_mask
+}
+
+export function generation(id: number) {
+    return (id & generation_mask) >> 16;
+}
+
+export function id(index: number, generation = 1) {
+    return (generation << 16) | index;
+}
+
+export function estr(entity: number) {
+    return entity === MAX ? 'PLACEHOLDER' : `${index(entity)}V${generation(entity)}`;
+}
 
 export type EntityLocation = {
     archetype_id: ArchetypeId;
@@ -46,123 +65,6 @@ const EntityMeta = {
 
 export const PLACEHOLDER = u32.MAX;
 
-export class EntityOld {
-    #index: EntityId;
-    #generation: number;
-
-    constructor(index: EntityId, generation: number) {
-        this.#index = index;
-        this.#generation = generation;
-    }
-
-    static get PLACEHOLDER(): EntityOld {
-        return EntityOld.from_raw(
-            u32.MAX
-        )
-    }
-
-    clone() {
-        return new EntityOld(this.#index, this.#generation);
-    }
-
-    /// Convert to a form convenient for passing outside of JavaScript.
-    ///
-    /// Only useful for identifying entities within the same instance of an application. Do not use
-    /// for serialization between runs.
-    ///
-    /// No particular structure is guaranteed for the returned bits.
-    to_bits(): bigint {
-        return IdentifierMask.pack_into_U64(this.#index, this.#generation);
-    }
-
-    static default() {
-        return EntityOld.from_raw(0);
-    }
-
-    /// Reconstruct an `Entity` previously destructured with [`Entity::to_bits`].
-    ///
-    /// Only useful when applied to results from `to_bits` in the same instance of an application.
-    ///
-    /// # Panics
-    ///
-    /// This method will likely panic if given `u64` values that did not come from [`Entity::to_bits`].
-    // bits: u64
-    static from_bits(bits: bigint) {
-        const entity = EntityOld.try_from_bits(bits);
-
-        if (entity instanceof Error) {
-            throw new Error('Attempted to initialize invalid bits as an entity')
-        }
-
-        return entity;
-    }
-
-    /// Reconstruct an `Entity` previously destructured with [`Entity::to_bits`].
-    ///
-    /// Only useful when applied to results from `to_bits` in the same instance of an application.
-    ///
-    /// This method is the fallible counterpart to [`Entity::from_bits`].
-    // bits: u64
-    static try_from_bits(bits: bigint): Result<EntityOld, Err<IdentifierErrorType>> {
-        const id = Identifier.try_from_bits(bits) as Identifier;
-        if (!is_error(id)) {
-            if (u8.from(id.kind()) === IdKind.Entity) {
-                return new EntityOld(id.low(), id.high());
-            }
-        }
-
-        return new ErrorExt(IdentifierError.InvalidEntityId(bits)) as any
-    }
-
-    static from_raw(index: number) {
-        return new EntityOld(index, 1)
-    }
-
-    static from_raw_and_generation(index: number, generation: number) {
-        return new EntityOld(index, generation);
-    }
-
-    static eq(a: EntityOld, b: EntityOld) {
-        return a.#index === b.#index && a.#generation === b.#generation;
-    }
-
-    // static ge(a: Entity, b: Entity) {
-    //     return TODO('Entity::ge()', a, b)
-    // }
-    // static le(a: Entity, b: Entity): boolean {
-    //     return TODO('Entity::le()', a, b)
-
-    // }
-
-    // static gt(a: Entity, b: Entity): boolean {
-    //     return TODO('Entity::gt()', a, b)
-
-    // }
-
-    // static lt(a: Entity, b: Entity): boolean {
-    //     return TODO('Entity::lt()', a, b)
-    // }
-
-    index(): number {
-        return this.#index
-    }
-    generation(): number {
-        return this.#generation
-    }
-
-    [Symbol.toPrimitive](hint: 'string' | 'number' | 'default') {
-        if (hint === 'number') {
-            return this.#index + this.#generation;
-        } else if (hint === 'string') {
-            return `${this.#index}-${this.#generation}`;
-
-        } else {
-            return this.#index + this.#generation;
-        }
-    }
-}
-
-export type Entity = number;
 export const Entity = Symbol('Entity');
 
 // class ReserveEntitiesIterator extends Iterator<Entity> {
@@ -215,25 +117,7 @@ export const AllocAtWithoutReplacement = {
     }
 } as const;
 
-// type EntityConfig = {
-//     /** Number of bits used for versioning. */
-//     generation_bits: number
-//     /** Bit mask for entity ID. */
-//     entity_mask: number
-//     /** Bit shift for generation_. */
-//     generation_shift: number
-//     /** Bit mask for generation_. */
-//     generation_mask: number
-// }
-
-//     generation_bits = generation_bits ?? 8;
-
-//     const entity_bits = 32 - generation_bits;
-//     const entity_mask = (1 << entity_bits) - 1;
-//     const version_shift = entity_bits;
-//     const generation_mask = ((1 << generation_bits) - 1) << version_shift;
-
-export class Entities {
+class Entities {
 
     __meta: EntityMeta[];
     /// The `pending` and `free_cursor` fields describe three sets of Entity IDs
@@ -292,7 +176,7 @@ export class Entities {
     static init_state() { }
 
     static get_param(_state: void, _system_meta: SystemMeta, world: World) {
-        return world.entities
+        return world.entities;
     }
 
     reserve_entity(): Entity {
@@ -635,6 +519,9 @@ export class Entities {
         return this.__len === 0;
     }
 }
+defineParam(Entities);
+
+export { Entities }
 
 // export class EntitiesOld {
 

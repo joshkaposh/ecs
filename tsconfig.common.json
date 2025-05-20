@@ -1,0 +1,61 @@
+{
+    "compilerOptions": {
+        "moduleResolution": "bundler",
+        "module": "ESNext",
+        "target": "ESNext",
+        "lib": [
+            "ESNext",
+            "DOM"
+        ],
+        "outDir": "dist",
+        "useDefineForClassFields": true,
+        "alwaysStrict": true,
+        "pretty": true,
+        "strict": true,
+        "isolatedModules": true,
+        "esModuleInterop": true,
+        "noUnusedLocals": true,
+        "noUnusedParameters": true,
+        "noImplicitReturns": true,
+        "skipLibCheck": true,
+        "declaration": true,
+        "declarationMap": true,
+        "composite": true,
+        "incremental": true,
+        "noEmitOnError": true,
+        "paths": {
+            "@packages/ecs": [
+                "./ecs/src"
+            ],
+            "@packages/ecs-app": [
+                "./ecs-app/src"
+            ],
+            "@packages/define": [
+                "./define/src"
+            ],
+            "@packages/ecs-input": [
+                "./ecs-input/src"
+            ],
+            "@packages/ecs-ui": [
+                "./ecs-ui/src"
+            ]
+        },
+        "references": [
+            {
+                "path": "./ecs"
+            },
+            {
+                "path": "./ecs-app"
+            },
+            {
+                "path": "./ecs-input"
+            },
+            {
+                "path": "./ecs-ui"
+            },
+            {
+                "path": "./ecs-math"
+            }
+        ]
+    },
+}

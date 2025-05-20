@@ -1,9 +1,10 @@
-import { ScheduleGraph, Tick, World } from "..";
+import { Result, Option, ErrorExt } from "joshkaposh-option";
+import { DeferredWorld, ScheduleGraph, SystemParamValidationError, Tick, World } from "..";
 import { Access } from "../query";
-import { And, AndMarker, Condition, Nand, NandMarker, Nor, NorMarker, Or, OrMarker, Xnor, XnorMarker, Xor, XorMarker } from "../schedule/condition";
-import { ScheduleConfig, ScheduleConfigs } from "../schedule/config";
+import { AndCondition, AndMarker, Condition, NandCondition, NandMarker, NorCondition, NorMarker, OrCondition, OrMarker, XnorCondition, XnorMarker, XorCondition, XorMarker } from "../schedule/condition";
+import { Schedulable, ScheduleConfig, ScheduleConfigs } from "../schedule/config";
 import { Ambiguity, NodeId } from "../schedule/graph";
-import { IntoSystemSet, SystemSet, SystemTypeSet } from "../schedule/set";
+import { InternedSystemSet, IntoSystemSet, set, SystemSet, SystemTypeSet } from "../schedule/set";
 import { SystemInput } from "./input";
 import { System, SystemIn } from "./system";
 
@@ -14,7 +15,6 @@ export type Combine<A extends System<any, any>, B extends System<any, any>, In =
         b: (input: any) => ReturnType<B['run']>,
     ): Out;
 }
-
 
 export class CombinatorSystem<
     Marker extends Combine<A, B>,
@@ -58,19 +58,22 @@ export class CombinatorSystem<
     readonly is_exclusive: boolean;
     readonly has_deferred: boolean;
 
+    pipe<Bin, Bout>(b: System<Bin, Bout>): System<any, Bout> {
+        return new PipeSystem(this, b);
+    }
+
     setName(new_name: string): System<any, any> {
         // @ts-expect-error
         this.name = new_name;
         return this as any;
     }
 
-    processConfig(schedule_graph: ScheduleGraph, config: ScheduleConfigs): NodeId {
+    processConfig(schedule_graph: ScheduleGraph, config: ScheduleConfig<Schedulable>): NodeId {
         //@ts-expect-error
         return schedule_graph.add_system_inner(config as any);
     }
 
-
-    intoConfig(): ScheduleConfigs {
+    intoConfig() {
         return new ScheduleConfig(
             this as any,
             {
@@ -82,48 +85,48 @@ export class CombinatorSystem<
         )
     }
 
-    inSet(set: SystemSet): ScheduleConfigs {
+    inSet(set: SystemSet) {
         return this.intoConfig().inSet(set);
     }
 
-    before<M>(set: IntoSystemSet<M>): ScheduleConfigs {
+    before<M>(set: IntoSystemSet<M>) {
         return this.intoConfig().before(set);
     }
 
-    beforeIgnoreDeferred<M>(set: IntoSystemSet<M>): ScheduleConfigs {
+    beforeIgnoreDeferred<M>(set: IntoSystemSet<M>) {
         return this.intoConfig().beforeIgnoreDeferred(set);
 
     }
 
-    after<M>(set: IntoSystemSet<M>): ScheduleConfigs {
+    after<M>(set: IntoSystemSet<M>) {
         return this.intoConfig().after(set);
     }
 
-    afterIgnoreDeferred<M>(set: IntoSystemSet<M>): ScheduleConfigs {
+    afterIgnoreDeferred<M>(set: IntoSystemSet<M>) {
         return this.intoConfig().afterIgnoreDeferred(set);
     }
 
-    distributiveRunIf<M>(condition: Condition<M, boolean>): ScheduleConfigs {
+    distributiveRunIf<M>(condition: Condition<M, boolean>) {
         return this.intoConfig().distributiveRunIf(condition);
     }
 
-    runIf<M>(condition: Condition<M, boolean>): ScheduleConfigs {
+    runIf<M>(condition: Condition<M, boolean>) {
         return this.intoConfig().runIf(condition);
     }
 
-    chain(): ScheduleConfigs {
+    chain() {
         return this.intoConfig().chain();
     }
 
-    chainIgnoreDeferred(): ScheduleConfigs {
+    chainIgnoreDeferred() {
         return this.intoConfig().chainIgnoreDeferred();
     }
 
-    ambiguousWith<M>(set: IntoSystemSet<M>): ScheduleConfigs {
+    ambiguousWith<M>(set: IntoSystemSet<M>) {
         return this.intoConfig().ambiguousWith(set);
     }
 
-    ambiguousWithAll(): ScheduleConfigs {
+    ambiguousWithAll() {
         return this.intoConfig().ambiguousWithAll();
     }
 
@@ -144,7 +147,7 @@ export class CombinatorSystem<
              * 
              * Short-curcuits: Condition `other` will not run if `this` condition returns false.
              */
-    and<C extends Condition<any>>(other: C): And<Condition<any, boolean>, C> {
+    and<C extends Condition<any>>(other: C): AndCondition<Condition<any, boolean>, C> {
         const a = this.intoSystem();
         const b = other.intoSystem();
         const name = `${a.name} && ${b.name}`;
@@ -161,7 +164,7 @@ export class CombinatorSystem<
      * 
      * Short-curcuits: Condition `other` will not run if `this` condition returns true.
      */
-    nand<C extends Condition<any>>(other: C): Nand<Condition<any, boolean>, C> {
+    nand<C extends Condition<any>>(other: C): NandCondition<Condition<any, boolean>, C> {
         const a = this.#a.intoSystem();
         const b = other.intoSystem();
         const name = `${a.name} && ${b.name}`;
@@ -178,7 +181,7 @@ export class CombinatorSystem<
      * 
      * Short-curcuits: Condition `other` will not run if `this` condition returns true.
      */
-    or<C extends Condition<any>>(other: C): Or<Condition<any, boolean>, C> {
+    or<C extends Condition<any>>(other: C): OrCondition<Condition<any, boolean>, C> {
         const a = this.#a.intoSystem();
         const b = other.intoSystem();
         const name = `${a.name} && ${b.name}`;
@@ -195,7 +198,7 @@ export class CombinatorSystem<
      * 
      * Short-curcuits: Condition `other` may not run if `this` condition returns false.
      */
-    nor<C extends Condition<any>>(other: C): Nor<Condition<any, boolean>, C> {
+    nor<C extends Condition<any>>(other: C): NorCondition<Condition<any, boolean>, C> {
         const a = this.#a.intoSystem();
         const b = other.intoSystem();
         const name = `${a.name} && ${b.name}`;
@@ -211,7 +214,7 @@ export class CombinatorSystem<
      * 
      * Both conditions will always run.
      */
-    xor<C extends Condition<any>>(other: C): Xor<Condition<any, boolean>, C> {
+    xor<C extends Condition<any>>(other: C): XorCondition<Condition<any, boolean>, C> {
         const a = this.#a.intoSystem();
         const b = other.intoSystem();
         const name = `${a.name} && ${b.name}`;
@@ -227,11 +230,15 @@ export class CombinatorSystem<
      * 
      * Both conditions will always run.
      */
-    xnor<C extends Condition<any>>(other: C): Xnor<Condition<any, boolean>, C> {
+    xnor<C extends Condition<any>>(other: C): XnorCondition<Condition<any, boolean>, C> {
         const a = this.#a.intoSystem();
         const b = other.intoSystem();
         const name = `${a.name} && ${b.name}`;
         return new CombinatorSystem(new XnorMarker(), a, b, name) as any;
+    }
+
+    clone(): System<any, any> {
+        return new CombinatorSystem(this.#type, this.#a.clone(), this.#b.clone(), this.name)
     }
 
     componentAccess() {
@@ -269,7 +276,7 @@ export class CombinatorSystem<
         this.#b.applyDeferred(world);
     }
 
-    queueDeferred(world: World): void {
+    queueDeferred(world: DeferredWorld): void {
         this.#a.queueDeferred(world);
         this.#b.queueDeferred(world);
     }
@@ -335,4 +342,208 @@ export class CombinatorSystem<
             is_send: ${this.is_send}
         }`
     }
+}
+
+export class PipeSystem<A extends System<any, any>, B extends System<any, any>> implements System<any, any> {
+    #a: A;
+    #b: B;
+    constructor(a: A, b: B) {
+        this.#a = a;
+        this.#b = b;
+
+        this.name = `${a} -> ${b}`;
+        this.fallible = a.fallible && b.fallible;
+        const type_id = `${a.type_id}+${b.type_id}` as UUID;
+        this.type_id = type_id;
+        this.system_type_id = type_id;
+        this.is_exclusive = a.is_exclusive || b.is_exclusive;
+        this.is_send = a.is_send && b.is_send;
+    }
+
+    readonly name: string;
+    readonly fallible: boolean;
+    readonly type_id: UUID;
+    readonly system_type_id: UUID;
+    readonly is_exclusive: boolean;
+    readonly is_send: boolean;
+
+    get has_deferred() {
+        return this.#a.has_deferred || this.#b.has_deferred;
+    }
+
+    pipe<Bin, Bout>(b: System<Bin, Bout>): System<any, Bout> {
+        return new PipeSystem(this, b);
+    }
+
+    intoConfig(): ScheduleConfig<Schedulable> {
+        const sets = this.defaultSystemSets!();
+        return new ScheduleConfig(
+            this as Schedulable,
+            {
+                hierarchy: sets,
+                dependencies: [],
+                ambiguous_with: Ambiguity.default()
+            },
+            []
+        )
+    }
+
+    before<M>(other: IntoSystemSet<M>) {
+        return this.intoConfig!().before(other);
+    }
+
+    after<M>(other: IntoSystemSet<M>) {
+        return this.intoConfig!().after(other);
+    }
+
+    inSet(set: SystemSet) {
+        return this.intoConfig!().inSet(set);
+    }
+
+    afterIgnoreDeferred<M>(set: IntoSystemSet<M>) {
+        return this.intoConfig!().afterIgnoreDeferred(set);
+    }
+
+    beforeIgnoreDeferred<M>(set: IntoSystemSet<M>) {
+        return this.intoConfig!().beforeIgnoreDeferred(set);
+    }
+
+    runIf(condition: Condition<any>) {
+        return this.intoConfig!().runIf(condition);
+    }
+
+    distributiveRunIf(condition: Condition<any>) {
+        return this.intoConfig!().distributiveRunIf(condition);
+    }
+
+    ambiguousWith<M>(set: IntoSystemSet<M>) {
+        return this.intoConfig!().ambiguousWith(set);
+    }
+
+    ambiguousWithAll() {
+        return this.intoConfig!!().ambiguousWithAll()
+    }
+
+    chain() {
+        return this.intoConfig!().chain();
+    }
+
+    chainIgnoreDeferred() {
+        return this.intoConfig!().chainIgnoreDeferred();
+    }
+
+
+    setName(new_name: string): System<any, any> {
+        // @ts-expect-error
+        this.name = new_name;
+        return this;
+    }
+
+    initialize(world: World): void {
+        this.#a.initialize(world);
+        this.#b.initialize(world);
+    }
+
+    validateParamUnsafe(world: World): Result<Option<void>, SystemParamValidationError> {
+        return this.#a.validateParamUnsafe(world) ?? this.#b.validateParamUnsafe(world);
+    }
+
+    validateParam(world: World): Result<Option<void>, SystemParamValidationError> {
+        return this.#a.validateParam(world) ?? this.#b.validateParam(world);
+    }
+
+    runUnsafe(input: any, world: World) {
+        input = this.#a.runUnsafe(input, world);
+        return this.#b.runUnsafe(input, world);
+    }
+
+    run(input: any, world: World) {
+        input = this.#a.run(input, world);
+        return this.#b.run(input, world);
+    }
+
+    runWithoutApplyingDeferred(input: any, world: World) {
+        input = this.#a.runWithoutApplyingDeferred(input, world);
+        return this.#b.runWithoutApplyingDeferred(input, world);
+    }
+
+    queueDeferred(world: DeferredWorld): void {
+        this.#a.queueDeferred(world);
+        this.#b.queueDeferred(world);
+    }
+
+    applyDeferred(world: World): void {
+        this.#a.applyDeferred(world);
+        this.#b.applyDeferred(world);
+    }
+
+    getLastRun(): Tick {
+        return this.#a.getLastRun();
+    }
+
+    setLastRun(tick: Tick): void {
+        this.#a.setLastRun(tick);
+        this.#b.setLastRun(tick);
+    }
+
+    checkChangeTick(tick: Tick): void {
+        this.#a.checkChangeTick(tick);
+        this.#b.checkChangeTick(tick)
+    }
+
+    componentAccess(): Access {
+        return this.#a.componentAccess().clone();
+
+    }
+
+    archetypeComponentAccess(): Access {
+        return this.#a.archetypeComponentAccess().clone();
+    }
+
+    updateArchetypeComponentAccess(world: World): void {
+        this.#a.updateArchetypeComponentAccess(world);
+        this.#b.updateArchetypeComponentAccess(world);
+    }
+
+    defaultSystemSets(): InternedSystemSet[] {
+        return [this.#a.intoSystemSet(), this.#b.intoSystemSet()]
+    }
+
+    intoSystem(): System<any, any> {
+        return this;
+    }
+
+    intoSystemSet(): SystemSet {
+        return set(this.#a, this.#b);
+    }
+
+    clone(): System<any, any> {
+        return new PipeSystem(this.#a.clone(), this.#b.clone())
+    }
+
+    processConfig(schedule_graph: ScheduleGraph, config: ScheduleConfigs<Schedulable>): Result<NodeId, ErrorExt<any>> {
+        return schedule_graph.addSystemInner(config as ScheduleConfig<Schedulable>)
+    }
+
+    [Symbol.toPrimitive]() {
+        return `PipeSystem {
+        name: ${this.name},
+        is_exclusive: ${this.is_exclusive},
+        is_send: ${this.is_send}
+        }`
+    }
+
+    [Symbol.toStringTag]() {
+        return `PipeSystem {
+            name: ${this.name},
+            is_exclusive: ${this.is_exclusive},
+            is_send: ${this.is_send}
+            }`
+    }
+
+
+
+
+
+
 }

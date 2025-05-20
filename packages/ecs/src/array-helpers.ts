@@ -1,4 +1,4 @@
-import { type Option, View, byte_length } from "joshkaposh-option";
+import { type Option, View } from "joshkaposh-option";
 import { unused } from 'joshkaposh-iterator/src/util'
 
 export const view = {

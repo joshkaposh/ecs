@@ -1,9 +1,10 @@
 import BTree from "sorted-btree";
 import { type Iterator, iter } from "joshkaposh-iterator";
+import { assert } from 'joshkaposh-iterator/src/util'
 import type { Result, Option } from "joshkaposh-option";
 import { DiGraph, NodeId, Incoming, Outgoing } from "./graph";
 import { ReportCycles, ScheduleBuildError, ScheduleGraph, SystemNode } from "./schedule";
-import { entry } from "../util";
+import { entry, TypeId } from "../util";
 import { ApplyDeferred } from "../system";
 import { ScheduleBuildPass } from "./pass";
 import { World } from "../world";
@@ -51,12 +52,12 @@ export class AutoInsertApplyDeferredPass implements ScheduleBuildPass<typeof Ign
     addAutoSync(graph: ScheduleGraph) {
         const id = new NodeId.System(graph.systems.length);
 
-        graph.systems.push(new SystemNode(new ApplyDeferred().intoSystem()));
+        graph.systems.push(new SystemNode(ApplyDeferred.intoSystem()));
         graph.systemConditions.push([]);
 
         // ignore ambiguities with auto sync points.
         // they aren't under user control, so no one should know or care.
-        graph.ambiguous_with_all.add(id.to_primitive());
+        graph.ambiguous_with_all.add(id);
 
         return id;
     }
@@ -76,7 +77,13 @@ export class AutoInsertApplyDeferredPass implements ScheduleBuildPass<typeof Ign
         }
 
         function set_has_conditions(graph: ScheduleGraph, node: NodeId): boolean {
-            return graph.setConditionsAt(node).length !== 0
+            const conditions = graph.getSetConditionsAt(node);
+
+            if (!conditions) {
+                return false
+            }
+
+            return conditions.length !== 0
                 || graph
                     .hierarchy
                     .graph
@@ -85,8 +92,9 @@ export class AutoInsertApplyDeferredPass implements ScheduleBuildPass<typeof Ign
         }
 
         function system_has_conditions(graph: ScheduleGraph, node: NodeId) {
-            return graph.systemConditions[node.index].length
-                && graph
+            assert(node.is_system());
+            return graph.systemConditions[node.index].length !== 0
+                || graph
                     .hierarchy
                     .graph
                     .edges_directed(node, Incoming)
@@ -262,5 +270,7 @@ export class AutoInsertApplyDeferredPass implements ScheduleBuildPass<typeof Ign
     }
 }
 
-const IgnoreDeferred = {};
+export const IgnoreDeferred: TypeId = {
+    type_id: v4() as UUID
+};
 

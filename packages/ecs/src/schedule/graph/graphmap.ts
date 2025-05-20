@@ -1,5 +1,5 @@
-// import { IndexMap } from "joshkaposh-index-map";
-import { IndexMap } from '../../temp-index-map'
+import { IndexMap } from "joshkaposh-index-map";
+// import { IndexMap } from '../../temp-index-map'
 import { iter } from "joshkaposh-iterator";
 import { assert } from "joshkaposh-iterator/src/util";
 import { swap_remove } from "joshkaposh-graph/src/array-helpers";

@@ -1,25 +1,18 @@
 {
     "extends": "../../tsconfig.json",
+    "include": [
+        "src",
+    ],
     "compilerOptions": {
+        "emitDeclarationOnly": true,
+        "outDir": "./dist",
         "paths": {
             "@packages/ecs": [
-                "../ecs/src"
+                "../packages/ecs/src"
             ],
-            "@packages/ecs-app": [
-                "../ecs-app/src"
-            ],
-            "@packages/ecs-math": [
-                "../ecs-math/src"
-            ],
-            "@packages/ecs-input": [
-                "../ecs-input/src"
-            ],
-            "@packages/ecs-ui": [
-                "../ecs-ui/src"
-            ],
-            "@packages/define": [
-                "../define/src"
-            ],
+            "references": [
+                "../ecs"
+            ]
         }
-    }
+    },
 }

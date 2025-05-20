@@ -50,7 +50,7 @@ test('lerp', () => {
 })
 
 function uint_wrapping(BITS: any) {
-    const type = uint[BITS];
+    const type = uint[BITS as keyof typeof uint];
     if (type.BITS !== 64) {
         const max = type.MAX;
         assert(type.wrapping_add(max, 1) === 0)

@@ -25,6 +25,8 @@ type TableMoveResult = {
 
 export { Column } from './column';
 
+export * from './object-store';
+
 export * from './thin-column';
 export * from './thin-table';
 
@@ -79,23 +81,19 @@ export class Table {
     }
 
     getAddedTick(component_id: ComponentId, row: TableRow) {
-        return this.getColumn(component_id)?.added_ticks[row];
+        return this.getColumn(component_id)?.ticks[row].added;
     }
 
     getChangedTick(component_id: ComponentId, row: TableRow) {
-        return this.getColumn(component_id)?.changed_ticks[row];
+        return this.getColumn(component_id)?.ticks[row].changed;
     }
 
     getDataSliceFor(component_id: ComponentId) {
-        return this.getColumn(component_id)?.getDataSlice(this.entityCount)
+        return this.getColumn(component_id)?.getDataSlice(this.entityCount);
     }
 
-    getChangedTicksSliceFor(component_id: ComponentId) {
-        return this.getColumn(component_id)?.getChangedTicksSlice(this.entityCount)
-    }
-
-    getAddedTicksSliceFor(component_id: ComponentId) {
-        return this.getColumn(component_id)?.getAddedTicksSlice(this.entityCount)
+    getTicksSliceFor(component_id: ComponentId) {
+        return this.getColumn(component_id)?.getTicksSlice(this.entityCount);
     }
 
     hasColumn(component_id: ComponentId) {

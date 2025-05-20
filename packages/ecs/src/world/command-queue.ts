@@ -1,28 +1,33 @@
 import { Option } from 'joshkaposh-option'
-import { DeferredWorld, SystemMeta, World } from "..";
-import { Command } from "../system/commands";
+import { World } from './world';
+import { DeferredWorld } from './deferred-world';
+import { SystemMeta, Command } from '../system';
 
 interface CommandMeta {
     consume_command_and_get_size(value: any, world: Option<World>, cursor: number): number
 }
 
 export class CommandQueue {
-    #bytes: any[]; // u8[]
+    #commands: any[]; // u8[]
     #cursor: number;
     #panic_recovery: any[]; // u8[]
 
     constructor(bytes: any[] = [], cursor: number = 0, panic_recovery: any[] = []) {
-        this.#bytes = bytes;
+        this.#commands = bytes;
         this.#cursor = cursor;
         this.#panic_recovery = panic_recovery;
     }
 
+    static from_world(_world: World) {
+        return new CommandQueue();
+    }
+
     clone() {
-        const cloned_bytes = new Array(this.#bytes.length);
+        const cloned_bytes = new Array(this.#commands.length);
         const cloned_panic_recovery = new Array(this.#panic_recovery.length);
 
-        for (let i = 0; i < this.#bytes.length; i++) {
-            const b = this.#bytes[i];
+        for (let i = 0; i < this.#commands.length; i++) {
+            const b = this.#commands[i];
             if (b?.clone) {
                 cloned_bytes[i] = b.clone();
             } else {
@@ -53,11 +58,11 @@ export class CommandQueue {
         this.get_raw().apply_or_drop_queued(world);
     }
 
-    exec(world: World) {
+    exec(_system_meta: SystemMeta, world: World) {
         this.apply(world);
     }
 
-    queue(world: DeferredWorld) {
+    queue(_system_meta: SystemMeta, world: DeferredWorld) {
         world.commands.append(this);
     }
 
@@ -66,23 +71,23 @@ export class CommandQueue {
     }
 
     append(other: CommandQueue) {
-        this.#bytes.push(...other.#bytes)
+        this.#commands.push(...other.#commands)
     }
 
     is_empty() {
-        return this.#cursor >= this.#bytes.length
+        return this.#cursor >= this.#commands.length
     }
 
     get_raw() {
         return new RawCommandQueue(
-            this.#bytes,
+            this.#commands,
             this.#cursor,
             this.#panic_recovery
         )
     }
 
     drop() {
-        if (this.#bytes.length !== 0) {
+        if (this.#commands.length !== 0) {
             console.warn('CommandQueue has un-applied commands being dropped. Did you forget to call SystemState.apply()?')
         }
 
@@ -99,73 +104,71 @@ export class CommandQueue {
 }
 
 export class RawCommandQueue {
-    #bytes: number[]; // u8[]
+    #commands: { meta: CommandMeta; command: Command }[];
     #cursor: number;
-    #panic_recovery: number[]; // u8[]
+    #panic_recovery: { meta: CommandMeta; command: Command }[];
 
-    constructor(bytes: number[] = [], cursor: number = 0, panic_recovery: number[] = []) {
-        this.#bytes = bytes;
+    constructor(bytes: { meta: CommandMeta; command: Command }[] = [], cursor: number = 0, panic_recovery: { meta: CommandMeta; command: Command }[] = []) {
+        this.#commands = bytes;
         this.#cursor = cursor;
         this.#panic_recovery = panic_recovery;
     }
 
+    static from_world(_world: World) {
+        return new RawCommandQueue();
+    }
+
 
     is_empty() {
-        return this.#cursor >= this.#bytes.length
+        return this.#cursor >= this.#commands.length
     }
 
     push(command: Command) {
-        const meta: CommandMeta = {
-            consume_command_and_get_size(_value, world, cursor) {
-                cursor++;
-                if (world) {
-                    command.exec(world);
-                    world.flush();
-                }
-                return cursor;
-            },
-        }
-
-        this.#bytes.push({ meta, command } as unknown as number);
+        this.#commands.push({
+            meta: {
+                consume_command_and_get_size(_value, world, cursor) {
+                    cursor++;
+                    if (world) {
+                        command.exec(world);
+                        world.flush();
+                    }
+                    return cursor;
+                },
+            }, command
+        });
     }
 
     apply_or_drop_queued(world: Option<World>) {
         const start = this.#cursor;
-        const stop = this.#bytes.length;
+        const stop = this.#commands.length;
         let local_cursor = start;
         this.#cursor = stop;
 
         while (local_cursor < stop) {
-            const meta = this.#bytes[local_cursor];
+            const cmd = this.#commands[local_cursor];
             local_cursor += 1;
 
             try {
-                // @ts-expect-error
-                const cmd = meta.command;
-                // @ts-expect-error
-                (meta.meta.consume_command_and_get_size)(cmd, world, local_cursor);
+                cmd.meta.consume_command_and_get_size(cmd.command, world, local_cursor);
             } catch (error) {
                 const panic_recovery = this.#panic_recovery;
-                const bytes = this.#bytes;
+                const bytes = this.#commands;
                 const current_stop = bytes.length;
                 panic_recovery.push(...bytes.slice(local_cursor, current_stop));
                 bytes.length = start;
                 this.#cursor = start;
 
                 if (start === 0) {
-                    console.log('adding to bytes: ', panic_recovery);
-
                     bytes.push(...panic_recovery);
                 }
             }
         }
 
-        this.#bytes.length = start;
+        this.#commands.length = start;
         this.#cursor = start;
     }
 
     clone() {
-        return new RawCommandQueue(this.#bytes, this.#cursor, this.#panic_recovery)
-        // return new RawCommandQueue(structuredClone(this.#bytes), this.#cursor, structuredClone(this.#panic_recovery))
+        return new RawCommandQueue(this.#commands, this.#cursor, this.#panic_recovery)
     }
 }

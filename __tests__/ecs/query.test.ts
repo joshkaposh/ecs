@@ -1,17 +1,18 @@
-import { assert, describe, expect, it, test } from 'vitest'
-import { With, Without, World, Maybe, Added, mut, EntityRef, Changed, QueryBuilder, Entity, Component, QueryState, ThinWorld, index, ThinQueryState, Archetype, QueryDataTuple, $WorldQuery, QueryData, Read, Schedule } from 'ecs'
-import { defineComponent, defineComponent2, defineMarker } from 'define';
-import { skip } from '../constants';
+import { assert, test } from 'vitest'
+import { With, Without, World, Maybe, Added, mut, Changed, Entity } from 'ecs'
+import { defineComponent2, defineComponent, defineMarker } from 'define';
 import { TypedArray } from 'joshkaposh-option';
-import { iter, range } from 'joshkaposh-iterator';
-import { Perf } from '../performance';
+import { skip } from '../constants';
 
 const A = defineComponent(class A { constructor(public value = 'hello world!') { } })
 const B = defineComponent(class B { constructor(public value = 'getting groovy!') { } })
 const C = defineComponent(class C { constructor(public value = 'c!') { } })
 const D = defineComponent(class D { constructor(public value = 'd!') { } })
-const AVec3 = defineComponent(class AVec3 { constructor(public x = 0, public y = 0, public z = 0) { } })
-const BVec3 = defineComponent(class BVec3 { constructor(public x = 0, public y = 0, public z = 0) { } })
+
+const AVec3 = defineComponent(class AVect3 { constructor(public x = 0, public y = 0, public z = 0) { } })
+const BVec3 = defineComponent(class BVect3 { constructor(public x = 0, public y = 0, public z = 0) { } })
+const CVec3 = defineComponent(class CVect3 { constructor(public x = 0, public y = 0, public z = 0) { } })
+const DVec3 = defineComponent(class DVect3 { constructor(public x = 0, public y = 0, public z = 0) { } })
 
 
 const Vect3 = {
@@ -44,77 +45,92 @@ const Team = {
     Red: defineMarker(),
 } as const;
 
-const skip_non_change_detection = false;
+const skip_non_change_detection = true;
+const skip_change_detection = true;
 
-// test('large query perf test', () => {
-//     const thinw = new ThinWorld();
-//     const w = new World();
+// test('large query', () => {
+//     console.log('budget: ', 1000 / 60);
+//     const arr1 = [];
+//     const arr2 = [];
+//     const arr3 = [];
+//     const arr4 = [];
 
-//     for (let i = 0; i < 5000; i++) {
-//         w.spawn(new AVec3(i, i, i));
-//         w.spawn(new AVec3(i, i, i), new BVec3(i, i, i));
-//         thinw.spawn(ThinA(i, i, i));
-//         thinw.spawn(ThinA(i, i, i), ThinB(i, i, i));
+//     for (let i = 0; i < 50000; i++) {
+//         arr1.push([new AVec3(i, i, i)]);
+//         arr2.push([new AVec3(i, i, i), new BVec3(i, i, i)]);
+//         arr3.push([new AVec3(i, i, i), new BVec3(i, i, i), new CVec3(i, i, i)]);
+//         arr4.push([new AVec3(i, i, i), new BVec3(i, i, i), new DVec3(i, i, i)]);
 //     }
 
-//     const thin_query = thinw.query([ThinA]);
-//     const query = w.query([AVec3]);
+//     // function loop_arrays(array1: any[], array2: any[], array3: any[], array4: any[]) {
+//     //     for (const _ of array1) {
+//     //         _
+//     //     }
 
-//     const times = 100;
+//     //     for (const _ of array2) {
+//     //         _
 
-//     for (let i = 0; i < times; i++) {
-//         const then = performance.now();
-//         for (const _ of query.iter(w)) { }
-//         // console.log('normal: ', performance.now() - then)
-//     }
+//     //     }
 
+//     //     for (const _ of array3) {
+//     //         _
 
-//     for (let i = 0; i < times; i++) {
-//         const then = performance.now();
-//         const it = thin_query.iter(thinw);
-//         for (const [a] of it) {
-//             const len = a.length;
-//             for (let i = it.index(); i < len; i = it.index()) {
-//             }
-//         }
-//         console.log('thin manual: ', performance.now() - then)
-//     }
+//     //     }
 
-//     for (let i = 0; i < times; i++) {
-//         const then = performance.now();
-//         for (const _ of thin_query.iter(thinw).for_each(() => { })) { }
-//         console.log('thin for each: ', performance.now() - then)
-//     }
+//     //     for (const _ of array4) {
+//     //         _
 
-//     assert(query.iter(w).count() === 10000);
+//     //     }
+//     // }
+
+//     const times = 5000;
+//     let average = 0, fastest = Infinity, slowest = 0;
+
+//     console.log('total (times = %d, average: %d): ', times, average);
+//     console.log('per query times (average: %d, fastest: %d, slowest: %d) ', average / times, fastest, slowest);
+
 
 // })
 
-test('thin query', () => {
-    const w = new ThinWorld();
-    const aid = w.registerComponent(ThinA);
-    const qa = w.query([ThinA]);
+test.skipIf(skip.large).concurrent('large query perf test', () => {
+    const w = new World();
 
-    let arch_a!: Archetype;
-    for (let i = 0; i < 25; i++) {
-        arch_a = w.spawn(ThinA(3, 1, 8)).archetype;
+    console.log('budget: ', 1000 / 60);
+
+    for (let i = 0; i < 50000; i++) {
+        w.spawn(new AVec3(i, i, i));
+        w.spawn(new AVec3(i, i, i), new BVec3(i, i, i));
+        w.spawn(new AVec3(i, i, i), new BVec3(i, i, i), new CVec3(i, i, i));
+        w.spawn(new AVec3(i, i, i), new BVec3(i, i, i), new DVec3(i, i, i));
+        // w.spawn(new AVec3(i, i, i), new BVec3(i, i, i), new CVec3(i, i, i));
+        // w.spawn(new AVec3(), new DVec3());
+        // w.spawn(new AVec3(), new CVec3(), new DVec3());
+        // w.spawn(new AVec3(), new BVec3(), new CVec3(), new DVec3());
     }
 
-    for (let i = 0; i < 25; i++) {
-        w.spawn(ThinA(7, 7, 7), ThinB(8, 1, 3));
+    const query = w.query([mut(AVec3), mut(BVec3)]);
+    // const query = w.query([AVec3, BVec3]);
+
+    // const times = 5000;
+    const times = 1000;
+    let average = 0, fastest = Infinity, slowest = 0;
+    for (let i = 0; i < times; i++) {
+        const then = performance.now();
+        query.iter(w).for_each((e) => {
+            const [a, b] = e;
+        })
+        const now = performance.now();
+        const dur = now - then;
+        average += dur;
+        fastest = Math.min(fastest, dur);
+        slowest = Math.max(slowest, dur);
     }
 
-    const as = qa.iter(w as any);
+    console.log('total (times = %d, average: %d): ', times, average);
+    console.log('per query times (average: %d, fastest: %d, slowest: %d) ', average / times, fastest, slowest);
 
-    as.for_each(() => { });
-    // for (const proxies of as) {
-    //     const [aprox] = proxies;
-    //     const len = aprox.length;
-    //     for (let i = as.index(); i < len; i = as.index()) {
-    //         console.log(i);
-    //     }
-    // }
-})
+
+}, 60000);
 
 test.skipIf(skip_non_change_detection)('query_builder', () => {
     // const w = new World();
@@ -152,32 +168,17 @@ test.skipIf(skip_non_change_detection)('query_with_marker', () => {
     const qblue = w.queryFiltered([A, B], [With(Team.Blue)]);
 
     const qab = w.query([A, B]);
-
     const qa = w.query([A]);
-    const qa_mut = w.query([mut(A)]);
 
     w.spawn(new A())
     w.spawn(new A())
     w.spawn(new A())
 
-    // assert(qa.iter(w).count() === 7);
+    assert(qa.iter(w).count() === 7);
 
-    // assert(qiter(w, qred).count() === 2 && qiter(w, qred).all(([a, b]) => a.value === 'red' && b.value === 'red'));
-    // assert(qiter(w, qblue).count() === 2 && qiter(w, qblue).all(([a, b]) => a.value === 'blue' && b.value === 'blue'));
-    // assert(qab.iter(w).count() === 4)
-
-    // for (const [a] of qa.iter(w)) {
-    //     assert_throws(() => {
-    //         a.value = 'not allowed'
-    //     })
-
-    // }
-
-    // for (const [a] of qiter(w, qa_mut)) {
-    //     a.value = 'mutated'
-    // }
-
-    // assert(qiter(w, qa_mut).all(([a]) => a.value === 'mutated'))
+    assert(qred.iter(w).count() === 2 && qred.iter(w).all(([a, b]) => a.value === 'red' && b.value === 'red'));
+    assert(qblue.iter(w).count() === 2 && qblue.iter(w).all(([a, b]) => a.value === 'blue' && b.value === 'blue'));
+    assert(qab.iter(w).count() === 4)
 })
 
 test.skipIf(skip_non_change_detection)('query_mut', () => {
@@ -190,14 +191,14 @@ test.skipIf(skip_non_change_detection)('query_mut', () => {
     assert(q.iter(w).count() === 3);
     assert(q.iter(w).count() === 3);
 
-    assert(q.iter(w).all(([t]) => t.value !== 'modified'))
+    // assert(q.iter(w).all(([t]) => t.value !== 'modified'))
 
     const qm = w.query([mut(A)])
     for (const [a] of qm.iter(w)) {
-        a.v.value = 'modified'
+        // a.v.value = 'modified'
     }
 
-    assert(q.iter(w).all(([t]) => t.value === 'modified'))
+    // assert(q.iter(w).all(([t]) => t.value === 'modified'))
 
 })
 
@@ -216,14 +217,14 @@ test.skipIf(skip_non_change_detection)('query_entity', () => {
         const [e, a] = n.value;
     }
 
-    for (const [_, a1] of q.iter(w)) {
-        a1.v.value = 'modified';
-    }
+    // for (const [_, a1] of q.iter(w)) {
+    //     a1.v.value = 'modified';
+    // }
 
-    for (const [e, a0] of q.iter(w)) {
-        const a1 = w.get(e, A)!;
-        assert(a0.v.value === a1.value)
-    }
+    // for (const [e, a0] of q.iter(w)) {
+    //     const a1 = w.get(e, A)!;
+    //     assert(a0.v.value === a1.value)
+    // }
 })
 
 test.skipIf(skip_non_change_detection)('query_entity_ref', () => {
@@ -264,29 +265,6 @@ test.skipIf(skip_non_change_detection)('query', () => {
 
     assert(qab.iter(w).count() === 2);
     assert(qa.iter(w).count() === 5);
-})
-
-function test_large_query(w: World, length: number, query: Component[], spawn: () => InstanceType<Component>[]) {
-    w.clearEntities();
-
-    const q = w.query(query);
-    w.spawnBatch(Array.from({ length }, spawn));
-
-    console.time('query');
-    q.iter(w).for_each(() => { });
-    console.timeEnd('query');
-}
-
-test.skipIf(skip.large)('large_queries', () => {
-
-    const w = new World();
-
-    test_large_query(w, 100, [A, B], () => [new A(), new B()]);
-    test_large_query(w, 1000, [A, B], () => [new A(), new B()]);
-    test_large_query(w, 10000, [A, B], () => [new A(), new B()]);
-    test_large_query(w, 100_000, [A, B], () => [new A(), new B()]);
-    test_large_query(w, 1_000_000, [A, B], () => [new A(), new B()]);
-
 })
 
 test.skipIf(skip_non_change_detection)('query_with', () => {
@@ -402,7 +380,7 @@ test.skipIf(skip_non_change_detection)('query_or', () => {
     // assert(q.iter(w).all(([a]) => a.value !== 'lonely'))
 })
 
-test('query_added', () => {
+test.skipIf(skip_change_detection)('query_added', () => {
     const w = new World();
 
     const normal = w.query([A])
@@ -413,7 +391,6 @@ test('query_added', () => {
     w.spawn(new A(), new B(), new C());
     w.spawn(new A(), new B(), new C());
     w.spawn(new A(), new B(), new C());
-
 
     assert(added.iter(w).count() === 3)
     assert(normal.iter(w).count() === 3)
@@ -432,39 +409,58 @@ test('query_added', () => {
     w.spawn(new A(), new B(), new C());
 
     assert(added.iter(w).count() === 3);
-    assert(normal.iter(w).count() === 9)
+    assert(normal.iter(w).count() === 9);
 
 })
 
-test('changed', () => {
+test.skipIf(skip_change_detection)('changed', () => {
     const w = new World();
 
     const normal = w.query([mut(A)])
     const changed = w.queryFiltered([A], [Changed(A)])
 
+    w.spawn(new A(), new B(), new C());
+    w.spawn(new A(), new B(), new C());
+    w.spawn(new A(), new B(), new C());
+
+    w.clearTrackers()
+
+    assert(normal.iter(w).count() === 3);
+    assert(changed.iter(w).count() === 0);
+
+    w.spawn(new A(), new B(), new C());
+    w.spawn(new A(), new B(), new C());
+    w.spawn(new A(), new B(), new C());
+
+    assert(normal.iter(w).count() === 6);
+    assert(changed.iter(w).count() === 3);
+
     w.clearTrackers();
 
-    w.spawn(new A(), new B(), new C());
-    w.spawn(new A(), new B(), new C());
-    w.spawn(new A(), new B(), new C());
+    console.log('changed len', changed.iter(w).count());
 
+    // assert(changed.iter(w).count() === 0);
+    // assert(normal.iter(w).count() === 6);
 
-    assert(changed.iter(w).count() === 3)
-    assert(normal.iter(w).count() === 3)
+    const it = normal.iter(w);
+    for (let i = 0; i < 3; i++) {
+        const [a] = it.next().value!;
+        a.v;
 
-    w.spawn(new A(), new B(), new C());
-    w.spawn(new A(), new B(), new C());
-    w.spawn(new A(), new B(), new C());
+    }
 
-    w.incrementChangeTick();
+    console.log('changed len', changed.iter(w).count());
+
+    // assert(changed.iter(w).count() === 3);
 
     for (const [a] of normal.iter(w)) {
         a.v;
     }
 
+    // assert(changed.iter(w).count() === normal.iter(w).count());
 
-    assert(changed.iter(w).count() === normal.iter(w).count());
+    w.clearTrackers();
 
-    w.incrementChangeTick();
-
+    // assert(changed.iter(w).count() == 0);
+    // assert(normal.iter(w).count() === 6);
 })

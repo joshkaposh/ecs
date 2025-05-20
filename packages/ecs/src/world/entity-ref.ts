@@ -1,16 +1,19 @@
 import { iter, Iterator } from "joshkaposh-iterator";
 import { type Option, ErrorExt } from "joshkaposh-option";
 import { StorageType, Storages } from "../storage";
-import { type Component } from "../component";
-import { ON_REMOVE, ON_REPLACE, type World } from "./world";
+import { type Component, type ComponentId, type Components, ComponentTicks } from "../component";
+import { type World } from "./world";
 import { Entities, type Entity, EntityLocation, index } from "../entity";
 import { BundleId, BundleInfo, BundleInserter, Bundles, InsertMode, type Bundle, type DynamicBundle } from "../bundle";
-import { type Archetype, ArchetypeId, Archetypes, ComponentId, Components, ComponentTicks, RemapQueryTupleToQueryData, RemapToQueryItem } from "..";
-import { unsafe_entity_cell_components, unsafe_entity_cell_get, unsafe_entity_cell_get_change_ticks, unsafe_entity_cell_get_components, unsafe_entity_cell_get_ref, unsafe_entity_cell_archetype, unsafe_entity_cell_get_by_id, unsafe_entity_cell_contains_type_id, unsafe_entity_cell_get_change_ticks_by_id, unsafe_entity_cell_get_mut, unsafe_entity_cell_get_mut_by_id, unsafe_entity_cell_contains_id } from "./unsafe-world-cell";
+import { AsQueryItem } from "../query";
+import { type Archetype, ArchetypeId, Archetypes, } from '../archetype';
+import { unsafe_entity_cell_get, unsafe_entity_cell_get_change_ticks, unsafe_entity_cell_get_components, unsafe_entity_cell_get_ref, unsafe_entity_cell_archetype, unsafe_entity_cell_get_by_id, unsafe_entity_cell_contains_type_id, unsafe_entity_cell_get_change_ticks_by_id, unsafe_entity_cell_get_mut, unsafe_entity_cell_get_mut_by_id, unsafe_entity_cell_contains_id } from "./unsafe-world-cell";
 import { RemovedComponentEvents } from '../removal-detection'
 import { Mut, Ref } from "../change_detection";
-import { EntityCloner, EntityClonerBuilder } from "../entity/clone_entities";
+// import { EntityCloner, EntityClonerBuilder } from "../entity/clone_entities";
 import { TODO } from "joshkaposh-iterator/src/util";
+import { Relationship } from "../relationship";
+import { DeferredWorld, ON_REMOVE, ON_REPLACE } from "./deferred-world";
 
 export type BundleInput = (Bundle | InstanceType<Component> | Component)[]
 
@@ -74,19 +77,19 @@ export class EntityRef {
      * Returns read-only components for the current entity that match the query.
      * Throws an error if the entity does not have the components required by the query
      */
-    components<Q extends readonly any[]>(...query: Q): RemapToQueryItem<Q> {
+    components<Q extends readonly any[]>(...query: Q): AsQueryItem<Q> {
         const components = this.getComponents();
         if (!components) {
             throw new Error(`EntityRef.components: This entity has no components that match the query ${query}`)
         }
-        return components as RemapToQueryItem<Q>;
+        return components as AsQueryItem<Q>;
     }
 
     /**
      * Returns read-only components for the current entity that match the query.
      * Returns None if the entity does not have the components required by the query.
      */
-    getComponents<Q extends readonly any[]>(...query: Q): Option<RemapToQueryItem<Q>> {
+    getComponents<Q extends readonly any[]>(...query: Q): Option<AsQueryItem<Q>> {
         return unsafe_entity_cell_get_components(this.#world, this.#entity, this.#location, query);
     }
 }
@@ -140,10 +143,10 @@ export class EntityMut {
         return unsafe_entity_cell_get(this.#world, this.#entity, this.#location, component);
     }
 
-    components<Q extends readonly any[]>(...query: Q): RemapToQueryItem<Q> {
+    components<Q extends readonly any[]>(...query: Q): AsQueryItem<Q> {
         const components = this.getComponents(query);
         if (!components) throw new Error('Query Mismatch Error');
-        return components as RemapToQueryItem<Q>;
+        return components as AsQueryItem<Q>;
     }
 
     getComponents<const Q extends readonly any[]>(...query: Q) {
@@ -265,10 +268,9 @@ export class EntityWorldMut {
         }
     }
 
-    // private __as_unsafe_entity_cell(): UnsafeEntityCell {
-    //     this.#assertNotDespawned();
-    //     return new UnsafeEntityCell(this.#world, this.#entity, this.#location);
-    // }
+    readonly() {
+        return new EntityRef(this.#world, this.#location, this.#entity)
+    }
 
     get id(): Entity {
         return this.#entity;
@@ -299,6 +301,36 @@ export class EntityWorldMut {
 
     get<T extends Component>(component: T): Option<InstanceType<T>> {
         return unsafe_entity_cell_get(this.#world, this.#entity, this.#location, component)
+    }
+
+    withRelated(bundle: Bundle & Relationship) {
+        const parent = this.id;
+        this.#world.spawn(bundle, bundle.from(parent))
+    }
+
+    withRelatedEntities<R extends Relationship>(relationship: R, func: (spawner: RelatedSpawner<R>) => void) {
+        const parent = this.#entity;
+        func(new RelatedSpawner(this.#world, relationship, parent))
+    }
+
+    addRelated<R extends Relationship>(relationship: R, related: Entity[]) {
+        const target = relationship.RelationshipTarget;
+        for (let i = 0; i < related.length; i++) {
+            this.#world.entityMut(related[i]).insert(target)
+        }
+    }
+
+    clearRelated<R extends Relationship>(relationship: R) {
+        this.remove(relationship.RelationshipTarget);
+    }
+
+    insertRelated<R extends Relationship>(relationship: R, index: number, related: Entity[]) {
+        const id = this.#entity;
+        for (let i = 0; i < related.length; i++) {
+            const related_ = related[i];
+            const idx = index + i;
+            // if (this.#world.get(related_, relationship))?.
+        }
     }
 
     components<Q extends readonly any[]>(query: Q) {
@@ -449,35 +481,35 @@ export class EntityWorldMut {
         return this;
     }
 
-    clone_with(target: Entity, config: (builder: EntityClonerBuilder) => void) {
-        const builder = EntityCloner.build(this.#world);
-        config(builder);
-        builder.clone_entity(this.#entity, target);
-        this.#world.flush();
-        this.updateLocation();
-        return this;
-    }
+    // clone_with(target: Entity, config: (builder: EntityClonerBuilder) => void) {
+    //     const builder = EntityCloner.build(this.#world);
+    //     config(builder);
+    //     builder.clone_entity(this.#entity, target);
+    //     this.#world.flush();
+    //     this.updateLocation();
+    //     return this;
+    // }
 
-    clone_and_spawn() {
-        return this.clone_and_spawn_with(() => { });
-    }
+    // clone_and_spawn() {
+    //     return this.clone_and_spawn_with(() => { });
+    // }
 
-    clone_and_spawn_with(config: (builder: EntityClonerBuilder) => void): Entity {
-        this.#assertNotDespawned();
+    // clone_and_spawn_with(config: (builder: EntityClonerBuilder) => void): Entity {
+    //     this.#assertNotDespawned();
 
-        const world = this.#world;
-        // const entity_clone = world.entities().reserve_entity();
-        // world.flush();
+    //     const world = this.#world;
+    //     // const entity_clone = world.entities().reserve_entity();
+    //     // world.flush();
 
-        // const builder = EntityCloner.build(this.#world);
-        // config(builder);
-        // builder.clone_entity(this.#entity, entity_clone);
+    //     // const builder = EntityCloner.build(this.#world);
+    //     // config(builder);
+    //     // builder.clone_entity(this.#entity, entity_clone);
 
-        world.flush();
-        this.updateLocation();
-        return TODO('EntityWorldMut.clone_and_spawn_with()', config);
-        // return entity_clone;
-    }
+    //     world.flush();
+    //     this.updateLocation();
+    //     return TODO('EntityWorldMut.clone_and_spawn_with()', config);
+    //     // return entity_clone;
+    // }
 
     clone_components(target: Entity, components: BundleInput) {
         this.#assertNotDespawned();
@@ -712,7 +744,7 @@ export class EntityWorldMut {
 
     clear() {
         this.#assertNotDespawned();
-        const component_ids = this.archetype.components().collect();
+        const component_ids = this.archetype.__componentsArray();
         const world = this.#world;
         const components = world.components;
         const bundle_id = world.bundles.initDynamicInfo(components, world.storages, component_ids)
@@ -725,19 +757,20 @@ export class EntityWorldMut {
 
     despawn() {
         this.#assertNotDespawned();
-        const world = this.#world;
-        let archetype = world.archetypes.get(this.#location.archetype_id)!;
+        let archetype = this.#world.archetypes.get(this.#location.archetype_id)!;
+        const deferred_world = new DeferredWorld(this.#world);
 
-        if (archetype.hasReplaceObserver()) {
-            world.triggerObservers(ON_REPLACE, this.#entity, archetype.components())
+        if (archetype.hasReplaceObserver) {
+            deferred_world.triggerObservers(ON_REPLACE, this.#entity, archetype.components())
         }
-        world.triggerOnReplace(archetype, this.#entity, archetype.components())
-        if (archetype.hasRemoveObserver()) {
-            world.triggerObservers(ON_REMOVE, this.#entity, archetype.components())
+        deferred_world.triggerOnReplace(archetype, this.#entity, archetype.components())
+        if (archetype.hasRemoveObserver) {
+            deferred_world.triggerObservers(ON_REMOVE, this.#entity, archetype.components())
         }
-        world.triggerOnRemove(archetype, this.#entity, archetype.components())
+        deferred_world.triggerOnRemove(archetype, this.#entity, archetype.components())
 
         const components = archetype.__componentsArray();
+        const world = this.#world;
         for (let i = 0; i < components.length; i++) {
             world.removedComponents.send(components[i], this.#entity)
         }
@@ -897,5 +930,16 @@ function take_component(
             .get(component_id)!
             // @ts-expect-error
             .__deleteAndForget(entity)
+    }
+}
+
+class RelatedSpawner<R extends Relationship> {
+    #world: World;
+    #R: R;
+    #parent: Entity
+    constructor(world: World, relationship: R, parent: Entity) {
+        this.#world = world;
+        this.#R = relationship;
+        this.#parent = parent
     }
 }

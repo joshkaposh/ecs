@@ -2,10 +2,10 @@ import {
     World,
     Schedule,
     defineSystem,
-    ThinWorld
+    ThinWorld,
+    defineComponent
 } from "ecs";
 import {
-    defineComponent,
     defineComponent2
 } from 'define'
 import { TypedArray } from "joshkaposh-option";
@@ -44,8 +44,9 @@ function init_thin() {
     )
 }
 
-
 function init() {
+    console.log(world.entities.length);
+
     for (let i = 0; i < 5000; i++) {
         world.spawn(new Comp1());
     }
@@ -55,7 +56,6 @@ function init() {
         world.spawn(new Comp1(), new Comp2());
     }
 
-    console.log(world.entities.length);
 
     schedule.addSystems(
         defineSystem(b => b.thinQuery([Comp3]), function query_system(query) {

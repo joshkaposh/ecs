@@ -1,10 +1,12 @@
 import { assert, expect, test } from 'vitest';
-import { World } from 'ecs';
+import { Schedule, World } from 'ecs';
+import { defineComponent, defineResource, defineSystem } from 'define';
 import { CommandQueue } from 'ecs/src/world';
-import { defineComponent } from 'define';
 
-const Comp1 = defineComponent(class Comp1 { value = 'comp1' })
-const Comp2 = defineComponent(class Comp2 { value = 'comp2' })
+const Comp1 = defineComponent(class Comp1 { constructor(public value = 'comp1') { } })
+const Comp2 = defineComponent(class Comp2 { constructor(public value = 'comp2') { } })
+
+const Resource1 = defineResource(class Resource1 { constructor(public value = 'resource1') { } })
 
 class SpawnEmpty {
     exec(world: World) {
@@ -22,6 +24,19 @@ class Spawn {
     }
 }
 
+test('system commands', () => {
+    const w = new World();
+    const s = new Schedule();
+
+    const system = defineSystem(b => b.commands(), (commands) => commands.insertResource(Resource1))
+
+    s.addSystems(system);
+
+    s.run(w);
+
+    console.log(w.getResource(Resource1), w.getResource(Resource1) instanceof Resource1);
+
+})
 
 test('queue applies commands once', () => {
     const w = new World();
@@ -44,7 +59,7 @@ test('world receives spawned component from queue', () => {
     const w = new World();
     const queue = new CommandQueue();
 
-    queue.push(new Spawn([new Comp1()]))
+    queue.push(new Spawn([new Comp1('himom')]))
 
     queue.apply(w);
     queue.apply(w);
@@ -55,19 +70,7 @@ test('world receives spawned component from queue', () => {
     const id = w.storages.tables.get(table_id)!.entities[0]
 
     assert(w.get(id, Comp1) != null);
-    expect(w.get(id, Comp1)).toEqual(new Comp1())
-})
-
-test('world receives spawned component from commands', () => {
-    const w = new World();
-    const commands = w.commands;
-
-    // const id = commands.spawn(new Comp1()).id;
-
-    // w.flush()
-
-    // assert(null != w.get(id, Comp1));
-    // expect(w.get(id, Comp1)).toEqual(new Comp1())
+    expect(w.get(id, Comp1)).toEqual(new Comp1('himom'))
 })
 
 test('spawn and then insert', () => {
@@ -89,8 +92,8 @@ test('two commands', () => {
     const a = w.commands;
     const b = w.commands;
 
-    a.spawn_empty();
-    b.spawn_empty();
+    a.spawnEmpty();
+    b.spawnEmpty();
 
     w.flush();
 

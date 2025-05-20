@@ -96,18 +96,18 @@ export class SingleThreadedExecutor implements SystemExecutor {
                 this.applyDeferred(schedule, world)
             }
 
-            // try {
             if (system.is_exclusive) {
                 system.run(unit, world);
             } else {
                 system.updateArchetypeComponentAccess(world);
                 system.runUnsafe(unit, world);
             }
-            // } catch (error) {
-            // throw new Error(`Encountered an error in system: ${system}`, { cause: error && typeof error === 'object' && 'cause' in error ? error.cause : undefined })
-            // }
-            this.#unapplied_systems.insert(system_index);
+
+            if (system.has_deferred) {
+                this.#unapplied_systems.insert(system_index);
+            }
         }
+
         if (this.#apply_final_deferred) {
             this.applyDeferred(schedule, world)
         }

@@ -4,7 +4,7 @@ import { QueryData } from "../query";
 import { World } from "../world";
 import { SystemMeta, SystemState } from "./function-system";
 import { Local, SystemChangeTick, SystemParam, SystemParamState } from "./system-param";
-import { Component, Resource, Tick } from "../component";
+import type { Component, Resource, Tick } from "../component";
 import { Commands } from "./commands";
 import { OptRes, Res, ResMut, OptResMut } from "../change_detection";
 import { Query, ThinQuery } from "./query";
@@ -25,19 +25,10 @@ type ExcludeMetadata<T extends readonly any[]> = {
 type PRet<Previous extends any[], Current> = ParamBuilder<[...Previous, Current]>;
 
 export class ParamBuilder<P extends any[] = []> {
-    // #w: World;
-    // #system_meta: SystemMeta
-    // #params: P;
     #uninitialized: [param_type: any, (world: World, meta: SystemMeta) => any][];
+    // @ts-expect-error
     #name: string;
-    constructor(
-        // world: World,
-        // system_meta: SystemMeta,
-        name: string
-    ) {
-        // this.#w = world;
-        // this.#system_meta = system_meta;
-        // this.#params = [] as unknown as P;
+    constructor(name: string) {
         this.#uninitialized = [];
         this.#name = name;
     }
@@ -56,8 +47,7 @@ export class ParamBuilder<P extends any[] = []> {
     }
 
     buildState<Param extends SystemParam>(world: World, param: Param): SystemState<Param> {
-        return TODO('ParamBuilder.buildState')
-        // return SystemState.fromBuilder(world, this, param)
+        return TODO('ParamBuilder.buildState', world, param);
     }
 
     world(): PRet<P, World> {
@@ -116,15 +106,15 @@ export class ParamBuilder<P extends any[] = []> {
         return this.#add_param(Events, (world, meta) => Events.init_state(world, meta, type));
     }
 
-    reader<E extends Event>(type: E): PRet<P, EventReader<E>> {
+    reader<E extends Event>(type: E): PRet<P, Res<EventReader<E>>> {
         return this.#add_param(EventReader, (world, meta) => EventReader.init_state(world, meta, type));
     }
 
-    writer<E extends Event>(type: E): PRet<P, EventWriter<E>> {
-        return this.#add_param(EventReader, (world, meta) => EventWriter.init_state(world, meta, type));
+    writer<E extends Event>(type: E): PRet<P, ResMut<EventWriter<E>>> {
+        return this.#add_param(EventWriter, (world, meta) => EventWriter.init_state(world, meta, type));
     }
 
-    removedComponent<T extends Component>(type: T): PRet<P, RemovedComponents<T>> {
+    removedComponent<T extends Component>(type: T): PRet<P, RemovedComponents> {
         return this.#add_param(RemovedComponents, (world, meta) => RemovedComponents.init_state(world, meta, world.componentId(type)))
     }
 }

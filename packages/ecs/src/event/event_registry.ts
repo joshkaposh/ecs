@@ -1,9 +1,9 @@
-import { Events } from "./collections";
-import { type ComponentId, Tick } from "../component";
-import { World } from "../world";
-import { Mut } from "../change_detection";
-import { Event } from "./base";
 import { v4 } from "uuid";
+import type { Events } from "./collections";
+import type { ComponentId, Tick } from "../component";
+import type { World } from "../world";
+import type { Mut } from "../change_detection";
+import type { Event } from "./event.type";
 
 interface RegisteredEvent {
     component_id: ComponentId;

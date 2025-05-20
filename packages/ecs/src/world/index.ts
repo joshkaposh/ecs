@@ -1,9 +1,4 @@
-import type { Instance } from '../util';
-import type { World } from './world';
-
-export interface FromWorld<T> {
-    from_world(world: World): Instance<T>
-}
+export type * from './world.types';
 
 export * from './error';
 export * from './world';

@@ -3,18 +3,15 @@ import { u32 } from "joshkaposh-option";
 
 export const HIGH_MASK = 0x7FFF_FFFF;
 
-// type U64 = bigint;
-type U32 = number;
-
-function extract_kind_from_high_entity(value: U32): IdKind {
-    // The negated HIGH_MASK will extract just the bit we need for kind.
-    let kind_mask = HIGH_MASK + 1;
-    let bit = value & kind_mask;
-    if (bit == kind_mask) {
-        return IdKind.Entity
-    }
-    throw new Error('Unreachable')
-}
+// function extract_kind_from_high_entity(value: number): IdKind {
+//     // The negated HIGH_MASK will extract just the bit we need for kind.
+//     let kind_mask = HIGH_MASK + 1;
+//     let bit = value & kind_mask;
+//     if (bit == kind_mask) {
+//         return IdKind.Entity
+//     }
+//     throw new Error('Unreachable')
+// }
 
 
 export const IdentifierMask = {
@@ -38,22 +35,22 @@ export const IdentifierMask = {
     },
 
     // Pack a low and high `u32` values into a single `U64` value.
-    pack_into_U64(low: U32, high: U32): bigint {
+    pack_into_U64(low: number, high: number): bigint {
         return ((BigInt(high) << BigInt(u32.BITS)) | BigInt(low))
         // return TODO('IdentifierMask::pack_into_U64')
     },
 
     // Pack the [`IdKind`] bits into a high segment.
-    pack_kind_into_high(value: U32, kind: IdKind): U32 {
+    pack_kind_into_high(value: number, kind: IdKind): number {
         return Number(BigInt(value) | (BigInt(kind) << BigInt(24)))
     },
 
     // Extract the value component from a high segment of an [`super::Identifier`].
-    extract_value_from_high(value: U32): U32 {
+    extract_value_from_high(value: number): number {
         return Number(BigInt(value) & BigInt(HIGH_MASK));
     },
 
-    extract_kind_from_high(value: U32): IdKind {
+    extract_kind_from_high(value: number): IdKind {
         // The negated HIGH_MASK will extract just the bit we need for kind.
         const kind_mask = ~HIGH_MASK;
         const bit = value & kind_mask;
@@ -66,7 +63,7 @@ export const IdentifierMask = {
     /// never be greater than [`HIGH_MASK`].
 
     // lhs is non-zero
-    inc_masked_high_by(lhs: U32, rhs: U32) {
+    inc_masked_high_by(lhs: number, rhs: number) {
         // let lo = (lhs.get() & HIGH_MASK).wrapping_add(rhs & HIGH_MASK);
         const lo = u32.wrapping_add(lhs & HIGH_MASK, rhs & HIGH_MASK);
         // const lo = (lhs & HIGH_MASK) + (rhs & HIGH_MASK);

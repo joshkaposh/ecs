@@ -1,24 +1,23 @@
+import { v4 } from 'uuid';
 import { Iterator, iter } from "joshkaposh-iterator";
 import { ErrorExt, type Option, type Result } from 'joshkaposh-option'
 import { FixedBitSet } from "fixed-bit-set";
 import BTree from "sorted-btree";
-import { defineResource } from "define";
 import type { System } from "../system/system";
-import { World } from "../world";
-import { insert_set, debug_assert } from "../util";
-import { Component, Components, Resource, Tick, type ComponentId } from '../component'
+import type { World } from "../world";
+import { insert_set } from "../util";
+import type { Component, Components, Resource, Tick, ComponentId } from '../component';
 import { ExecutorKind, is_apply_deferred, SystemExecutor, SystemSchedule } from "../executor";
 import { DiGraph, UnGraph, Outgoing, Incoming, GraphInfo, DependencyKind, check_graph, index, Ambiguity } from './graph'
-import { ScheduleConfigs, ScheduleConfig, Schedulable, IntoScheduleConfig, SystemConfig } from "./config";
-import { NodeId, NodeIdString } from "./graph/node";
+import { ScheduleConfigs, ScheduleConfig, Schedulable, IntoScheduleConfig, Configs } from "./config";
+import { NodeId } from "./graph/node";
 import { CheckGraphResults, simple_cycles_in_component } from "./graph";
 import { SingleThreadedExecutor } from "../executor/single-threaded";
 import { AnonymousSet, InternedSystemSet, IntoSystemSet, SystemSet } from "./set";
 import { Condition } from "./condition";
-import { ScheduleBuildPassObj } from "./pass";
-import { $is_system } from "../system";
-import { StorageType } from "../storage";
+import type { ScheduleBuildPassObj } from "./pass";
 import { AutoInsertApplyDeferredPass } from "./auto-insert-apply-deferred";
+import { assert } from 'joshkaposh-iterator/src/util';
 
 type BTreeSet<T> = BTree<T, undefined>;
 type ScheduleSystem = System<any, any>;
@@ -41,9 +40,11 @@ export type ScheduleId = number;
 export class Schedules {
     #schedules: Map<ScheduleLabel, Schedule>;
     ignored_scheduling_ambiguities: BTreeSet<ComponentId>;
-    static readonly type_id: UUID;
-    static readonly storage_type: StorageType;
-    static from_world: (world: World) => InstanceType<typeof Schedules>;
+    static readonly type_id = v4() as UUID;
+    static readonly storage_type = 1;
+    static from_world() {
+        return new Schedules();
+    }
 
     constructor(schedules: Map<ScheduleLabel, Schedule> = new Map(), ignored_scheduling_ambiguities: BTreeSet<ComponentId> = new BTree()) {
         this.#schedules = schedules;
@@ -140,7 +141,7 @@ export class Schedules {
 
     }
 
-    configureSets(schedule: ScheduleLabel, sets: ScheduleConfigs) {
+    configureSets(schedule: ScheduleLabel, sets: ScheduleConfigs<Schedulable>) {
         this.entry(schedule).configureSets(sets);
         return this;
     }
@@ -150,7 +151,6 @@ export class Schedules {
         return this;
     }
 };
-defineResource(Schedules);
 
 const DefaultSchedule = 'DefaultSchedule'
 export class Schedule {
@@ -180,20 +180,23 @@ export class Schedule {
     }
 
     addSystems<M extends IntoScheduleConfig<any>>(systems: M) {
-        this.#graph.processConfigs(systems.intoConfig(), false)
+        const type = systems instanceof ScheduleConfig ? systems.node :
+            systems instanceof Configs ? systems.set : systems;
+
+        this.#graph.processConfigs(type, systems.intoConfig(), false)
         return this;
     }
 
     ignoreAmbiguity<M1, M2, S1 extends IntoSystemSet<M1>, S2 extends IntoSystemSet<M2>>(a: S1, b: S2) {
         a = a.intoSystemSet() as unknown as S1;
         b = b.intoSystemSet() as unknown as S2;
-        const a_id = this.#graph.systemSetIds.get(a as unknown as SystemSet)
+        const a_id = this.#graph.systemSetIds.get(`${a}`)
         if (!a_id) {
             throw new Error(`Could not mark system as ambiguous, ${a} was not found in the schedule.
                     Did you try to call \`ambiguous_with\` before adding the system to the world?`
             )
         }
-        const b_id = this.#graph.systemSetIds.get(b as unknown as SystemSet)
+        const b_id = this.#graph.systemSetIds.get(`${b}`)
         if (!b_id) {
             throw new Error(`Could not mark system as ambiguous, ${b} was not found in the schedule.
                     Did you try to call \`ambiguous_with\` before adding the system to the world?`
@@ -235,9 +238,7 @@ export class Schedule {
     run(world: World) {
         world.checkChangeTicks();
         const err = this.initialize(world)
-        if (err) throw new Error(`Error when initializing schedule ${this.#label}: ${err}`)
-
-
+        if (err) throw new Error(`Error when initializing schedule ${this.#label}: ${err.message}`)
         this.#executor.run(this.#executable, world, undefined);
     }
 
@@ -260,15 +261,6 @@ export class Schedule {
         if (!this.#executor_initialized) {
             this.#executor.init(this.#executable);
             this.#executor_initialized = true;
-
-            // console.log('Schedule Build: ', this.label);
-            // try {
-            // console.log('systems order: ', this.#executable.__systems.map((s, i) => ({ name: s.name, conditions: this.#executable.__system_conditions[i].map(c => c.name) })));
-            // } catch (error) {
-            // console.error(error);
-            // }
-
-
         }
 
         return;
@@ -371,13 +363,6 @@ export class SystemNode {
     }
 };
 
-function ShortName(system_string: string) {
-    const name_start = system_string.indexOf('name: ');
-    const name_end = system_string.indexOf(',', name_start);
-    const name = system_string.slice(name_start + 6, name_end);
-    return name;
-}
-
 export class ScheduleGraph {
     /** List of systems in the schedule */
     #systems: SystemNode[];
@@ -390,7 +375,7 @@ export class ScheduleGraph {
     /** List of conditions for each system set, in the same order as system sets */
     #system_set_conditions: Array<Condition<any, any>>[];
     /** Map from system set to node id */
-    #system_set_ids: Map<InternedSystemSet, NodeId>;
+    #system_set_ids: Map<string, NodeId>;
     /** Systems that have not been initialized yet. For system sets, we store the index of the first uninitialized condition 
      * (all the conditions after the index still need to be initialized) */
     #uninit: [NodeId, number][];
@@ -400,7 +385,7 @@ export class ScheduleGraph {
     #dependency: Dag;
     #ambiguous_with: UnGraph;
     /** Nodes that are allowed to have ambiguous ordering relationship with any other systems. */
-    ambiguous_with_all: Set<NodeIdString>;
+    ambiguous_with_all: Set<NodeId>;
     #conflicting_systems: [NodeId, NodeId, ComponentId[]][]
     #anonymous_sets: number;
     __changed: boolean;
@@ -414,12 +399,12 @@ export class ScheduleGraph {
         system_ids: Map<System<any, any>, NodeId> = new Map(),
         system_sets: Array<SystemSetNode> = [],
         system_set_conditions: Array<Array<Condition<any, any>>> = [],
-        system_set_ids: Map<InternedSystemSet, NodeId> = new Map(),
+        system_set_ids: Map<string, NodeId> = new Map(),
         uninit: Array<[NodeId, number]> = [],
         hierarchy: Dag = { topsort: [], graph: DiGraph() },
         dependency: Dag = { topsort: [], graph: DiGraph() },
         ambiguous_with: UnGraph = UnGraph(),
-        ambiguous_with_all: Set<NodeIdString> = new Set(),
+        ambiguous_with_all: Set<NodeId> = new Set(),
         conflicting_systems: Array<[NodeId, NodeId, ComponentId[]]> = [],
         anonymous_sets = 0,
         changed = false,
@@ -453,6 +438,10 @@ export class ScheduleGraph {
         return this.#system_conditions;
     }
 
+    get setConditions() {
+        return this.#system_set_conditions;
+    }
+
     get settings(): ScheduleBuildSettings {
         return this.#settings;
     }
@@ -461,6 +450,7 @@ export class ScheduleGraph {
         this.#settings = new_settings
 
         if (new_settings.auto_insert_apply_deferred) {
+            // @ts-expect-error
             this.#passes.set(AutoInsertApplyDeferredPass.type_id, new AutoInsertApplyDeferredPass())
         } else {
             this.#passes.delete(AutoInsertApplyDeferredPass.type_id)
@@ -468,7 +458,7 @@ export class ScheduleGraph {
 
     }
 
-    get systemSetIds(): Map<SystemSet, NodeId> {
+    get systemSetIds(): Map<string, NodeId> {
         return this.#system_set_ids;
     }
 
@@ -485,7 +475,7 @@ export class ScheduleGraph {
     }
 
     hasSet(set: SystemSet) {
-        return this.#system_set_ids.has(set);
+        return this.#system_set_ids.has(`${set}`);
     }
 
     getSystemAt(id: NodeId): Option<ScheduleSystem> {
@@ -559,44 +549,44 @@ export class ScheduleGraph {
         return new AnonymousSet(id);
     }
 
-    applyCollectiveConditions(configs: readonly ScheduleConfigs[], collective_conditions: Condition<any, any>[]) {
+    applyCollectiveConditions(configs: readonly (Schedulable & ProcessScheduleConfig)[], collective_conditions: Condition<any>[]) {
         if (collective_conditions.length !== 0) {
-            const [config] = configs;
-            if (config) {
-                for (const condition of collective_conditions) {
+            for (let i = 0; i < configs.length; i++) {
+                const config = configs[i];
+                if (config) {
+                    for (let j = 0; j < collective_conditions.length; j++) {
+                        // @ts-expect-error
+                        config.runIfDyn(collective_conditions[j]);
+                    }
+                } else {
+                    const set = this.createAnonymousSet();
+                    for (const config of configs) {
+                        // @ts-expect-error
+                        config.inSetInner(set.intern());
+                    }
+
+                    assert(set.systemType == null, 'Configuring system type sets is not allowed');
                     // @ts-expect-error
-                    config.runIfDyn(condition);
-                }
-            } else {
-                const set = this.createAnonymousSet();
-                for (const config of configs) {
-                    // @ts-expect-error
-                    config.inSetInner(set);
+                    const set_config = set.intern().intoConfig();
+                    set_config.conditions.push(...collective_conditions);
+
+                    this.configureSetInner(set_config);
                 }
 
-                debug_assert(set.systemType == null, 'Configuring system type sets is not allowed');
-
-                const set_config = set.intoConfig();
-                // TODO: maybe needs ScheduleConfig instead of Configs
-                // const set_config = new ScheduleConfigs.ScheduleConfig(set, {
-                //     hierarchy: [],
-                //     ambiguous_with: [],
-                //     dependencies: [],
-                // }, [])
-                set_config.collective_conditions.push(...collective_conditions);
-                this.configureSetInner(set_config as any);
             }
+
         }
     }
 
-    processConfig<T extends ScheduleConfig<Schedulable>>(
-        config: T,
+    processConfig<T extends ProcessScheduleConfig & Schedulable>(
+        type: T,
+        config: ScheduleConfig<T>,
         collect_nodes: boolean
     ): ProcessConfigsResult {
         const nodes: NodeId[] = [];
-        const cfg = config.processConfig(this);
+        const cfg = type.processConfig(this, config);
         if (!(cfg instanceof NodeId)) {
-            throw new Error(cfg as any);
+            throw cfg;
         }
         if (collect_nodes) {
             nodes.push(cfg);
@@ -606,15 +596,27 @@ export class ScheduleGraph {
             densely_chained: true,
             nodes
         }
+
     }
 
-    processConfigs(_configs: ScheduleConfigs, collect_nodes: boolean): ProcessConfigsResult {
+    /**
+     * Adds the config nodes to the graph.
+     * 
+     * `collect nodes` controls whether the `NodeId`s of the processed config nodes are stored in the returned [`ProcessConfigsResult`].
+     * `processConfig` is the function which processes each individual config node and returns a corresponding `NodeId`.
+     * 
+     * The fields on the returned [`ProcessConfigsResult`] are:
+     * - `nodes`: an array of all node ids contained in the nested `ScheduleConfigs`
+     * - `densely_chained`: a boolean that is true if all nested nodes are linearly chained (with successive `after` orderings) in the order they're defined
+     */
+    processConfigs<T extends ProcessScheduleConfig & Schedulable>(type: T, _configs: ScheduleConfigs<T>, collect_nodes: boolean): ProcessConfigsResult {
         if (_configs instanceof ScheduleConfig) {
-            return this.processConfig(_configs, collect_nodes);
+            return this.processConfig(type, _configs, collect_nodes);
         } else {
             const { configs, collective_conditions, chained } = _configs;
-            this.applyCollectiveConditions(configs, collective_conditions);
-            const is_chained = chained instanceof Map;
+
+            this.applyCollectiveConditions(configs as any, collective_conditions);
+            const is_chained = Boolean(chained);
             let densely_chained = is_chained || configs.length === 1;
             const nodes: any[] = [];
 
@@ -625,14 +627,14 @@ export class ScheduleGraph {
                 }
             }
             const first = configs[0];
-
-            let previous_result = this.processConfigs(first, collect_nodes || is_chained);
+            const ty = first instanceof ScheduleConfig ? first.node : first instanceof Configs ? first.set : type;
+            let previous_result = this.processConfigs(ty as any, first, collect_nodes || is_chained);
 
             densely_chained = densely_chained && previous_result.densely_chained;
 
-            for (let j = 1; j < configs.length; j++) {
-                const current = configs[j];
-                const current_result = this.processConfigs(current, collect_nodes || is_chained);
+            for (let i = 1; i < configs.length; i++) {
+                const current = configs[i];
+                const current_result = this.processConfigs(ty as any, current, collect_nodes || is_chained);
                 densely_chained = densely_chained && current_result.densely_chained;
 
                 if (chained instanceof Map) {
@@ -640,10 +642,10 @@ export class ScheduleGraph {
                     const current_nodes = current_result.densely_chained ? current_result.nodes.slice(0, 1) : current_result.nodes;
                     const previous_nodes = previous_result.densely_chained ? previous_result.nodes.slice(previous_result.nodes.length - 1) : previous_result.nodes;
 
-                    for (let i = 0; i < previous_nodes.length; i++) {
-                        const previous_node = previous_nodes[i];
-                        for (let j = 0; j < current_nodes.length; j++) {
-                            const current_node = current_nodes[j];
+                    for (let j = 0; j < previous_nodes.length; j++) {
+                        const previous_node = previous_nodes[j];
+                        for (let k = 0; k < current_nodes.length; k++) {
+                            const current_node = current_nodes[k];
                             this.#dependency.graph.add_edge(previous_node, current_node);
                             this.#passes.forEachPair((_, pass) => pass.addDependency(
                                 previous_node,
@@ -681,32 +683,31 @@ export class ScheduleGraph {
     }
 
     configureSets<M extends Schedulable>(sets: IntoScheduleConfig<M>) {
-        this.processConfigs(sets.intoConfig(), false);
+        this.processConfigs(sets as any, sets.intoConfig(), false);
     }
 
-    addSystemInner(config: ScheduleConfig<Schedulable>): Result<NodeId, ScheduleBuildError> {
+    addSystemInner(config: ScheduleConfig<Schedulable>): NodeId | ScheduleBuildError {
         const id = new NodeId.System(this.#systems.length);
         const err = this.#updateGraphs(id, config.graph_info);
         if (err) return err;
 
         this.#uninit.push([id, 0]);
-        this.#systems[id.index] = new SystemNode(config.node as any);
+        this.#systems[id.index] = new SystemNode(config.node as unknown as System<any, any>);
         this.#system_conditions[id.index] = config.conditions;
         this.#system_ids.set(config.node as any, id);
         return id;
     }
 
-    configureSetInner(set_: SystemConfig): Result<NodeId, ScheduleBuildError> {
+    configureSetInner(set_: ScheduleConfig<Schedulable<SystemSet, Chain>>): Result<NodeId, ScheduleBuildError> {
         const { node: set, graph_info, conditions } = set_;
 
-        const id = this.#system_set_ids.get(set as any) ?? this.#addSet(set as any);
-
+        const id = this.#system_set_ids.get(`${set}`) ?? this.#addSet(set as unknown as SystemSet);
         // graph updates are immediate
         const err = this.#updateGraphs(id, graph_info);
         if (err) return err
 
         const system_set_conditions = this.#system_set_conditions[id.index];
-        this.#uninit[id.index] = [id, system_set_conditions.length];
+        this.#uninit.push([id, system_set_conditions.length]);
         system_set_conditions.push(...conditions);
         return id;
     }
@@ -720,7 +721,7 @@ export class ScheduleGraph {
             const [id, i] = uninit[index];
             const id_index = id.index;
             if (id instanceof NodeId.System) {
-                this.#systems[id.index].inner!.initialize(world);
+                this.#systems[id_index].inner!.initialize(world);
                 const conditions = this.#system_conditions[id_index];
                 for (let j = 0; j < conditions.length; j++) {
                     conditions[j].initialize(world);
@@ -732,6 +733,7 @@ export class ScheduleGraph {
                 }
             }
         }
+
         this.#uninit.length = 0;
     }
 
@@ -763,7 +765,6 @@ export class ScheduleGraph {
         err = this.topsortGraph(this.#dependency.graph, ReportCycles.Dependency);
         if (!Array.isArray(err)) return err
 
-        this.#dependency.topsort = err;
         // check for systems or system sets depending on sets they belong to
         const dep_results = check_graph(this.#dependency.graph, this.#dependency.topsort)
         err = this.#checkForCrossDependencies(dep_results, hier_results.connected)
@@ -789,7 +790,6 @@ export class ScheduleGraph {
         if (typeof result !== 'number') {
             return result
         }
-
         const topsort = this.topsortGraph(dependency_flattened, ReportCycles.Dependency);
 
         if (!Array.isArray(topsort)) return topsort;
@@ -818,28 +818,23 @@ export class ScheduleGraph {
         if (err) return err;
 
         this.#conflicting_systems = conflicting_systems;
-        const sched = this.#buildScheduleInner(dependency_flattened_dag, hier_results.reachable);
-        // console.log('BuildSchedule: ', sched.__systems, sched.__system_ids);
-
-        return sched;
+        return this.#buildScheduleInner(dependency_flattened_dag, hier_results.reachable);
     }
 
     #addSet(set: InternedSystemSet): NodeId {
         const id = new NodeId.Set(this.#system_sets.length);
         this.#system_sets.push(new SystemSetNode(set));
         this.#system_set_conditions.push([]);
-        this.#system_set_ids.set(set, id);
+        this.#system_set_ids.set(`${set}`, id);
         return id;
     }
 
+    /**
+     * Checks that a system set isn't included in itself.
+     * If not present, add the set to the graph.
+     */
     #checkHierarchySet(id: NodeId, set: SystemSet): Result<undefined, ScheduleBuildError> {
-        // @ts-expect-error
-        if (set[$is_system]) {
-            // @ts-expect-error
-            set = set.intoSystemSet();
-        }
-
-        const set_id = this.#system_set_ids.get(set);
+        const set_id = this.#system_set_ids.get(`${set}`);
         if (set_id) {
             if (id.eq(set_id)) {
                 return ScheduleBuildError.HierarchyLoop(this.nodeName(id))
@@ -852,11 +847,15 @@ export class ScheduleGraph {
 
     }
 
+    /**
+     * Check that no set in included in itself.
+     * Adds all the sets from the [`GraphInfo`]'s hierarchy to the graph.
+     */
     #checkHierarchySets(id: NodeId, graph_info: GraphInfo): Result<undefined, ScheduleBuildError> {
-        const { hierarchy } = graph_info
+        const { hierarchy } = graph_info;
+
         for (let i = 0; i < hierarchy.length; i++) {
-            const set = hierarchy[i];
-            const err = this.#checkHierarchySet(id, set);
+            const err = this.#checkHierarchySet(id, hierarchy[i]);
             if (err) return err;
         }
         return
@@ -868,27 +867,30 @@ export class ScheduleGraph {
      */
     #checkEdges(id: NodeId, graph_info: GraphInfo): Result<undefined, ScheduleBuildError> {
         const { dependencies } = graph_info;
+
         for (let i = 0; i < dependencies.length; i++) {
             const { set } = dependencies[i];
-            const set_id = this.#system_set_ids.get(set);
+
+            const set_id = this.#system_set_ids.get(`${set}`);
+
             if (set_id) {
-                if (id.eq(set_id)) {
-                    return ScheduleBuildError.DependencyLoop(this.nodeName(id))
+                if (set_id.eq(id)) {
+                    return ScheduleBuildError.DependencyLoop(this.nodeName(id));
                 }
             } else {
                 this.#addSet(set);
             }
         }
 
-        // const ambiguous_with = graph_info.ambiguous_with;
-        // if (Array.isArray(ambiguous_with)) {
-        //     for (let i = 0; i < ambiguous_with.length; i++) {
-        //         const set = ambiguous_with[i];
-        //         if (!this.system_set_ids.has(set)) {
-        //             this.#addSet(set);
-        //         }
-        //     }
-        // }
+        const ambiguous_with = graph_info.ambiguous_with;
+        if (Array.isArray(ambiguous_with)) {
+            for (let i = 0; i < ambiguous_with.length; i++) {
+                const set = ambiguous_with[i];
+                if (!this.#system_set_ids.has(`${set}`)) {
+                    this.#addSet(set);
+                }
+            }
+        }
 
         return
     }
@@ -902,6 +904,7 @@ export class ScheduleGraph {
         if (err) return err
         err = this.#checkEdges(id, graph_info);
         if (err) return err
+
         this.__changed = true;
 
         const { hierarchy: sets, dependencies, ambiguous_with } = graph_info;
@@ -909,20 +912,22 @@ export class ScheduleGraph {
         this.#dependency.graph.add_node(id);
 
         for (let i = 0; i < sets.length; i++) {
-            const set = this.#system_set_ids.get(sets[i])!;
+            const set = this.#system_set_ids.get(`${sets[i]}`)!;
+
             this.#hierarchy.graph.add_edge(set, id);
             // ensure set also appears in dependency graph
             this.#dependency.graph.add_node(set);
         }
 
         for (let i = 0; i < dependencies.length; i++) {
-            const d = dependencies[i];
-            const { kind, options } = d;
-            const set = this.#system_set_ids.get(d.set);
+            const { kind, options, set: set_ } = dependencies[i];
+            const set = this.#system_set_ids.get(`${set_}`);
             if (!set) {
                 throw new Error('Set must exist at this point.')
             }
+
             const [lhs, rhs]: [NodeId, NodeId] = DependencyKind.Before === kind ? [id, set] : [set, id];
+
             this.#dependency.graph.add_edge(lhs, rhs);
             this.#passes.forEachPair((_, pass) => pass.addDependency(lhs, rhs, options))
 
@@ -934,12 +939,11 @@ export class ScheduleGraph {
             case Ambiguity.Check:
                 break;
             case Ambiguity.IgnoreAll:
-                this.ambiguous_with_all.add(id.to_primitive())
+                this.ambiguous_with_all.add(id)
                 break;
             default:
                 for (let i = 0; i < ambiguous_with.length; i++) {
-                    const set = this.#system_set_ids.get(ambiguous_with[i])!;
-                    this.#ambiguous_with.add_edge(id, set);
+                    this.#ambiguous_with.add_edge(id, this.#system_set_ids.get(`${ambiguous_with[i]}`)!);
                 }
                 break;
         }
@@ -952,14 +956,15 @@ export class ScheduleGraph {
      * Also return a map from system set `NodeId` to a `FixedBitSet` of system `NodeId`s that are included in the set,
      * where the bitset order is the same as this.systems
      */
-    #mapSetsToSystems(hierarchy_topsort: NodeId[], hierarchy_graph: DiGraph): [Map<string, NodeId[]>, Map<string, FixedBitSet>] {
-        const set_systems: Map<string, NodeId[]> = new Map();
-        const set_system_bitsets: Map<string, FixedBitSet> = new Map();
+    #mapSetsToSystems(hierarchy_topsort: NodeId[], hierarchy_graph: DiGraph): [Map<NodeId, NodeId[]>, Map<NodeId, FixedBitSet>] {
+        const set_systems: Map<NodeId, NodeId[]> = new Map();
+        const set_system_bitsets: Map<NodeId, FixedBitSet> = new Map();
 
         const system_length = this.#systems.length;
 
         for (let i = hierarchy_topsort.length - 1; i >= 0; i--) {
             const id = hierarchy_topsort[i];
+
             if (id.is_system()) continue;
 
             const systems = [];
@@ -973,57 +978,52 @@ export class ScheduleGraph {
                     systems.push(child);
                     system_bitset.insert(child.index);
                 } else {
-                    const child_primitive = child.to_primitive();
-                    const child_systems = set_systems.get(child_primitive)!;
-                    const child_system_bitset = set_system_bitsets.get(child_primitive)!;
+                    const child_systems = set_systems.get(child)!;
+                    const child_system_bitset = set_system_bitsets.get(child)!;
                     systems.push(...child_systems);
                     system_bitset.union_with(child_system_bitset);
                 }
             }
 
-            const id_primitive = id.to_primitive();
-            set_systems.set(id_primitive, systems);
-            set_system_bitsets.set(id_primitive, system_bitset);
+            set_systems.set(id, systems);
+            set_system_bitsets.set(id, system_bitset);
         }
-
-        // console.log('MapSetsToSystems: ', Array.from(set_systems.entries()));
-
 
         return [set_systems, set_system_bitsets];
     }
 
-    #getDependencyFlattened(set_systems: Map<string, NodeId[]>): DiGraph {
+    #getDependencyFlattened(set_systems: Map<NodeId, NodeId[]>): DiGraph {
         // flatten: combine `in_set` with `before` and `after` information
         // have to do it like this to preserve transitivity
         const dependency_flattened = this.#dependency.graph.clone();
         const temp: [NodeId, NodeId][] = [];
 
         for (const [set, systems] of set_systems) {
-            const set_id = NodeId.to_node_id(set);
-            this.#passes.forEachPair((_, pass) => pass.collapseSet(set_id, systems, dependency_flattened, temp))
+            // const set_id = NodeId.to_node_id(set);
+            this.#passes.forEachPair((_, pass) => pass.collapseSet(set, systems, dependency_flattened, temp))
 
             if (systems.length === 0) {
                 // collapse dependencies for empty sets
-                for (const a of dependency_flattened.neighbors_directed(set_id, Incoming)) {
-                    for (const b of dependency_flattened.neighbors_directed(set_id, Outgoing)) {
+                for (const a of dependency_flattened.neighbors_directed(set, Incoming)) {
+                    for (const b of dependency_flattened.neighbors_directed(set, Outgoing)) {
                         temp.push([a, b]);
                     }
                 }
             } else {
-                for (const a of dependency_flattened.neighbors_directed(set_id, Incoming)) {
+                for (const a of dependency_flattened.neighbors_directed(set, Incoming)) {
                     for (const sys of systems) {
                         temp.push([a, sys])
                     }
                 }
 
-                for (const b of dependency_flattened.neighbors_directed(set_id, Outgoing)) {
+                for (const b of dependency_flattened.neighbors_directed(set, Outgoing)) {
                     for (const sys of systems) {
                         temp.push([sys, b])
                     }
                 }
             }
 
-            dependency_flattened.remove_node(set_id);
+            dependency_flattened.remove_node(set);
             for (let i = 0; i < temp.length; i++) {
                 const [a, b] = temp[i];
                 dependency_flattened.add_edge(a, b);
@@ -1034,7 +1034,7 @@ export class ScheduleGraph {
         return dependency_flattened;
     }
 
-    #getAmbiguousWithFlattened(set_systems: Map<string, NodeId[]>): UnGraph {
+    #getAmbiguousWithFlattened(set_systems: Map<NodeId, NodeId[]>): UnGraph {
         const ambiguous_with_flattened = UnGraph();
         for (const [lhs, rhs] of this.#ambiguous_with.all_edges()) {
             const l = lhs instanceof NodeId.System, r = rhs instanceof NodeId.System;
@@ -1042,16 +1042,16 @@ export class ScheduleGraph {
             if (l && r) {
                 ambiguous_with_flattened.add_edge(lhs, rhs);
             } else if (!l && r) {
-                for (const lhs_ of set_systems.get(lhs.to_primitive()) ?? []) {
+                for (const lhs_ of set_systems.get(lhs) ?? []) {
                     ambiguous_with_flattened.add_edge(lhs_, rhs);
                 }
             } else if (l && !r) {
-                for (const rhs_ of set_systems.get(rhs.to_primitive()) ?? []) {
+                for (const rhs_ of set_systems.get(rhs) ?? []) {
                     ambiguous_with_flattened.add_edge(lhs, rhs_);
                 }
             } else {
-                for (const lhs_ of set_systems.get(lhs.to_primitive()) ?? []) {
-                    for (const rhs_ of set_systems.get(rhs.to_primitive()) ?? []) {
+                for (const lhs_ of set_systems.get(lhs) ?? []) {
+                    for (const rhs_ of set_systems.get(rhs) ?? []) {
                         ambiguous_with_flattened.add_edge(lhs_, rhs_)
                     }
                 }
@@ -1068,8 +1068,8 @@ export class ScheduleGraph {
         const conflicting_systems: any[] = [];
         for (const [a, b] of flat_results_disconnected) {
             if (ambiguous_with_flattened.contains_edge(a, b)
-                || this.ambiguous_with_all.has(a.to_primitive())
-                || this.ambiguous_with_all.has(b.to_primitive())
+                || this.ambiguous_with_all.has(a)
+                || this.ambiguous_with_all.has(b)
             ) {
                 continue
             }
@@ -1107,20 +1107,20 @@ export class ScheduleGraph {
         dependency_flattened_dag: Dag,
         hier_results_reachable: FixedBitSet
     ) {
-        const cache = dependency_flattened_dag.topsort
-        const dg_system_ids = cache.filter(id => id.is_system());
-        // const dg_system_ids = Array.from({ length: cache.length }, (_, i) => cache[i])
-        // console.log('DgSystemIds', dg_system_ids);
 
-        const dg_system_idx_map = new Map(iter(dg_system_ids)
+        const dg_system_ids = dependency_flattened_dag
+            .topsort
+            .filter(id => id.is_system());
+
+        const dg_system_idx_map = iter(dg_system_ids)
             .enumerate()
-            .map(([i, id]) => [id.to_primitive(), i])
-            .collect() as [string, number][]);
+            .map(([i, id]) => [id, i])
+            .collect(Map) as Map<NodeId, number>;
 
         const hg_systems = iter(this.#hierarchy.topsort)
             .enumerate()
             .filter(([_, id]) => id.is_system())
-            .collect()
+            .collect();
 
         const [hg_set_with_conditions_idxs, hg_set_ids] = iter(this.#hierarchy.topsort)
             .enumerate()
@@ -1143,7 +1143,7 @@ export class ScheduleGraph {
             const dependents = dependency_flattened_dag
                 .graph
                 .neighbors_directed(sys_id, Outgoing)
-                .map(dep_id => dg_system_idx_map.get(dep_id.to_primitive())!)
+                .map(dep_id => dg_system_idx_map.get(dep_id)!)
 
             system_dependencies.push(num_dependencies);
             system_dependents.push(dependents);
@@ -1155,7 +1155,7 @@ export class ScheduleGraph {
             const bitset = systems_in_sets_with_conditions[i];
             for (let j = 0; j < hg_systems.length; j++) {
                 const [col, sys_id] = hg_systems[j]
-                const idx = dg_system_idx_map.get(sys_id.to_primitive())!;
+                const idx = dg_system_idx_map.get(sys_id)!;
                 const is_descendant = hier_results_reachable.contains(index(row, col, hg_node_count));
                 bitset.set(idx, is_descendant);
             }
@@ -1164,7 +1164,7 @@ export class ScheduleGraph {
         const sets_with_conditions_of_systems = Array.from({ length: sys_count }, () => FixedBitSet.with_capacity(set_with_conditions_count));
         for (let i = 0; i < hg_systems.length; i++) {
             const [col, sys_id] = hg_systems[i];
-            const ix = dg_system_idx_map.get(sys_id.to_primitive())!;
+            const ix = dg_system_idx_map.get(sys_id)!;
             const bitset = sets_with_conditions_of_systems[ix];
             const it = iter(hg_set_with_conditions_idxs)
                 .enumerate()
@@ -1222,21 +1222,20 @@ export class ScheduleGraph {
             return err_or_sched;
         }
 
-        // console.log('ErrOrSched', err_or_sched.__system_ids);
-
         schedule.cloneFrom(err_or_sched);
         // move systems into new schedule
         const system_ids = schedule.__system_ids;
-        // console.log('updateSchedule systems length:', system_ids, system_ids.length, schedule.__systems.length);
 
         for (let i = 0; i < system_ids.length; i++) {
             const id = system_ids[i];
             const system = this.#systems[id.index].inner!;
+
             this.#systems[id.index].inner = null;
             const conditions = this.#system_conditions[id.index];
+
             this.#system_conditions[id.index] = [];
             schedule.__systems.push(system);
-            schedule.__system_conditions[id.index] = conditions;
+            schedule.__system_conditions.push(conditions);
         }
 
         const set_ids = schedule.__set_ids;
@@ -1246,6 +1245,7 @@ export class ScheduleGraph {
             this.#system_set_conditions[id.index] = [];
             schedule.__set_conditions.push(conditions);
         }
+
 
         return
     }
@@ -1312,12 +1312,12 @@ export class ScheduleGraph {
 
     #nodeNameInner(id: NodeId, report_sets: boolean): string {
         let name;
-
         if (id.is_system()) {
             const name_ = this.#systems[id.index].inner!.name;
 
             if (report_sets) {
                 const sets = this.namesOfSetsContainingNode(id);
+
                 if (sets.length === 0) {
                     name = name_
                 } else if (sets.length === 1) {
@@ -1338,10 +1338,11 @@ export class ScheduleGraph {
             }
 
             if (set.inner.systemType) {
-                const start = `${name}`.search('name:');
-                name = name.slice(start);
-                const end = name.indexOf('\n') - 1;
-                name = name.slice(6, end)
+
+                // const start = `${name}`.search('name:');
+                // name = name.slice(start);
+                // const end = name.indexOf('\n') - 1;
+                // name = name.slice(6, end)
             }
 
         }
@@ -1371,14 +1372,22 @@ export class ScheduleGraph {
     getDependencyCyclesErrorMessage(cycles: Array<NodeId[]>) {
         let message = `schedule has ${cycles.length} before/after cycles:\n`
         for (const [i, cycle] of iter(cycles).enumerate()) {
-            const names = iter(cycle).map(id => [this.nodeKind(id), this.nodeName(id)] as const);
-            const [first_kind, first_name] = names.next().value;
+            const first_id = cycle[0];
+            const first_kind = this.nodeKind(first_id);
+            const first_name = this.nodeName(first_id);
+
             message += `\ncycle ${i + 1}: ${first_kind} ${first_name} must run before itself`;
             message += `\n${first_kind} ${first_name}`;
 
-            for (const [kind, name] of names.chain(iter.once([first_kind, first_name]) as any)) {
+            for (let i = 1; i < cycle.length; i++) {
+                const id = cycle[i];
+                const kind = this.nodeKind(id);
+                const name = this.nodeName(id);
                 message += `\n... which must run before ${kind} ${name}`;
             }
+
+            message += `\n... which must run before ${first_kind} ${first_name}`;
+
             message = `\n${message}`
         }
         return message;
@@ -1405,7 +1414,7 @@ export class ScheduleGraph {
 
     #checkOrderButIntersect(
         dep_results_connected: CheckGraphResults['connected'],
-        set_system_bitsets: Map<string, FixedBitSet>
+        set_system_bitsets: Map<NodeId, FixedBitSet>
     ): Result<undefined, ScheduleBuildError> {
         // check that there is no ordering between system sets that intersect
         for (const str of dep_results_connected) {
@@ -1417,8 +1426,8 @@ export class ScheduleGraph {
                 continue
             }
 
-            const a_systems = set_system_bitsets.get(a.to_primitive())!;
-            const b_systems = set_system_bitsets.get(b.to_primitive())!;
+            const a_systems = set_system_bitsets.get(a)!;
+            const b_systems = set_system_bitsets.get(b)!;
 
             if (!a_systems.is_disjoint(b_systems)) {
                 return ScheduleBuildError.SetsHaveOrderButIntersect(
@@ -1430,9 +1439,8 @@ export class ScheduleGraph {
         return
     }
 
-    #checkSystemTypeSetAmbiguity(set_systems: Map<string, NodeId[]>): Result<undefined, ScheduleBuildError> {
-        for (const [str, systems] of set_systems) {
-            const id = NodeId.to_node_id(str)
+    #checkSystemTypeSetAmbiguity(set_systems: Map<NodeId, NodeId[]>): Result<undefined, ScheduleBuildError> {
+        for (const [id, systems] of set_systems) {
             const set = this.#system_sets[id.index];
             if (set.isSystemType) {
                 const instances = systems.length;
@@ -1539,7 +1547,7 @@ type ProcessConfigsResult = {
 }
 
 export interface ProcessScheduleConfig {
-    processConfig(schedule_graph: ScheduleGraph, config: ScheduleConfigs): NodeId
+    processConfig(schedule_graph: ScheduleGraph, config: ScheduleConfigs<Schedulable>): Result<NodeId, ErrorExt<any>>
 }
 
 export type ReportCycles = 0 | 1;

@@ -1,52 +1,66 @@
 import { Result } from "joshkaposh-option";
-import { Entity, EntityDoesNotExistDetails } from "../entity";
+import { Entity } from "../entity";
 import { Command, EntityCommand, EntityCommandError } from "../system/commands";
 import { EntityFetchError } from "../world/error";
-import { World } from "../world";
+import { EntityWorldMut, World } from "../world";
 
-export function default_error_handler(error: Error, context: any) {
+export function default_error_handler(error: Error, _context: any) {
     throw error;
 }
 
-export interface HandleError<Out extends any = void> {
-    hande_error_with(error_handler: (error: Error, context: any) => void): Command;
-    handle_error(): Command;
+export interface HandleError<Out> {
+    handle_error_with(error_handler: (error: Error, context: any) => void): Command<Out>;
+    handle_error(): Command<Out>;
 }
 
-export function HandleError(error_handler: (error: Error, context: any) => void = default_error_handler): Command {
-    return error_handler as any;
+export interface WithEntity<Out> {
+    with_entity(entity: Entity): Command<Out>
 }
 
-export interface CommandWithEntity<Out> {
-    with_entity(entity: Entity): Command<Out> & HandleError<Out>
-}
+export interface CommandWithEntity<Out> extends Command<Out>, WithEntity<Out> { }
 
-export function CommandWithEntity<Out>(command: EntityCommand<Out>): CommandWithEntity<Result<void, Error>> {
-    // @ts-expect-error
-    command.with_entity = function with_entity(entity: Entity) {
-        return {
-            exec(world: World) {
-                const e = world.getEntityMut(entity);
-                if (!e) {
-                    return new EntityFetchError({ NoSuchEntity: { entity, details: EntityDoesNotExistDetails } });
-                }
-
-                const err = command.exec(e);
-                if (err instanceof Error) {
-                    return new EntityCommandError({ CommandFailed: 0 })
-                }
-
-                return;
-            },
-
-            hande_error_with(_error_handler: any) {
-                // error_handler()
-            },
-
-            handle_error() {
-                // this.hande_error_with(default_error_handler)
-            },
-        }
+export function apply_error_handling<Out>(command: Partial<HandleError<Out>>) {
+    command.handle_error_with = function handle_error_with(_error_handler) {
+        return this as Command<Out>;
     }
-    return command as any;
+
+    command.handle_error = function handle_error() {
+        return this as Command<Out>;
+    }
+}
+
+export function defineCommand<Fn extends (world: World) => any, Out extends ReturnType<Fn>>(fn: Fn & Partial<Command<Out>>): Command<Out> {
+    fn.exec = fn;
+    apply_error_handling(fn)
+
+    return fn as Command<Out>;
+}
+
+export function defineEntityCommand<T extends (entity: EntityWorldMut) => any, Out extends ReturnType<T>>(fn: T & Partial<EntityCommand<Out>>): EntityCommand<Out> {
+    fn.exec = fn;
+    apply_error_handling(fn);
+    apply_with_entity(fn as EntityCommand<Out>);
+    return fn as EntityCommand<Out>;
+}
+
+export function apply_with_entity<Out>(command: EntityCommand<Out> & Partial<WithEntity<Out>>): CommandWithEntity<Result<void, EntityCommandError>> {
+    command.with_entity = function with_entity(entity: Entity) {
+        const execute = command.exec;
+        // @ts-expect-error
+        command.exec = function exec(world: World) {
+            const ref = world.getEntityMut(entity);
+            if (!ref) {
+                return new EntityCommandError({ EntityFetchError: new EntityFetchError({ NoSuchEntity: entity }) })
+            }
+
+            const out = execute(ref) as Out;
+            if (out instanceof Error) {
+                return new EntityCommandError({ CommandFailed: 0 });
+            }
+        }
+
+        return this as unknown as Command<Out>;
+    }
+
+    return command as unknown as CommandWithEntity<Result<void, EntityCommandError>>
 }

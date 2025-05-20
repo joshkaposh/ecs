@@ -4,6 +4,9 @@ import { CombinatorSystem, Combine } from "../system/combinator";
 
 // TODO: Condition does not need `IntoScheduleConfig` or `IntoSystemSet`
 export interface Condition<In, Out extends boolean = boolean> extends System<In, Out> {
+    clone(): Condition<In, Out>;
+    intoSystem(): this;
+
     setName(new_name: string): Condition<In, Out>
 
     /**

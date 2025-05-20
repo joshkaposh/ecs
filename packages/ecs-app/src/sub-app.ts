@@ -7,7 +7,7 @@ import { App, AppLabel } from "./app";
 import { Plugin, Plugins, PluginsState } from "./plugin";
 // import { $Main, Main } from "./main_schedule";
 import { IntoSystemSet, SystemSet } from "ecs/src/schedule/set";
-import { MainScheduleOrder } from "./main_schedule";
+// import { MainScheduleOrder } from "./main_schedule";
 import { IntoScheduleConfig, Schedulable } from "ecs/src/schedule/config";
 import { Chain } from "ecs/src/schedule/schedule";
 
@@ -211,10 +211,8 @@ export class SubApp {
 
 
     addEvent(type: Event) {
-        // @ts-expect-error
-        const ev_type = type.ECS_EVENTS_TYPE;
-        if (!this.#world.hasResource(ev_type)) {
-            EventRegistry.registerEvent(ev_type, this.#world)
+        if (!this.#world.hasResource(type)) {
+            EventRegistry.registerEvent(type, this.#world)
         }
 
         return this;
@@ -230,10 +228,7 @@ export class SubApp {
     }
 
     getAddedPlugins() {
-        return iter(this.__plugin_registry)
-            // @ts-expect-error
-            .filter_map(p => p.downcast_ref())
-            .collect()
+        return Array.from(this.__plugin_registry)
     }
 
     isBuildingPlugins() {

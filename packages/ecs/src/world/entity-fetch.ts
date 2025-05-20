@@ -1,32 +1,26 @@
-import { World } from "./world";
-import { Entity, EntityDoesNotExistDetails, EntityMap, EntitySet } from "../entity";
+import type { World } from "./world";
+import { type Entity, EntityDoesNotExistDetails } from "../entity";
 import { EntityFetchError } from "./error";
 import { EntityMut, EntityRef, EntityWorldMut } from "./entity-ref";
-import { ErrorExt, Result } from "joshkaposh-option";
+import { ErrorExt, type Result } from "joshkaposh-option";
 
-export type WorldEntityFetch = Entity | Entity[] | EntitySet;
+export type WorldEntityFetch = Entity | Entity[] | Set<Entity>;
+type HandleFetch<T extends WorldEntityFetch, R extends EntityRef | EntityMut | EntityWorldMut> = Result<
+    T extends Entity ? R :
+    T extends Entity[] ? R[] :
+    T extends Set<Entity> ? Map<Entity, R> :
+    never
+    , EntityFetchError>
 
-// type EntityFetchRef = ''
 
-type HandleFetch<T extends WorldEntityFetch, F extends 0 | 1 | 2> = T extends Entity ?
-    EntityFetchEntity<F> : T extends Entity[] ?
-    EntityFetchArray<F> :
-    EntityFetchSet<F>
+// type HandleFetch<T extends WorldEntityFetch, R extends EntityRef | EntityMut | EntityWorldMut> =
+//     T extends Entity ? R :
+//     T extends Entity[] ? R[] :
+//     T extends Set<Entity> ? R :
+//     never;
 
-type EntityFetchEntity<FnType extends 0 | 1 | 2> = FnType extends 0 ?
-    ReturnType<typeof fetch_ref_entity> : FnType extends 1 ?
-    ReturnType<typeof fetch_mut_entity> :
-    ReturnType<typeof fetch_deferred_mut_entity>;
+type FetchResult<T> = Result<T, EntityFetchError>;
 
-type EntityFetchArray<FnType extends 0 | 1 | 2> = FnType extends 0 ?
-    ReturnType<typeof fetch_ref_array> : FnType extends 1 ?
-    ReturnType<typeof fetch_mut_array> :
-    ReturnType<typeof fetch_deferred_mut_array>;
-
-type EntityFetchSet<FnType extends 0 | 1 | 2> = FnType extends 0 ?
-    ReturnType<typeof fetch_ref_set> : FnType extends 1 ?
-    ReturnType<typeof fetch_mut_set> :
-    ReturnType<typeof fetch_deferred_mut_set>;
 
 
 // type WorldEntityFetchReturnType<T extends WorldEntityFetch, FnType extends 'Ref' | 'Mut' | 'DeferredMut'> = T extends Entity ?
@@ -51,7 +45,7 @@ export function fetch_ref_entity(cell: World, entity: Entity): Result<EntityRef,
 export function fetch_mut_entity(cell: World, entity: Entity): Result<EntityWorldMut, EntityFetchError> {
     const location = cell.entities.get(entity);
     if (!location) {
-        return new EntityFetchError({ NoSuchEntity: { entity, details: EntityDoesNotExistDetails } })
+        return new EntityFetchError({ NoSuchEntity: entity })
     }
     return new EntityWorldMut(cell, location, entity);
 }
@@ -59,7 +53,7 @@ export function fetch_mut_entity(cell: World, entity: Entity): Result<EntityWorl
 export function fetch_deferred_mut_entity(cell: World, entity: Entity): Result<EntityMut, EntityFetchError> {
     const location = cell.entities.get(entity);
     if (!location) {
-        return new EntityFetchError({ NoSuchEntity: { entity, details: EntityDoesNotExistDetails } })
+        return new EntityFetchError({ NoSuchEntity: entity })
     }
     return new EntityMut(cell, entity, location)
 }
@@ -102,7 +96,7 @@ export function fetch_deferred_mut_array(cell: World, entities: Entity[]) {
     return fetch_mut_array(cell, entities);
 }
 
-export function fetch_ref_set(cell: World, set: EntitySet) {
+export function fetch_ref_set(cell: World, set: Set<Entity>) {
     const refs = new Map<Entity, EntityRef>();
     try {
         set.forEach(id => {
@@ -114,17 +108,17 @@ export function fetch_ref_set(cell: World, set: EntitySet) {
         })
         return refs;
     } catch (error) {
-        return error as Entity;
+        return new EntityFetchError({ NoSuchEntity: error as number });
     }
 }
 
-export function fetch_mut_set(cell: World, set: EntitySet) {
+export function fetch_mut_set(cell: World, set: Set<Entity>) {
     const refs = new Map<Entity, EntityMut>();
     try {
         set.forEach(id => {
             const location = cell.entities.get(id);
             if (!location) {
-                throw new EntityFetchError({ NoSuchEntity: { entity: id, details: EntityDoesNotExistDetails } })
+                throw new EntityFetchError({ NoSuchEntity: id })
             }
 
             refs.set(id, new EntityMut(cell, id, location))
@@ -135,30 +129,32 @@ export function fetch_mut_set(cell: World, set: EntitySet) {
     }
 }
 
-export function fetch_deferred_mut_set(cell: World, set: EntitySet) {
+export function fetch_deferred_mut_set(cell: World, set: Set<Entity>) {
     return fetch_mut_set(cell, set);
 }
-export function fetch_ref<T extends WorldEntityFetch>(cell: World, entities: T): HandleFetch<T, 0> {
+
+export function fetch_ref<T extends WorldEntityFetch>(cell: World, entities: T): HandleFetch<T, EntityRef> {
     const fn = typeof entities === 'number' ?
         fetch_ref_entity :
         Array.isArray(entities) ? fetch_ref_array : fetch_ref_set
 
-    return fn(cell, entities as any) as HandleFetch<T, 0>;
+    return fn(cell, entities as any) as HandleFetch<T, EntityRef>;
 }
 
-
-export function fetch_mut<T extends WorldEntityFetch>(cell: World, entities: T): HandleFetch<T, 1> {
+export function fetch_mut<T extends WorldEntityFetch>(cell: World, entities: T): HandleFetch<T, EntityWorldMut> {
     const fn = typeof entities === 'number' ?
         fetch_mut_entity :
-        Array.isArray(entities) ? fetch_mut_array : fetch_mut_set
+        Array.isArray(entities) ? fetch_mut_array :
+            fetch_mut_set
 
-    return fn(cell, entities as any) as HandleFetch<T, 1>;
+    return fn(cell, entities as any) as HandleFetch<T, EntityWorldMut>;
 }
 
-export function fetch_deferred_mut<T extends WorldEntityFetch>(cell: World, entities: T): HandleFetch<T, 2> {
+export function fetch_deferred_mut<T extends WorldEntityFetch>(cell: World, entities: T): HandleFetch<T, EntityMut> {
     const fn = typeof entities === 'number' ?
         fetch_deferred_mut_entity :
-        Array.isArray(entities) ? fetch_deferred_mut_array : fetch_deferred_mut_set
+        Array.isArray(entities) ? fetch_deferred_mut_array :
+            fetch_deferred_mut_set
 
-    return fn(cell, entities as any) as HandleFetch<T, 2>;
+    return fn(cell, entities as any) as HandleFetch<T, EntityMut>
 }

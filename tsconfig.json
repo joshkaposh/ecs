@@ -1,48 +1,10 @@
 {
-    "compilerOptions": {
-        "target": "ESNext",
-        "useDefineForClassFields": true,
-        "module": "ESNext",
-        "lib": [
-            "ESNext",
-            "DOM"
-        ],
-        "alwaysStrict": true,
-        "pretty": true,
-        "moduleResolution": "Node",
-        "strict": true,
-        "resolveJsonModule": true,
-        "isolatedModules": true,
-        "esModuleInterop": true,
-        "noEmit": true,
-        "noUnusedLocals": true,
-        "noUnusedParameters": true,
-        "noImplicitReturns": true,
-        "skipLibCheck": true,
-        "paths": {
-            "@packages/ecs": [
-                "./ecs/src"
-            ],
-            "@packages/ecs-app": [
-                "./ecs-app/src"
-            ],
-            "@packages/define": [
-                "./define/src"
-            ],
-            "@packages/ecs-input": [
-                "./ecs-input/src"
-            ],
-            "@packages/ecs-ui": [
-                "./ecs-ui/src"
-            ]
-        }
-    },
+    "extends": "./tsconfig.common.json",
     "include": [
-        "src",
-        "packages/define/src",
-        "packages/ecs/src",
-        "packages/ecs-app/src",
-        "packages/ecs-input/src",
-        "packages/ecs-ui/src"
-    ],
+        "packages/ecs",
+        "packages/ecs-app",
+        "packages/ecs-input",
+        "packages/ecs-math",
+        "packages/ecs-ui"
+    ]
 }

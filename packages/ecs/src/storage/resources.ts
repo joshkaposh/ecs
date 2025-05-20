@@ -1,11 +1,9 @@
 import type { Iterator } from "joshkaposh-iterator";
 import type { Option } from "joshkaposh-option";
-import { type ComponentId, type Components, ComponentTicks, type Resource, Tick, check_tick, check_tick_and_assign, defineComponent, ComponentMetadata } from "../component";
+import { type ComponentId, type Components, ComponentTicks, type Resource, Tick, check_tick_and_assign } from "../component";
 import { SparseSet, ThinSparseSet } from "./sparse-set";
 import type { ArchetypeComponentId } from "../archetype";
 import { $read_and_write, Mut, TicksMut } from "../change_detection";
-import { Class } from "../util";
-import { World } from "../world";
 
 class ResourceData<R extends Resource> {
     #data: Option<InstanceType<R>>;
@@ -46,7 +44,7 @@ class ResourceData<R extends Resource> {
         const data = this.getWithTicks();
         if (data) {
             const [ptr, tick_cells] = data;
-            const ticks_mut = TicksMut.fromTickCells(tick_cells, last_run, this_run);
+            const ticks_mut = new TicksMut(tick_cells, last_run, this_run);
             return new Mut<R>($read_and_write(ptr, ticks_mut) as any, ticks_mut)
         }
         return;
@@ -209,16 +207,4 @@ export class ThinResources {
             )
         }) as ResourceData<R>;
     }
-}
-
-
-type ResourceMetadata<R extends new (...args: any[]) => any> = { from_world(world: World): InstanceType<R> };
-
-export function defineResource<R extends Class>(ty: R & Partial<ComponentMetadata> & Partial<ResourceMetadata<R>> & {}): Resource<R> {
-    defineComponent(ty, 1);
-    ty.from_world ??= (_world: World) => {
-        return new ty() as InstanceType<R>;
-    }
-
-    return ty as Resource<R>
 }

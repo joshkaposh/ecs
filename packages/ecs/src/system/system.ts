@@ -3,22 +3,29 @@ import { ErrorExt, Option, Result } from "joshkaposh-option";
 import { TODO } from "joshkaposh-iterator/src/util";
 import { DeferredWorld, World } from "../world";
 import { Access } from "../query";
-import { SystemParamValidationError, check_tick, ParamBuilder, relative_to, Tick, MAX_CHANGE_AGE, Condition } from "..";
+import { Tick, check_tick, relative_to } from "../component";
+import { MAX_CHANGE_AGE } from "../change_detection";
+import { SystemParamValidationError } from "./system-param";
+import { ParamBuilder } from "./param-builder";
+import { Condition } from "../schedule/condition";
 import { unit } from "../util";
 import { InternedSystemSet, IntoSystemSet, SystemSet, SystemTypeSet } from "../schedule/set";
-import { ScheduleConfig, ScheduleConfigs } from "../schedule/config";
+import { IntoScheduleConfig, Schedulable, ScheduleConfig, ScheduleConfigs } from "../schedule/config";
 import { ProcessScheduleConfig, ScheduleGraph } from "../schedule/schedule";
 import { Ambiguity, NodeId } from "../schedule/graph";
+import { PipeSystem } from "./combinator";
+
+export type InferSystemParams<In> = In extends any[] ? In : In extends ParamBuilder<infer Args extends any[]> ? Args : never
+
 export type SystemIn<S> = S extends System<infer In, any> ? In : never;
-
-export type SystemFn<P, Out, Fallible extends boolean = false> = (...args: P extends any[] ? P : P extends ParamBuilder<infer Args> ? Args : never) => Fallible extends false ? Out : boolean;
-
+export type SystemOut<S> = S extends System<any, infer Out> ? Out : never;
+export type SystemFn<In, Out> = (...args: InferSystemParams<In>) => Out;
 
 export interface IntoSystem<In, Out> {
     intoSystem(): System<In, Out>;
 }
 
-export interface System<In, Out> extends IntoSystemSet<any>, IntoSystem<In, Out>, ProcessScheduleConfig {
+export interface System<In, Out> extends IntoSystemSet<any>, IntoSystem<In, Out>, ProcessScheduleConfig, IntoScheduleConfig<Schedulable> {
     /**
      * Property indicating if this system returns a boolean.
      */
@@ -179,6 +186,10 @@ export interface System<In, Out> extends IntoSystemSet<any>, IntoSystem<In, Out>
      */
     defaultSystemSets(): InternedSystemSet[];
 
+    clone(): System<In, Out>;
+
+    pipe<Bin, Bout>(b: System<Bin, Bout>): System<In, Bout>
+
     [Symbol.toPrimitive](): string;
     [Symbol.toStringTag](): string;
 }
@@ -187,7 +198,7 @@ export function check_system_change_tick(last_run: Tick, this_run: Tick, system_
     if (check_tick(last_run, this_run)) {
         const age = relative_to(this_run, last_run);
         console.warn(`System ${system_name} has not run for ${age} ticks. Changes older than ${MAX_CHANGE_AGE - 1} will not be detected.`)
-        return relative_to(this_run, Tick.MAX);
+        return relative_to(this_run, MAX_CHANGE_AGE);
     }
     return this_run;
 }
@@ -213,30 +224,39 @@ export function assert_is_system(system: System<any, any>) {
     system.initialize(world);
 }
 
-export class ApplyDeferred implements System<unit, unit> {
-    static readonly type_id: UUID = v4() as UUID;
+export const ApplyDeferred: System<unit, unit> & IntoScheduleConfig<Schedulable> & { last_run: number } = {
+    type_id: v4() as UUID,
+    fallible: false,
 
-    readonly fallible = false;
+    name: 'joshkaposh-ecs: apply_deferred',
+    is_send: false,
+    is_exclusive: true,
+    has_deferred: false,
 
-    readonly name = 'joshkaposh-ecs: apply_deferred';
-    readonly is_send = false;
-    readonly is_exclusive = true;
-    readonly has_deferred = false;
+    last_run: 0,
 
-    readonly system_type_id = ApplyDeferred.type_id;
-    readonly type_id = ApplyDeferred.type_id;
+    get system_type_id() {
+        return this.type_id;
+    },
+
+    clone() {
+        return { ...this };
+    },
+
+    pipe(b) {
+        return new PipeSystem(this, b)
+    },
 
     setName(_new_name: string): System<typeof unit, typeof unit> {
-        console.warn('Cannot customize ApplyDeferred name')
+        console.warn('Cannot customize ApplyDeferred name');
         return this;
-    }
+    },
 
-
-    processConfig(schedule_graph: ScheduleGraph, config: ScheduleConfigs): NodeId {
+    processConfig(schedule_graph: ScheduleGraph, config: ScheduleConfigs<Schedulable>): NodeId {
         return schedule_graph.addSystemInner(config as any) as any;
-    }
+    },
 
-    intoConfig(): ScheduleConfigs {
+    intoConfig(): ScheduleConfigs<Schedulable> {
         const sets = this.defaultSystemSets();
         return new ScheduleConfig(
             this as any,
@@ -247,112 +267,108 @@ export class ApplyDeferred implements System<unit, unit> {
             },
             []
         )
-    }
+    },
 
     intoSystem(): System<typeof unit, typeof unit> {
         return this
-    }
+    },
 
-    inSet(set: SystemSet): ScheduleConfigs {
+
+    inSet(set: SystemSet): ScheduleConfigs<Schedulable> {
         return this.intoConfig().inSet(set)
-        // throw new Error('ApplyDeferred cannot be configured. This methods are implemented for consistency across types.')
-    }
+    },
 
-    before<M>(set: IntoSystemSet<M>): ScheduleConfigs {
+    before<M>(set: IntoSystemSet<M>): ScheduleConfigs<Schedulable> {
         return this.intoConfig().before(set)
-    }
+    },
 
-    beforeIgnoreDeferred<M>(set: IntoSystemSet<M>): ScheduleConfigs {
-        return this.intoConfig().beforeIgnoreDeferred(set)
-    }
+    beforeIgnoreDeferred<M>(set: IntoSystemSet<M>): ScheduleConfigs<Schedulable> {
+        return this.intoConfig().beforeIgnoreDeferred(set);
+    },
 
-    after<M>(set: IntoSystemSet<M>): ScheduleConfigs {
-        return this.intoConfig().after(set)
-    }
+    after<M>(set: IntoSystemSet<M>): ScheduleConfigs<Schedulable> {
+        return this.intoConfig().after(set);
+    },
 
-    afterIgnoreDeferred<M>(set: IntoSystemSet<M>): ScheduleConfigs {
+    afterIgnoreDeferred<M>(set: IntoSystemSet<M>): ScheduleConfigs<Schedulable> {
         return this.intoConfig().afterIgnoreDeferred(set)
-    }
+    },
 
-    distributiveRunIf<M>(condition: Condition<M, boolean>): ScheduleConfigs {
+    distributiveRunIf<M>(condition: Condition<M>): ScheduleConfigs<Schedulable> {
         return this.intoConfig().distributiveRunIf(condition)
-    }
+    },
 
-    runIf<M>(condition: Condition<M, boolean>): ScheduleConfigs {
-        return this.intoConfig().runIf(condition)
-    }
+    runIf<M>(condition: Condition<M>): ScheduleConfigs<Schedulable> {
+        return this.intoConfig().runIf(condition);
+    },
 
-    ambiguousWith<M>(set: IntoSystemSet<M>): ScheduleConfigs {
-        return this.intoConfig().ambiguousWith(set)
-    }
+    ambiguousWith<M>(set: IntoSystemSet<M>): ScheduleConfigs<Schedulable> {
+        return this.intoConfig().ambiguousWith(set);
+    },
 
-    ambiguousWithAll(): ScheduleConfigs {
-        return this.intoConfig().ambiguousWithAll()
-    }
+    ambiguousWithAll(): ScheduleConfigs<Schedulable> {
+        return this.intoConfig().ambiguousWithAll();
+    },
 
-    chain(): ScheduleConfigs {
+    chain(): ScheduleConfigs<Schedulable> {
         return this.intoConfig().chain();
-    }
+    },
 
-    chainIgnoreDeferred(): ScheduleConfigs {
+    chainIgnoreDeferred(): ScheduleConfigs<Schedulable> {
         return this.intoConfig().chainIgnoreDeferred();
-    }
+    },
 
     componentAccess(): Access {
         return TODO('class ApplyDeferred.component_access()')
-    }
+    },
 
     archetypeComponentAccess(): Access {
         return TODO('class ApplyDeferred.archetype_component_access()')
-    }
+    },
 
     run(input: unit, world: World): unit {
         const ret = this.runWithoutApplyingDeferred(input, world);
         this.applyDeferred(world);
         return ret as unit;
-    }
+    },
 
     runUnsafe(_input: SystemIn<System<unit, unit>>, _world: World): unit {
         return unit;
-    }
+    },
 
     runWithoutApplyingDeferred(input: unit, world: World): unit {
         this.updateArchetypeComponentAccess(world);
 
         return this.runUnsafe(input, world);
-    }
+    },
 
-    applyDeferred(_world: World): void { }
+    applyDeferred(_world: World) { },
 
-    queueDeferred(_world: DeferredWorld): void { }
+    queueDeferred(_world: DeferredWorld) { },
 
-    validateParamUnsafe(_world: World): Result<Option<void>, SystemParamValidationError> {
+    validateParamUnsafe(_world: World) { },
 
-    }
+    validateParam(_world: World) { },
 
-    validateParam(_world: World): Result<Option<void>, SystemParamValidationError> {
+    initialize(_world: World) { },
 
-    }
+    updateArchetypeComponentAccess(_world: World) { },
 
-    initialize(_world: World): void { }
-
-    updateArchetypeComponentAccess(_world: World): void { }
-
-    checkChangeTick(_change_tick: Tick): void { }
+    checkChangeTick(_change_tick: Tick) { },
 
     defaultSystemSets(): InternedSystemSet[] {
         return [new SystemTypeSet(this as any)];
-    }
+    },
 
     getLastRun(): Tick {
-        return MAX_CHANGE_AGE;
-    }
+        return this.last_run;
+    },
 
-    setLastRun(_last_run: Tick): void { }
+    setLastRun(_last_run: Tick) { },
 
     intoSystemSet() {
         return new SystemTypeSet(this as any);
-    }
+    },
 
     [Symbol.toPrimitive]() {
         return `System {
@@ -360,7 +376,7 @@ export class ApplyDeferred implements System<unit, unit> {
             is_exclusive: ${this.is_exclusive},
             is_send: ${this.is_send}
         }`
-    }
+    },
 
     [Symbol.toStringTag]() {
         return `System {

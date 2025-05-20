@@ -82,31 +82,38 @@ export class EntityComponentError extends Error implements ErrorType<{ MissingCo
     }
 }
 
-export class EntityFetchError extends Error implements ErrorType<{ NoSuchEntity: { entity: Entity; details: EntityDoesNotExistDetails } } | { AliasedMutability: Entity }> {
-    #type: { NoSuchEntity: { entity: Entity; details: EntityDoesNotExistDetails } } | { AliasedMutability: Entity };
-    constructor(type: { NoSuchEntity: { entity: Entity; details: EntityDoesNotExistDetails } } | { AliasedMutability: Entity }) {
+type EntityFetchErrorType = { NoSuchEntity: Entity } | { AliasedMutability: Entity }
+export class EntityFetchError extends Error implements ErrorType<EntityFetchErrorType> {
+    #id: Entity;
+    #ty: 'NoSuchEntity' | 'AliasedAmbiguity';
+    constructor(type: EntityFetchErrorType) {
         let ty, id
         if ('NoSuchEntity' in type) {
-            ty = 'NoSuchEntity';
-            id = type.NoSuchEntity.entity;
+            ty = 'NoSuchEntity' as const
+            id = type.NoSuchEntity;
         } else {
-            ty = 'AliasedMutability';
+            ty = 'AliasedAmbiguity' as const;
             id = type.AliasedMutability;
         }
 
-        super(`EntityFetchError { ${type}: ${id} }`);
-        this.#type = type;
+        super(`EntityFetchError { ${ty}: ${id} }`);
+        this.#id = id;
+        this.#ty = ty;
     }
 
-    get(): { NoSuchEntity: { entity: Entity; details: EntityDoesNotExistDetails; }; } | { AliasedMutability: Entity; } {
-        return this.#type;
+    get(): EntityFetchErrorType {
+        return { [`${this.#ty}`]: this.#id } as EntityFetchErrorType;
     }
 
     eq(other: EntityFetchError) {
-        return +this === +other;
+        return this.#ty === other.#ty && this.#id === other.#id;
     }
 
     [Symbol.toPrimitive]() {
-        return 'NoSuchEntity' in this.get()
+        return this.message;
+    }
+
+    [Symbol.toStringTag]() {
+        return this.message;
     }
 }

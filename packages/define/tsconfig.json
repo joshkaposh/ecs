@@ -1,5 +1,8 @@
 {
     "extends": "../../tsconfig.json",
+    "include": [
+        "src"
+    ],
     "compilerOptions": {
         "paths": {
             "@packages/ecs": [
@@ -9,8 +12,12 @@
                 "../ecs-app/src"
             ],
             "@packages/define": [
-                "../define/src"
+                "./"
+            ],
+            "references": [
+                "../ecs/src",
+                "../node_modules/joshkaposh-iterator"
             ]
-        }
+        },
     }
 }

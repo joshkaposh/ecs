@@ -1,5 +1,23 @@
 import { type Option, is_none } from "joshkaposh-option";
-import { type World, type Component, type ComponentId, type Entity, type EntityLocation, type RemapQueryTupleToQueryData, type Tick, ComponentTicks, QueryDataTuple, StorageType, RemapToQueryItem } from "..";
+import type { World } from "./world";
+import type { Component, ComponentId } from "../component";
+import type { Entity, EntityLocation } from "../entity";
+import { ComponentTicks, type Tick } from "../tick";
+import { QueryDataTuple } from "../query";
+import { StorageType } from "../storage";
+import { AsQueryItem } from "../query";
+// import {
+//     type World,
+//     type Component,
+//     type ComponentId,
+//     type Entity,
+//     type EntityLocation,
+//     type Tick,
+//     ComponentTicks,
+//     QueryDataTuple,
+//     StorageType,
+//     AsQueryItem
+// } from "..";
 import { $readonly, Mut, Ref, Ticks, TicksMut } from "../change_detection";
 import { fetchTable, fetchSparseSet } from "./world";
 
@@ -20,7 +38,7 @@ export function get_mut_using_ticks<T extends Component>(
         return
     }
     const [value, cells] = tuple;
-    return new Mut(value, TicksMut.fromTickCells(cells, last_change_tick, change_tick))
+    return new Mut(value, new TicksMut(cells, last_change_tick, change_tick))
 }
 
 export function unsafe_entity_cell_get_mut_by_id<T extends Component>(world: World, entity: Entity, location: EntityLocation, component_id: ComponentId): Option<Mut<T>> {
@@ -41,7 +59,7 @@ export function unsafe_entity_cell_get_mut_by_id<T extends Component>(world: Wor
     }
 
     const [value, cells] = tuple;
-    return new Mut(value, TicksMut.fromTickCells(cells, world.lastChangeTick, world.changeTick))
+    return new Mut(value, new TicksMut(cells, world.lastChangeTick, world.changeTick))
 }
 
 export function unsafe_entity_cell_get_change_ticks_by_id(world: World, entity: Entity, loc: EntityLocation, component_id: ComponentId): Option<ComponentTicks> {
@@ -98,16 +116,16 @@ export function unsafe_entity_cell_get_ref<T extends Component>(world: World, en
     }
     const [value, cells] = tuple;
 
-    return new Ref(value as InstanceType<T>, Ticks.fromTickCells(cells, last_change_tick, change_tick));
+    return new Ref(value as InstanceType<T>, new Ticks(cells, last_change_tick, change_tick));
 }
 
-export function unsafe_entity_cell_components<Q extends readonly any[]>(world: World, entity: Entity, loc: EntityLocation, query: Q): RemapToQueryItem<Q> {
+export function unsafe_entity_cell_components<Q extends readonly any[]>(world: World, entity: Entity, loc: EntityLocation, query: Q): AsQueryItem<Q> {
     const components = unsafe_entity_cell_get_components(world, entity, loc, query);
     if (!components) throw new Error('Query Mismatch Error');
     return components;
 }
 
-export function unsafe_entity_cell_get_components<Q extends readonly any[]>(world: World, entity: Entity, location: EntityLocation, query: Q): Option<RemapToQueryItem<Q>> {
+export function unsafe_entity_cell_get_components<Q extends readonly any[]>(world: World, entity: Entity, location: EntityLocation, query: Q): Option<AsQueryItem<Q>> {
     const q = new QueryDataTuple(query);
 
     const state = q.get_state(world.components);
@@ -129,7 +147,7 @@ export function unsafe_entity_cell_get_components<Q extends readonly any[]>(worl
 
         q.set_archetype(fetch, state, archetype, table);
 
-        return q.fetch(fetch, entity, location.table_row) as RemapToQueryItem<Q>;
+        return q.fetch(fetch, entity, location.table_row) as AsQueryItem<Q>;
     }
     return
 }
@@ -140,7 +158,6 @@ export function unsafe_entity_cell_get<T extends Component>(world: World, entity
     if (component_id == null) {
         return;
     }
-
     const component = get_component_inner(
         world,
         component_id,
@@ -191,7 +208,7 @@ export function unsafe_entity_cell_get_mut<T extends Component>(world: World, en
     }
     const [value, cells] = tup;
 
-    return new Mut(value, TicksMut.fromTickCells(cells, last_change_tick, change_tick))
+    return new Mut(value, new TicksMut(cells, last_change_tick, change_tick))
     // return $read_and_write(value,
     // new TicksMut(
     //     cells.added,

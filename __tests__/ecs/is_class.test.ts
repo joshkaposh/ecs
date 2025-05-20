@@ -5,11 +5,11 @@ class TestClass { }
 
 function TestFunction() { }
 
-
 test('is_class', () => {
     assert(is_class(TestClass))
     assert(is_class(new TestClass()))
     assert(is_class(TestFunction));
+    // @ts-expect-error
     assert(is_class(new TestFunction()));
     assert(!is_class({}));
     assert(!is_class({ a: 'hello' }));

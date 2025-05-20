@@ -1,22 +1,24 @@
 {
   "name": "joshkaposh-ecs",
   "version": "0.0.1",
-  "description": "",
+  "description": "an ECS-style game engine written in TypeScript.",
   "main": "src/index.ts",
   "type": "module",
   "scripts": {
     "dev": "vite",
     "test": "vitest",
     "build": "tsc && vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "find-circular-deps": "dpdm --no-warning --no-tree --output circular-deps.json ./src/index.ts"
   },
   "keywords": [],
   "author": "",
   "license": "MIT",
   "devDependencies": {
     "@types/uuid": "^9.0.8",
+    "dpdm": "^3.14.0",
     "typescript": "^5.8.3",
-    "vite": "^6.3.3",
+    "vite": "^6.3.4",
     "vitest": "^3.1.2"
   },
   "dependencies": {

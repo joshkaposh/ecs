@@ -1,13 +1,11 @@
 import { Iterator, iter } from "joshkaposh-iterator";
 import { type Option } from 'joshkaposh-option';
 import { type Component, type ComponentId, type ComponentInfo, ComponentTicks, ThinComponentInfo, type Tick } from "../component";
-import { index, type Entity, type EntityId } from "../entity";
+import { index, type Entity } from "../entity";
 import { Column, type TableRow } from "./table";
 import { capacity, swap_remove, swap_remove_typed } from "../array-helpers";
 import type { Instance } from "../util";
 import { alloc, push, ThinColumn } from "./table/thin-column";
-
-type EntityIndex = EntityId;
 
 export interface PublicThinComponentSparseSet {
     readonly length: number;
@@ -177,7 +175,7 @@ export class ThinComponentSparseSet {
 // Designed for relatively fast insertions and deletions
 export class ComponentSparseSet {
     #dense: Column;
-    #entities: EntityIndex[];
+    #entities: Entity[];
     #sparse: Option<TableRow>[]
 
     constructor(_component_info: ComponentInfo, capacity: number) {
@@ -461,10 +459,10 @@ export class ThinSparseSet<T> {
 }
 
 export class SparseSet<T> {
-    #dense: T[] | readonly T[];
-    #indices: number[] | readonly number[];
-    #sparse: Option<number>[] | readonly Option<number>[];
-    constructor(indices: number[] | readonly number[] = [], dense: T[] | readonly T[] = [], sparse: Option<number>[] | readonly Option<number>[] = []) {
+    #dense: Instance<T>[];
+    #indices: number[];
+    #sparse: Option<number>[];
+    constructor(indices: number[] = [], dense: Instance<T>[] = [], sparse: Option<number>[] = []) {
         this.#indices = indices
         this.#dense = dense;
         this.#sparse = sparse;
@@ -476,7 +474,7 @@ export class SparseSet<T> {
     }
 
     intoImmutable(): SparseSet<T> {
-        return new SparseSet<T>(Object.freeze(this.#indices), Object.freeze(this.#dense), Object.freeze(this.#sparse))
+        return new SparseSet<T>(Object.freeze(this.#indices) as number[], Object.freeze(this.#dense) as any[], Object.freeze(this.#sparse) as any[])
     }
 
     get capacity() {
@@ -495,35 +493,42 @@ export class SparseSet<T> {
         return this.#sparse[index] != null;
     }
 
-    set(index: number, value: T) {
+    set(index: number, value: Instance<T>) {
         const dense_index = this.#sparse[index];
         if (dense_index != null) {
-            // @ts-expect-error
             this.#dense[dense_index] = value
         } else {
-            // @ts-expect-error
             this.#sparse[index] = this.#dense.length;
-            // @ts-expect-error
             this.#indices.push(index);
-            // @ts-expect-error
             this.#dense.push(value);
+        }
+    }
+
+    getOrSet(index: number, value: Instance<T>): Instance<T> {
+        const dense_index = this.#sparse[index];
+        if (dense_index != null) {
+            return this.#dense[dense_index];
+        } else {
+            const dense_index = this.#dense.length;
+            this.#sparse[index] = dense_index;
+            this.#indices.push(index)
+            this.#dense.push(value);
+            return this.#dense[dense_index];
+
         }
     }
 
     getOrSetWith(index: number, func: () => T): Instance<T> {
         const dense_index = this.#sparse[index];
         if (dense_index != null) {
-            return this.#dense[dense_index] as Instance<T>;
+            return this.#dense[dense_index];
         } else {
-            const value = func();
+            const value = func() as Instance<T>;
             const dense_index = this.#dense.length
-            // @ts-expect-error
             this.#sparse[index] = dense_index;
-            // @ts-expect-error
             this.#indices.push(index)
-            // @ts-expect-error
             this.#dense.push(value);
-            return this.#dense[dense_index] as Instance<T>;
+            return this.#dense[dense_index];
         }
     }
 
@@ -539,18 +544,14 @@ export class SparseSet<T> {
 
     delete(index: number): Option<T> {
         const dense_index = this.#sparse[index];
-        // @ts-expect-error
         this.#sparse[index] = null;
         if (dense_index != null) {
             const index = dense_index;
             const is_last = index === this.#dense.length - 1;
-            // @ts-expect-error
             const value = swap_remove(this.#dense, index);
-            // @ts-expect-error
             swap_remove(this.#indices, index);
             if (!is_last) {
                 const swapped_index = this.#indices[index];
-                // @ts-expect-error
                 this.#sparse[swapped_index] = dense_index;
             }
 
@@ -561,11 +562,8 @@ export class SparseSet<T> {
     }
 
     clear() {
-        // @ts-expect-error
         this.#dense.length = 0;
-        // @ts-expect-error
         this.#indices.length = 0;
-        // @ts-expect-error
         this.#sparse.length = 0;
     }
 
@@ -583,7 +581,7 @@ export class SparseSet<T> {
     /**
      * @returns an iterator of values in arbitrary order.
      */
-    values(): Iterator<T> {
+    values(): Iterator<Instance<T>> {
         return iter(this.#dense)
     }
 
@@ -591,11 +589,11 @@ export class SparseSet<T> {
         return this.#dense;
     }
 
-    iter(): Iterator<[number, T]> {
+    iter(): Iterator<[number, Instance<T>]> {
         return iter(this.#indices).zip(this.#dense);
     }
 
-    forEach(callback: (index: number, value: T) => void) {
+    forEach(callback: (index: number, value: Instance<T>) => void) {
         const indices = this.#indices;
         const dense = this.#dense;
         for (let i = 0; i < indices.length; i++) {

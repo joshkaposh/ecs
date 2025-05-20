@@ -1,10 +1,17 @@
 import type { Option } from "joshkaposh-option";
+import { defineWorldQuery } from "define";
 import { $WorldQuery, is_dense, ThinWorldQuery, WorldQuery } from "./world-query";
 import { Entity } from "../entity";
-import { Archetype, Component, ComponentId, Components, FilteredAccess, is_newer_than, AsQueryItem, AsQueryFetch, AsQueryState, StorageSwitch, StorageType, Tick, World } from "ecs";
+import { Archetype } from "../archetype";
+import { Component, ComponentId, Components, is_newer_than } from "../component";
+import { FilteredAccess } from "./access";
+import type { World } from "../world";
+import { type AsQueryState, type AsQueryFetch, type AsQueryItem, StorageSwitch } from "./fetch";
 import { Table, TableRow } from "../storage/table";
 import { unit } from "../util";
 import { ComponentSparseSet } from "../storage/sparse-set";
+import { ComponentTicks, Tick } from "../tick";
+import { StorageType } from "../storage";
 
 export interface QueryFilter<Item = any, Fetch = any, State = any> extends WorldQuery<Item, Fetch, State> {
     readonly IS_ARCHETYPAL: boolean;
@@ -23,32 +30,31 @@ interface FilterFetch<T extends WorldQuery<any, any, any>> {
     matches: boolean;
 }
 
-function is_dense_arch(filter: QueryFilter[]) {
-    let is_archetypal = 1;
-    let is_dense = 1;
-    filter.forEach(f => {
-        // @ts-expect-error
-        is_archetypal &= f.IS_ARCHETYPAL
-        // @ts-expect-error
-        is_dense &= f.IS_DENSE;
-    })
-    return [Boolean(is_dense), Boolean(is_archetypal)] as const;
-}
-
-interface ChangedFetch<T extends Component> {
-    ticks: StorageSwitch<T, Option<Tick[]>, ComponentSparseSet>
+interface ChangeDetectionFetch<T extends Component> {
+    ticks: StorageSwitch<T, Option<ComponentTicks[]>, ComponentSparseSet>;
     last_run: Tick;
     this_run: Tick;
 }
 
-class _Changed<T extends Component> implements QueryFilter<boolean, ChangedFetch<T>, ComponentId> {
+function is_dense_arch(filter: QueryFilter[]) {
+    let is_archetypal = 1;
+    let is_dense = 1;
+    for (let i = 0; i < filter.length; i++) {
+        const f = filter[i];
+        // @ts-expect-error
+        is_archetypal &= f.IS_ARCHETYPAL;
+        // @ts-expect-error
+        is_dense &= f.IS_DENSE;
+    }
+
+    return [Boolean(is_dense), Boolean(is_archetypal)] as const;
+}
+
+
+class _Changed<T extends Component> implements QueryFilter<boolean, ChangeDetectionFetch<T>, ComponentId> {
     readonly [$WorldQuery]: true;
     readonly IS_DENSE: boolean;
     readonly IS_ARCHETYPAL: boolean;
-
-    __item!: boolean;
-    __fetch!: ChangedFetch<T>;
-    __state!: ComponentId;
 
     #ty: T
     constructor(type: T) {
@@ -70,22 +76,22 @@ class _Changed<T extends Component> implements QueryFilter<boolean, ChangedFetch
         }
     }
 
-    set_archetype(fetch: ChangedFetch<T>, component_id: number, _archetype: Archetype, table: Table): void {
+    set_archetype(fetch: ChangeDetectionFetch<T>, component_id: number, _archetype: Archetype, table: Table): void {
         if (this.IS_DENSE) {
             this.set_table(fetch, component_id, table)
         }
 
     }
 
-    set_table(fetch: ChangedFetch<T>, component_id: number, table: Table): void {
-        fetch.ticks.set_table(table.getChangedTicksSliceFor(component_id)! as any);
+    set_table(fetch: ChangeDetectionFetch<T>, component_id: number, table: Table): void {
+        fetch.ticks.set_table(table.getTicksSliceFor(component_id)! as any);
     }
 
     set_access(_state: number, _access: FilteredAccess): void { }
 
-    fetch(fetch: ChangedFetch<T>, entity: Entity, table_row: TableRow): boolean {
+    fetch(fetch: ChangeDetectionFetch<T>, entity: Entity, table_row: TableRow): boolean {
         return fetch.ticks.extract(
-            table => is_newer_than(table![table_row], fetch.last_run, fetch.this_run),
+            table => is_newer_than(table![table_row].changed, fetch.last_run, fetch.this_run),
             sparse_set => is_newer_than(sparse_set.getChangedTick(entity)!, fetch.last_run, fetch.this_run)
         )
     }
@@ -109,24 +115,15 @@ class _Changed<T extends Component> implements QueryFilter<boolean, ChangedFetch
         return set_contains_id(id);
     }
 
-    filter_fetch(fetch: ChangedFetch<T>, entity: Entity, table_row: number): boolean {
+    filter_fetch(fetch: ChangeDetectionFetch<T>, entity: Entity, table_row: number): boolean {
         return this.fetch(fetch, entity, table_row);
     }
 }
-interface AddedFetch<T extends Component> {
-    ticks: StorageSwitch<T, Option<T>, ComponentSparseSet>;
-    last_run: Tick;
-    this_run: Tick;
-}
 
-class _Added<T extends Component> implements QueryFilter<boolean, AddedFetch<T>, ComponentId> {
+class _Added<T extends Component> implements QueryFilter<boolean, ChangeDetectionFetch<T>, ComponentId> {
     readonly IS_DENSE: boolean;
     readonly IS_ARCHETYPAL: boolean;
     readonly [$WorldQuery]: true;
-
-    __item!: boolean;
-    __fetch!: AddedFetch<T>;
-    __state!: ComponentId;
 
     #ty: T
     constructor(type: T) {
@@ -148,7 +145,7 @@ class _Added<T extends Component> implements QueryFilter<boolean, AddedFetch<T>,
         }
     }
 
-    set_archetype(fetch: AddedFetch<T>, component_id: number, _archetype: Archetype, table: Table): void {
+    set_archetype(fetch: ChangeDetectionFetch<T>, component_id: number, _archetype: Archetype, table: Table): void {
         if (this.IS_DENSE) {
             this.set_table(fetch, component_id, table)
         }
@@ -156,14 +153,13 @@ class _Added<T extends Component> implements QueryFilter<boolean, AddedFetch<T>,
 
     set_access(_state: number, _access: FilteredAccess): void { }
 
-    set_table(fetch: AddedFetch<T>, component_id: number, table: Table): void {
-        fetch.ticks.set_table(table.getAddedTicksSliceFor(component_id) as any);
+    set_table(fetch: ChangeDetectionFetch<T>, component_id: number, table: Table): void {
+        fetch.ticks.set_table(table.getTicksSliceFor(component_id));
     }
 
-    fetch(fetch: AddedFetch<T>, entity: Entity, table_row: TableRow): boolean {
+    fetch(fetch: ChangeDetectionFetch<T>, entity: Entity, table_row: TableRow): boolean {
         return fetch.ticks.extract(
-            // @ts-expect-error
-            (table) => is_newer_than(table![table_row], fetch.last_run, fetch.this_run),
+            (table) => is_newer_than(table![table_row].added, fetch.last_run, fetch.this_run),
             sparse_set => is_newer_than(sparse_set.getAddedTick(entity)!, fetch.last_run, fetch.this_run)
         )
 
@@ -178,7 +174,6 @@ class _Added<T extends Component> implements QueryFilter<boolean, AddedFetch<T>,
 
     init_state(world: World) {
         return world.registerComponent(this.#ty);
-
     }
 
     get_state(components: Components): Option<number> {
@@ -189,19 +184,16 @@ class _Added<T extends Component> implements QueryFilter<boolean, AddedFetch<T>,
         return set_contains_id(id);
     }
 
-    filter_fetch(fetch: AddedFetch<T>, entity: Entity, table_row: number): boolean {
+    filter_fetch(fetch: ChangeDetectionFetch<T>, entity: Entity, table_row: number): boolean {
         return this.fetch(fetch, entity, table_row);
     }
 }
 
-class _With implements QueryFilter<unit, unit, ComponentId> {
+class _With {
     readonly IS_DENSE: boolean;
     readonly IS_ARCHETYPAL: boolean;
     readonly [$WorldQuery]: true;
 
-    __item!: unit;
-    __fetch!: unit;
-    __state!: ComponentId;
     #ty: Component;
     constructor(type: Component) {
         this.#ty = type;
@@ -213,12 +205,6 @@ class _With implements QueryFilter<unit, unit, ComponentId> {
     init_fetch(_world: World, _state: number): unit {
         return unit
     }
-
-    set_table(_fetch: unit, _state: number, _table: Table): void { }
-
-    set_access(_state: number, _access: FilteredAccess): void { }
-
-    set_archetype(_fetch: unit, _state: number, _archetype: Archetype, _table: Table): void { }
 
     fetch(_fetch: unit, _entity: Entity, _table_row: TableRow): unit {
         return _fetch
@@ -245,39 +231,42 @@ class _With implements QueryFilter<unit, unit, ComponentId> {
     }
 }
 
-class _Without implements QueryFilter<unit, unit, ComponentId> {
+defineWorldQuery(_With.prototype);
+
+
+class _Without<T extends Component> {
     readonly IS_DENSE: boolean;
     readonly IS_ARCHETYPAL: boolean;
-    readonly [$WorldQuery]: true;
+    readonly [$WorldQuery] = true;
 
-    #ty: Component;
-    constructor(type: Component) {
+    #ty: T;
+    constructor(type: T) {
         this.#ty = type;
-        this[$WorldQuery] = true;
         this.IS_DENSE = is_dense(type)
         this.IS_ARCHETYPAL = true;
     }
 
     init_fetch(_world: World, _state: number): unit { return unit }
 
-    set_archetype(_fetch: unit, _state: number, _archetype: Archetype, _table: Table): void { }
-
-    set_table(_fetch: unit, _state: number, _table: Table): void { }
-
-    set_access(_state: number, _access: FilteredAccess): void { }
-
-    fetch(_fetch: unit, _entity: Entity, _table_row: TableRow): unit { return _fetch }
-
-    update_component_access(id: number, access: FilteredAccess): void { access.and_without(id) }
+    fetch(_fetch: unit, _entity: Entity, _table_row: TableRow): unit { return unit }
 
     init_state(world: World) { return world.registerComponent(this.#ty) }
 
-    get_state(components: Components): Option<number> { return components.componentId(this.#ty) }
+    get_state(components: Components): Option<number> {
+        return components.getComponentId(this.#ty);
+    }
 
-    matches_component_set(id: number, set_contains_id: (component_id: ComponentId) => boolean): boolean { return !set_contains_id(id) }
+    matches_component_set(id: number, set_contains_id: (component_id: ComponentId) => boolean): boolean {
+        return !set_contains_id(id);
+    }
 
-    filter_fetch(_fetch: unit, _entity: Entity, _table_row: number): boolean { return true }
+    filter_fetch(_fetch: unit, _entity: Entity, _table_row: number): boolean {
+        return true;
+    }
 }
+
+defineWorldQuery(_Without.prototype);
+
 
 class _Or<F extends QueryFilter<boolean, FilterFetch<WorldQuery>, any>[]> implements QueryFilter<boolean, AsQueryFetch<F>, AsQueryState<F>> {
     readonly IS_ARCHETYPAL: boolean;
@@ -333,14 +322,14 @@ class _Or<F extends QueryFilter<boolean, FilterFetch<WorldQuery>, any>[]> implem
         }
     }
 
-
     set_access(_state: any[], _access: FilteredAccess): void { }
 
     fetch(fetch: AsQueryFetch<F>, entity: Entity, table_row: TableRow): boolean {
+        const filters = this.#filters;
         let b = false;
-        for (let i = 0; i < this.#filters.length; i++) {
+        for (let i = 0; i < filters.length; i++) {
             // @ts-expect-error
-            b &= fetch.matches && this.#filters[i].filter_fetch(fetch.fetch[i].fetch, entity, table_row);
+            b &= fetch.matches && filters[i].filter_fetch(fetch.fetch[i].fetch, entity, table_row);
         }
         return Boolean(b);
     }
@@ -360,8 +349,8 @@ class _Or<F extends QueryFilter<boolean, FilterFetch<WorldQuery>, any>[]> implem
         access.set_to_access(new_access)
     }
 
-    init_state(world: World): any[] {
-        return this.#filters.map(f => f.init_state(world));
+    init_state(world: World): AsQueryState<F> {
+        return this.#filters.map(f => f.init_state(world)) as AsQueryState<F>;
     }
 
     get_state(components: Components): Option<AsQueryState<F>> {
@@ -391,7 +380,6 @@ class _Or<F extends QueryFilter<boolean, FilterFetch<WorldQuery>, any>[]> implem
 }
 
 class _All<F extends QueryFilter<any[], any[], any>[]> implements QueryFilter<boolean, FilterFetch<any>[], any[]> {
-
     readonly IS_ARCHETYPAL: boolean;
     readonly IS_DENSE: boolean;
     readonly [$WorldQuery]: true;
@@ -496,15 +484,15 @@ export function All(...filter: QueryFilter<any, any, any>[]) {
 }
 
 export type With = InstanceType<typeof _With>
-export function With<T extends Component>(type: T) {
-    return new _With(type)
+export function With<const T extends Component[]>(...type: T) {
+    return type.length === 1 ? new _With(type[0]) : _All.from_filter(type.map(t => new _With(t) as unknown as QueryFilter))
 }
 
 export type Without = InstanceType<typeof _Without>
-export function Without<T extends Component>(type: T) {
-    return new _Without(type)
+export function Without<const T extends Component[]>(...type: T) {
+    return type.length === 1 ? new _Without(type[0]) : _All.from_filter(type.map(t => new _Without(t) as unknown as QueryFilter))
 }
 
-export function Or(...filters: QueryFilter<any, any, any>[]) {
+export function Or<const T extends QueryFilter[]>(...filters: T) {
     return new _Or(filters);
 }

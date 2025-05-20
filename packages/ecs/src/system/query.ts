@@ -3,7 +3,7 @@ import { QueryState, ThinQueryState } from "../query/state";
 import { QueryData, RemapQueryTupleToQueryData, QueryDataTuple, AsQueryItem, ThinQueryData } from "../query/fetch";
 import { All, QueryFilter, ThinQueryFilter } from "../query/filter";
 import { Result } from "joshkaposh-option";
-import { Archetype, Entity, EntitySet, init_query_param, NoopWorldQuery, QueryCombinationIter, QueryEntityError, QueryIter, QueryManyIter, QueryManyUniqueIter, QuerySingleError, SystemMeta, Tick } from "..";
+import { Archetype, Entity, init_query_param, NoopWorldQuery, QueryCombinationIter, QueryEntityError, QueryIter, QueryManyIter, QueryManyUniqueIter, QuerySingleError, SystemMeta, Tick } from "..";
 import { TODO } from "joshkaposh-iterator/src/util";
 
 export class Query<const D extends readonly any[], const F extends readonly any[]> {
@@ -33,6 +33,8 @@ export class Query<const D extends readonly any[], const F extends readonly any[
         init_query_param(world, system_meta, state);
         return state;
     }
+
+    static exec() { }
 
     static new_archetype(state: any, archetype: Archetype, system_meta: SystemMeta) {
         state.new_archetype(archetype, system_meta.__archetype_component_access)
@@ -268,17 +270,17 @@ export class Query<const D extends readonly any[], const F extends readonly any[
         )
     }
 
-    iter_many_unique(entities: EntitySet) {
+    iter_many_unique(entities: Set<Entity>) {
         return this.iter_many_unique_inner(entities);
         // return this.as_readonly().iter_many_unique_inner(entities);
     }
 
-    iter_many_unique_mut(entities: EntitySet) {
+    iter_many_unique_mut(entities: Set<Entity>) {
         return this.iter_many_unique_inner(entities);
     }
 
 
-    iter_many_unique_inner(entities: EntitySet) {
+    iter_many_unique_inner(entities: Set<Entity>) {
         return QueryManyUniqueIter.new(
             this.#world,
             this.#state,
@@ -555,17 +557,17 @@ export class ThinQuery<const D extends readonly any[], const F extends readonly 
         )
     }
 
-    iter_many_unique(entities: EntitySet) {
+    iter_many_unique(entities: Set<Entity>) {
         return this.iter_many_unique_inner(entities);
         // return this.as_readonly().iter_many_unique_inner(entities);
     }
 
-    iter_many_unique_mut(entities: EntitySet) {
+    iter_many_unique_mut(entities: Set<Entity>) {
         return this.iter_many_unique_inner(entities);
     }
 
 
-    iter_many_unique_inner(entities: EntitySet) {
+    iter_many_unique_inner(entities: Set<Entity>) {
         return QueryManyUniqueIter.new(
             this.#world,
             this.#state,

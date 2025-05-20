@@ -1,4 +1,9 @@
-import { Added, All, Changed, Component, ComponentId, Query, QueryData, QueryDataTuple, QueryFilter, QueryState, StorageType, With, Without, World } from "ecs";
+import {
+    // Added,
+    All,
+    // Changed,
+    Component, ComponentId, Query, QueryData, QueryDataTuple, QueryFilter, QueryState, StorageType, With, Without, World
+} from "ecs";
 import { FilteredAccess, UnboundedAccessError } from "./access";
 
 export class QueryBuilder<const D extends any[] = [], const F extends any[] = []> {
@@ -7,8 +12,9 @@ export class QueryBuilder<const D extends any[] = [], const F extends any[] = []
 
     #or: boolean;
     #first: boolean;
-
+    // @ts-expect-error
     #D!: QueryData;
+    // @ts-expect-error
     #F!: QueryFilter;
 
     #data: D;
@@ -39,7 +45,7 @@ export class QueryBuilder<const D extends any[] = [], const F extends any[] = []
     }
 
     is_dense() {
-        const is_dense = (component_id: number) => this.#world.components.get_info(component_id)?.storage_type() === StorageType.Table;
+        const is_dense = (component_id: number) => this.#world.components.getInfo(component_id)?.storageType === StorageType.Table;
         const component_accesses = this.#access.access().try_iter_component_access();
         if (component_accesses instanceof UnboundedAccessError) {
             return false;
@@ -130,9 +136,9 @@ export class QueryBuilder<const D extends any[] = [], const F extends any[] = []
         return this;
     }
 
-    ref<T extends Component>(type: T) { }
+    ref<T extends Component>(_type: T) { }
 
-    mut<T extends Component>(type: T) { }
+    mut<T extends Component>(_type: T) { }
 
     and(fn: (builder: QueryBuilder) => void) {
         const builder = new QueryBuilder(this.#world, [], []);
@@ -196,7 +202,7 @@ export class QueryBuilder<const D extends any[] = [], const F extends any[] = []
 
     build() {
         const state = QueryState.new(this.#data as any, this.#filter as any, this.#world)
-        return new Query(this.#world, state, this.#world.last_change_tick(), this.#world.change_tick())
+        return new Query(this.#world, state, this.#world.lastChangeTick, this.#world.changeTick)
     }
 
 

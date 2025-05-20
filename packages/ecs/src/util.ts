@@ -1,7 +1,9 @@
 import type { Primitive } from "joshkaposh-iterator";
 import type { None, Option } from "joshkaposh-option";
-import type { Component, ComponentMetadata } from "./component";
-import type { Prettify } from "joshkaposh-iterator/src/util";
+
+export interface TypeId {
+    readonly type_id: UUID;
+}
 
 export type Some<T> = T extends None ? never : T;
 
@@ -12,7 +14,33 @@ export type Class<Static extends {} = {}, Inst extends {} = {}> = (new (...args:
 
 export type Instance<T> = T extends new (...args: any[]) => any ? InstanceType<T> : T;
 
-export type PrettifyComponent<T extends Component> = Prettify<Omit<T, keyof ComponentMetadata>>;
+export type DeepReadonly<T> = Readonly<{
+    [K in keyof T]:
+    // Is it a primitive? Then make it readonly
+    T[K] extends (number | string | symbol) ? Readonly<T[K]>
+    // Is it an array of items? Then make the array readonly and the item as well
+    : T[K] extends Array<infer A> ? Readonly<Array<DeepReadonly<A>>>
+    // It is some other object, make it readonly as well
+    : DeepReadonly<T[K]>;
+}>
+
+export type Trait<Required, Provided> = {
+    required: Required
+    provided: Provided;
+};
+
+export type MutOrReadonlyArray<T> =
+    T extends Array<infer Inner> ? MutOrReadonlyArray<Inner> :
+    T[] | readonly T[];
+
+export function all_tuples<T>(tuples: (T | T[])[], fn: (tuple: (T | T[])[]) => void) {
+    for (let i = 0; i < tuples.length; i++) {
+        const maybeTuple = tuples[i];
+        if (Array.isArray(maybeTuple)) {
+            fn(maybeTuple);
+        }
+    }
+}
 
 export function is_primitive(value: unknown): value is Primitive {
     const ty = typeof value;
@@ -125,34 +153,6 @@ export function insert_set<T>(set: Set<T>, value: T): boolean {
 
 // }
 
-export type DeepReadonly<T> = Readonly<{
-    [K in keyof T]:
-    // Is it a primitive? Then make it readonly
-    T[K] extends (number | string | symbol) ? Readonly<T[K]>
-    // Is it an array of items? Then make the array readonly and the item as well
-    : T[K] extends Array<infer A> ? Readonly<Array<DeepReadonly<A>>>
-    // It is some other object, make it readonly as well
-    : DeepReadonly<T[K]>;
-}>
-
-export type Trait<Required, Provided> = {
-    required: Required
-    provided: Provided;
-};
-
-export type MutOrReadonlyArray<T> =
-    T extends Array<infer Inner> ? MutOrReadonlyArray<Inner> :
-    T[] | readonly T[];
-
-// export function eq<T>(a: T, b: T, hint: Hint = 'number') {
-//     if (hint === 'number') {
-//         return Number(a) === Number(b);
-//     } else if (hint === 'string') {
-//         return `${a}` === `${b}`;
-//     } else {
-//         return a === b;
-//     }
-// }
 
 export function get_short_name(str: string) {
     return str;

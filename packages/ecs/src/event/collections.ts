@@ -1,14 +1,18 @@
 import { done, DoubleEndedIterator, drain, ExactSizeIterator, item, iter, Iterator } from "joshkaposh-iterator";
-import { extend } from "../array-helpers";
-import { Event, EventId, EventInstance } from "./base";
+import type { Event, EventId, EventInstance } from "./event.type";
+import type { Instance } from "../util";
 import { type Option, u32 } from "joshkaposh-option";
-import { EventCursor } from "./event_cursor";
-import { Instance } from "../util";
-import { Default } from "../default";
-import { defineParam, SystemMeta } from "../system";
-import { World } from "../world";
 import { ResMut } from "../change_detection";
-import { ComponentId, Tick } from "../component";
+import type { ComponentId, Tick } from "../component";
+import { EventCursor } from "./event_cursor";
+import { Default } from "../default";
+import { SystemMeta, SystemParam, defineParam } from "../system";
+import { World } from "../world";
+
+interface Events<E extends Event> extends SystemParam<ComponentId, ResMut<Events<E>>> {
+    send(event: Instance<E>): EventId;
+
+}
 
 class Events<E extends Event> {
     __events_a: EventSequence<E>;
@@ -37,14 +41,13 @@ class Events<E extends Event> {
         return ResMut.get_param(component_id, system_meta, world, change_tick);
     }
 
-    get event_count(): number {
-        return this.#event_count
+    /** the total amount of events in the buffer. */
+    get eventCount() {
+        return this.#event_count;
     }
 
-    /**
-     * @returns Returns the index of the oldest event stored in the event buffer.
-     */
-    oldest_event_count(): number {
+    /** the index of the oldest event stored in the event buffer. */
+    get oldestEventCount() {
         return this.__events_a.start_event_count;
     }
 
@@ -54,17 +57,12 @@ class Events<E extends Event> {
      * the event.
      * This method returns the `EventId` of the sent `event`
      */
-    send(event: Instance<E>): EventId<E> {
-        return this.send_with_caller(event);
-
-    }
-
-    send_with_caller(event: Instance<E>): EventId<E> {
-        const event_id = this.event_count;
+    send(event: Instance<E>): EventId {
+        const event_id = this.eventCount;
         const event_instance = {
             event_id,
             event
-        } as EventInstance<E>;
+        }
 
         this.__events_b.events.push(event_instance)
         this.#event_count += 1;
@@ -76,45 +74,30 @@ class Events<E extends Event> {
      * This is more efficient than sending each event individually.
      * This method returns the [IDs](`EventId`) of the sent `events`. 
      */
-    send_batch(events: Iterator<Instance<E>> | InstanceType<E>[]): SendBatchIds<E> {
+    sendBatch(events: Iterator<Instance<E>> | InstanceType<E>[]): SendBatchIds {
         const last_count = this.#event_count;
         this.extend(events);
 
         return new SendBatchIds(last_count, this.#event_count);
     }
 
-    send_default<T extends E extends Default<E> ? EventId<E> : never>(): T {
-        // @ts-expect-error
-        return this.send(new this.#ty());
+    sendDefault<T extends E extends Default<E> ? EventId : never>(): T {
+        return this.send(new this.#ty()) as T;
     }
 
     /**
-     * @summary Gets a new [`ManualEventReader`]. This will include all events already in the event buffers.
+     * @summary Gets a new [`EventCursor`]. This will include all events already in the event buffers.
      */
-    get_cursor(): EventCursor<E> {
-        return new EventCursor() as EventCursor<E>;
+    getCursor(): EventCursor<E> {
+        return new EventCursor(this.#ty)
     }
 
     /**
-     * @summary Gets a new [`ManualEventReader`]. This will ignore all events already in the event buffers.
+     * @summary Gets a new [`EventCursor`]. This will ignore all events already in the event buffers.
      * It will read all future events.
      */
-    get_cursor_current(): EventCursor<E> {
-        return new EventCursor(this.#event_count, this.#ty);
-    }
-
-    /**
-     * @deprecated `get_reader()` is deprecated. Please use `get_cursor()` instead.
-     */
-    get_reader(): EventCursor<E> {
-        return new EventCursor();
-    }
-
-    /**
-     * @deprecated `get_reader()` is deprecated. Please use `get_cursor()` instead.
-     */
-    get_reader_current(): EventCursor<E> {
-        return new EventCursor(this.#event_count, this.#ty);
+    getCursorCurrent(): EventCursor<E> {
+        return new EventCursor(this.#ty, this.#event_count);
     }
 
     /**
@@ -130,9 +113,9 @@ class Events<E extends Event> {
         this.__events_b.events = this.__events_a.events;
         this.__events_a.events = temp;
 
-        temp = this.__events_b.start_event_count;
-        this.__events_b.start_event_count = this.__events_a.start_event_count;
-        this.__events_a.start_event_count = temp;
+        // temp = this.__events_b.start_event_count;
+        // this.__events_b.start_event_count = this.__events_a.start_event_count;
+        // this.__events_a.start_event_count = temp;
 
         this.__events_b.events.length = 0
         this.__events_b.start_event_count = this.#event_count;
@@ -163,15 +146,15 @@ class Events<E extends Event> {
         this.__events_b.events.length = 0;
     }
 
-    len(): number {
+    get length(): number {
         return this.__events_a.events.length + this.__events_b.events.length;
     }
 
-    is_empty(): boolean {
-        return this.len() === 0;
+    get isEmpty(): boolean {
+        return this.__events_a.events.length === 0 && this.__events_b.events.length === 0;
     }
 
-    drain(): Iterator<E> {
+    drain(): Iterator<Instance<E>> {
         this.reset_start_event_count();
 
         return drain(this.__events_a.events)
@@ -180,11 +163,11 @@ class Events<E extends Event> {
     }
 
     iter_current_update_events(): ExactSizeIterator<E> {
-        return iter(this.__events_b.events).map(i => i.event) as unknown as ExactSizeIterator<E>
+        return iter(this.__events_b.events).map(i => i.event) as unknown as ExactSizeIterator<Instance<E>>
     }
 
-    get_event(id: number): Option<[event: E, index: number]> {
-        if (id < this.oldest_id()) {
+    getEvent(id: number): Option<[event: Instance<E>, index: number]> {
+        if (id < this.oldestId) {
             return
         }
 
@@ -195,7 +178,7 @@ class Events<E extends Event> {
         return inst ? [inst.event, inst.event_id] : undefined;
     }
 
-    oldest_id() {
+    get oldestId() {
         return this.__events_a.start_event_count;
     }
 
@@ -206,7 +189,7 @@ class Events<E extends Event> {
     }
 
     extend(iterable: Iterable<E>) {
-        const old_count = this.#event_count;
+        // const old_count = this.#event_count;
         let event_count = this.#event_count;
         const events = iter(iterable).map(event => {
             const event_id = this.#event_count
@@ -215,7 +198,8 @@ class Events<E extends Event> {
         }).collect();
 
         this.#event_count = event_count;
-        extend(this.__events_b.events, events as any)
+        this.__events_b.events.push(...events);
+        // extend(this.__events_b.events, events as any)
     }
 
 
@@ -223,14 +207,8 @@ class Events<E extends Event> {
 
 defineParam(Events);
 
-export { Events };
 
-export interface EventSequence<E extends Event> {
-    events: EventInstance<E>[];
-    start_event_count: number;
-}
-
-export class SendBatchIds<E extends Event> extends ExactSizeIterator<EventId<E>> {
+class SendBatchIds extends ExactSizeIterator<EventId> {
     #last_count: number;
     #event_count: number;
 
@@ -253,4 +231,11 @@ export class SendBatchIds<E extends Event> extends ExactSizeIterator<EventId<E>>
         this.#last_count += 1;
         return item(elt);
     }
+}
+
+export { Events, SendBatchIds };
+
+export interface EventSequence<E extends Event> {
+    events: EventInstance<E>[];
+    start_event_count: number;
 }

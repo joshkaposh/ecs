@@ -1,33 +1,41 @@
 import type { Option } from 'joshkaposh-option'
 import { iter, Iterator } from 'joshkaposh-iterator';
 import { Ord } from 'joshkaposh-index-map/src/map';
-import { Archetype, ArchetypeId, Archetypes, BundleComponentStatus, ComponentStatus, SpawnBundleStatus } from "./archetype";
-import { Component, ComponentId, ComponentMetadata, Components, RequiredComponents, ThinComponents, Tick } from "./component";
+import { ThinComponent } from 'define';
+import { Archetype, ArchetypeId, Archetypes, BundleComponentStatus, ComponentStatus, SpawnBundleStatus, ArchetypeAfterBundleInsert } from "./archetype";
+import { Component, ComponentId, ComponentMetadata, Components, ComponentsRegistrator, RequiredComponents, ThinComponents, Tick } from "./component";
 import { Entity, EntityLocation, index } from "./entity";
-import { StorageType, Storages, ThinSparseSets, ThinStorages, ThinTable } from "./storage";
-import { SparseSets } from "./storage/sparse-set";
-import { Table, TableRow } from "./storage/table";
-import { entry } from "./util";
-import { ArchetypeAfterBundleInsert, SystemMeta } from '.';
+import { StorageType, type Storages, type ThinSparseSets, type ThinStorages, type ThinTable, type SparseSets, type Table, type TableRow } from "./storage";
+import { entry, Instance, type TypeId } from "./util";
+import { DeferredWorld, EntityWorldMut, ON_ADD, ON_INSERT, ON_REPLACE } from './world';
 import { ThinWorld, World } from './world/world';
-import { ThinComponent, TypeId } from 'define';
+import { defineParam, SystemMeta } from './system';
 
 // TODO: enable reusing a bundle to spawn/insert components.
 // TODO: this will allow less object instantion
 
 export type BundleId = number;
 
+/**
+ * Creates a [`Bundle`] by taking it from internal Storage.
+ * 
+ * **Safety**
+ * 
+ * Manual implementations of this interface are unsupported.
+ * If you want a type to implement [`Bundle`], you must use `defineBundle`
+ */
 export interface BundleFromComponents {
     // Calls `func`, which should return data for each component in the bundle, in the order of
     // this bundle's `Component`s
 
     // ! Safety
     // Caller must return data for each component in the bundle, in the order of this bundle's `Components`s.
-    fromComponents<T>(ctx: T, fn: (value: T) => T): T;
+    fromComponents<T extends Component>(ctx: T, fn: (value: Instance<T>) => Instance<T>): T;
 }
 
 // The parts from the `Bundle` that don't require statically knowing the components of the bundle.
-export interface DynamicBundle {
+export interface DynamicBundle<Effect extends BundleEffect = BundleEffect> {
+    Effect: Effect;
     /**
      * **Safety** -
      * The `StorageType` argument passed into [`Bundle::get_components`] must be correct for the
@@ -36,14 +44,19 @@ export interface DynamicBundle {
      * Calls `func` on each value, in the order of this bundle's [`Component`]s. This passes
      * ownership of the component values to `func`.
      */
-    getComponents(func: (storage_type: StorageType, ptr: {}) => void): void;
+    getComponents(func: (storage_type: StorageType, ptr: InstanceType<Component>) => void): void;
 };
 
-export interface Bundle extends TypeId, DynamicBundle, BundleFromComponents {
-    readonly name: string;
+export interface BundleEffect {
+    apply(entity: EntityWorldMut): void;
+}
+
+export interface Bundle extends TypeId, DynamicBundle {
     // Gets this `Bundle`s component_ids, in the order of this bundle's `Component`s
     componentIds(components: Components, ids: (component_id: ComponentId) => void): void;
     getComponentIds(components: Components, ids: (component_id: Option<ComponentId>) => void): void;
+    registerRequiredComponents(components: ComponentsRegistrator, required_components: RequiredComponents): void;
+    [Symbol.toStringTag](): string;
 }
 
 export interface ThinBundleFromComponents {
@@ -71,33 +84,73 @@ export interface ThinBundle extends TypeId, ThinDynamicBundle, ThinBundleFromCom
     getComponentIds(components: ThinComponents, ids: (component_id: Option<ComponentId>) => void): void;
 }
 
-function ComponentBundle(type: ComponentMetadata): Bundle {
-    const actual = type;
-    type = type.type_id ? type : type.constructor as Component
+export const BundleEffect = {
+    NoEffect: { apply(_entity: EntityWorldMut) { } }
+} as const;
 
-    return {
-        type_id: type.type_id,
-        name: `ECS Bundle { ${type.type_id} }`,
-        componentIds(components, ids) {
-            ids(components.registerComponent(type as Component));
-        },
-        fromComponents(ctx, func) {
-            return func(ctx);
-        },
-        getComponentIds(components, ids) {
-            ids(components.getId(type))
-        },
+// function componentIds(this: Component, components: Components, ids: (component_id: ComponentId) => void) {
+//     ids(components.registerComponent(this))
+// }
 
-        getComponents(func) {
-            func(type.storage_type, actual)
-        },
-    }
+// function getComponentIds(this: Component, components: Components, ids: (component_id: Option<ComponentId>) => void) {
+//     ids(components.getId(this));
+// }
+
+// function fromComponents<T>(ctx: T, func: (value: T) => T) {
+//     return func(ctx);
+// }
+
+// function getComponents<T extends Component>(this: T, ptr: InstanceType<T>) {
+//     return (func: (storage_type: StorageType, ptr: {}) => void) => func(this.storage_type, ptr);
+// }
+
+// function BundleForComponent<T extends Component>(type: T & Partial<Bundle>): T & Bundle {
+//     type.componentIds = componentIds;
+//     type.getComponentIds = getComponentIds;
+//     type.fromComponents = fromComponents;
+//     // @ts-expect-error
+//     type.getComponents = getComponents(type);
+
+//     return type as T & Bundle;
+// }
+
+function componentIds(this: Component, components: Components, ids: (component_id: ComponentId) => void) {
+    ids(components.registerComponent(this));
+}
+// fromComponents(ctx, func) {
+//     return func(ctx);
+// },
+function getComponentIds(this: Component, components: Components, ids: (component_id: Option<ComponentId>) => void) {
+    ids(components.getId(this))
 }
 
-const BundleRegistry = new Map<UUID, ThinBundle>();
+function getComponents(this: Component, ptr: InstanceType<Component>, func: (storage_type: StorageType, ptr: InstanceType<Component>) => void) {
+    func(this.storage_type, ptr)
+}
+
+function registerRequiredComponents(_components: ComponentsRegistrator, _required_components: RequiredComponents) {
+
+}
+
+function addBundleToComponent(component: Component): Bundle {
+    const actual = component;
+    const type = actual.type_id ? actual : actual.constructor as Component;
+
+    type.Effect ??= BundleEffect.NoEffect;
+    type.componentIds ??= componentIds.bind(type);
+    type.getComponentIds ??= getComponentIds.bind(type);
+    type.registerRequiredComponents ??= registerRequiredComponents.bind(type);
+    // TODO: this mutates the component type every time this bundle is created, this is called by `Bundles.dynamic_bundle` which is called by `World.spawn` and `World.spawnBatch`
+    type.getComponents = getComponents.bind(type, actual);
+
+    return type;
+}
+
+const BundleRegistry = new Map<UUID, Bundle>();
+const ThinBundleRegistry = new Map<UUID, ThinBundle>();
 
 function ThinComponentBundle(bundles: (ThinComponent & ThinBundle)[], hash: UUID): ThinBundle {
-    const existing = BundleRegistry.get(hash);
+    const existing = ThinBundleRegistry.get(hash);
     if (existing) {
         return existing
     } else {
@@ -119,37 +172,16 @@ function ThinComponentBundle(bundles: (ThinComponent & ThinBundle)[], hash: UUID
                 bundles.forEach(b => b.getComponentIds(components, ids))
             },
         }
-        BundleRegistry.set(hash, bundle);
+        ThinBundleRegistry.set(hash, bundle);
         return bundle;
     }
 }
 
-type Sub<Type, T extends number> =
-    T extends 16 ? Sub<Type[], 15> :
-    T extends 15 ? Sub<Type[], 14> :
-    T extends 14 ? Sub<Type[], 13> :
-    T extends 13 ? Sub<Type[], 12> :
-    T extends 12 ? Sub<Type[], 11> :
-    T extends 11 ? Sub<Type[], 10> :
-    T extends 10 ? Sub<Type[], 9> :
-    T extends 9 ? Sub<Type[], 8> :
-    T extends 8 ? Sub<Type[], 7> :
-    T extends 7 ? Sub<Type[], 6> :
-    T extends 6 ? Sub<Type[], 5> :
-    T extends 5 ? Sub<Type[], 4> :
-    T extends 4 ? Sub<Type[], 3> :
-    T extends 3 ? Sub<Type[], 2> :
-    T extends 2 ? Sub<Type[], 1> :
-    Type[]
-
-type NestedArray<T, L extends number = 1> = Sub<T, L>;
-
 function hash_bundles(bundles: Bundle[] | ThinBundle[]) {
-    return bundles.map((b, i) => `${i}:${b.type_id}`).join('') as UUID;
+    return bundles.map((b, i) => `${i}:${b.type_id}`).join(',') as UUID;
 }
 
 type A<T> = T[];
-
 type Part = A<A<ThinBundle | A<ThinBundle>> | ThinBundle>;
 
 export function define_thin_bundle(bundle: Part): ThinBundle {
@@ -159,34 +191,52 @@ export function define_thin_bundle(bundle: Part): ThinBundle {
 }
 
 // TODO: compare precompute hash and get bundle if it exists, or create a new one if one does not exist.
-export function define_bundle(bundle: any[]): Bundle {
-    const bundles = bundle.flat(Infinity).map(c => ComponentBundle(c));
+export function define_bundle(bundle: any[], Effect: BundleEffect = BundleEffect.NoEffect): Bundle {
+    const bundles = bundle.flat(Infinity).map(c => addBundleToComponent(c));
 
     const hash = hash_bundles(bundles);
-    const name = `$ECS-Bundle:${hash}`;
 
-    return {
-        type_id: hash as UUID,
-        name: name,
-        componentIds(components, ids) {
-            for (let i = 0; i < bundles.length; i++) {
-                bundles[i].componentIds(components, ids)
+    const existing = BundleRegistry.get(hash);
+
+    if (existing) {
+        return existing;
+    } else {
+        const formatted = bundles.reduce(
+            // @ts-expect-error
+            (acc, x) => acc += `\n(${x.name ? `Component ${x.name}` : `${x.type_id}`})`
+            ,
+            'Bundle {'
+        ) + '\n}';
+
+        const bundle_impl: Bundle = {
+            type_id: hash,
+            Effect: Effect,
+            componentIds(components, ids) {
+                for (let i = 0; i < bundles.length; i++) {
+                    bundles[i].componentIds(components, ids)
+                }
+            },
+            getComponents(func) {
+                bundles.forEach(b => b.getComponents(func))
+            },
+
+            getComponentIds(components, ids) {
+                bundles.forEach(b => b.getComponentIds(components, ids))
+            },
+            registerRequiredComponents(components, required_components) {
+                bundles.forEach(b => b.registerRequiredComponents(components, required_components))
+            },
+
+            [Symbol.toStringTag]() {
+                return formatted;
             }
-        },
+        }
 
-        fromComponents(ctx, func) {
-            return bundles.map(b => b.fromComponents(ctx, func)) as any;
-        },
+        BundleRegistry.set(hash, bundle_impl);
 
-        getComponents(func) {
-            bundles.forEach(b => b.getComponents(func))
-        },
-
-        getComponentIds(components, ids) {
-            bundles.forEach(b => b.getComponentIds(components, ids))
-        },
-
+        return bundle_impl;
     }
+
 }
 
 export class ThinBundleInfo {
@@ -387,6 +437,7 @@ export class ThinBundleInfo {
             }
 
             const new_archetype_id = archetypes.getIdOrSet(
+                components as any,
                 table_id,
                 table_components,
                 sparse_set_components
@@ -455,6 +506,7 @@ export class ThinBundleInfo {
                 storages.tables.__getIdOrSet(next_table_components, components)
 
             const new_archetype_id = archetypes.getIdOrSet(
+                components,
                 next_table_id,
                 next_table_components,
                 next_sparse_set_components
@@ -689,6 +741,7 @@ export class BundleInfo {
             }
 
             const new_archetype_id = archetypes.getIdOrSet(
+                components,
                 table_id,
                 table_components,
                 sparse_set_components
@@ -756,6 +809,7 @@ export class BundleInfo {
                 storages.tables.__getIdOrSet(next_table_components, components)
 
             const new_archetype_id = archetypes.getIdOrSet(
+                components,
                 next_table_id,
                 next_table_components,
                 next_sparse_set_components
@@ -898,22 +952,20 @@ export class BundleInserter {
         const archetype_after_insert = this.#archetype_after_insert;
         const table = this.#table;
         const archetype = this.#archetype;
+        const world = new DeferredWorld(this.#world);
 
-        // if (insert_mode === InsertMode.Replace) {
-        //     if (archetype.has_replace_observer()) {
-        //         this.#world.trigger_observers(ON_REPLACE, entity, archetype_after_insert);
-        //     }
-        //     this.#world.trigger_on_replace(archetype, entity, archetype_after_insert);
-        // }
+        if (insert_mode === InsertMode.Replace) {
+            if (archetype.hasReplaceObserver) {
+                world.triggerObservers(ON_REPLACE, entity, archetype_after_insert.iter_existing());
+            }
+            world.triggerOnReplace(archetype, entity, archetype_after_insert.iter_existing());
+        }
 
         let new_location,
             new_archetype;
 
-
+        const sparse_sets = this.#world.storages.sparse_sets
         if (this.#archetype_move_type === ArchetypeMoveType.SameArchetype) {
-            // console.log('BundleInserted SameArchetype');
-
-            const sparse_sets = this.#world.storages.sparse_sets
             bundle_info.writeComponents(
                 table,
                 sparse_sets,
@@ -929,14 +981,6 @@ export class BundleInserter {
         } else if (!('new_table' in this.#archetype_move_type)) {
             // NewArchetypeSameTable
             const new_archetype_ = this.#archetype_move_type.new_archetype;
-            // console.log('BundleInserted NewArchetypeSameTable ',
-            //     this.#archetype.tableComponents().collect(),
-            //     this.#archetype.sparse_set_components().collect(),
-            //     new_archetype_.tableComponents().collect(),
-            //     new_archetype_.sparse_set_components().collect()
-            // );
-
-            const sparse_sets = this.#world.storages.sparse_sets;
             const entities = this.#world.entities;
             // @ts-ignore
             const result = archetype.__swapRemove(location.archetype_row);
@@ -970,12 +1014,10 @@ export class BundleInserter {
             new_location = new_location_;
         } else {
             // NewArchetypeNewTable
-            // console.log('BundleInserted NewArchetypeNewTable');
 
             const { new_archetype: new_archetype_, new_table } = this.#archetype_move_type
             const archetypes_ptr = this.#world.archetypes.inner;
             const entities = this.#world.entities;
-            const sparse_sets = this.#world.storages.sparse_sets;
             // @ts-ignore
             const result = archetype.__swapRemove(location.archetype_row);
             if (result.swapped_entity) {
@@ -1035,49 +1077,49 @@ export class BundleInserter {
         }
 
         new_archetype;
-        // this.#world.trigger_on_add(
-        //     new_archetype,
-        //     entity,
-        //     archetype_after_insert
-        // )
+        world.triggerOnAdd(
+            new_archetype,
+            entity,
+            archetype_after_insert.iter_added()
+        )
 
-        // if (new_archetype.has_add_observer()) {
-        //     this.#world.trigger_observers(
-        //         ON_ADD,
-        //         entity,
-        //         archetype_after_insert.iter_added()
-        //     )
-        // }
+        if (new_archetype.hasAddObserver) {
+            world.triggerObservers(
+                ON_ADD,
+                entity,
+                archetype_after_insert.iter_added()
+            )
+        }
 
-        // if (insert_mode === InsertMode.Replace) {
-        //     this.#world.trigger_on_insert(
-        //         new_archetype,
-        //         entity,
-        //         archetype_after_insert.iter_inserted()
-        //     )
-        //     if (new_archetype.has_insert_observer()) {
-        //         this.#world.trigger_observers(
-        //             ON_INSERT,
-        //             entity,
-        //             archetype_after_insert.iter_inserted()
-        //         )
-        //     }
-        // } else {
-        //     // InsertMode === Keep
-        //     this.#world.trigger_on_insert(
-        //         new_archetype,
-        //         entity,
-        //         archetype_after_insert.iter_added()
-        //     )
+        if (insert_mode === InsertMode.Replace) {
+            world.triggerOnInsert(
+                new_archetype,
+                entity,
+                archetype_after_insert.iter_inserted()
+            )
+            if (new_archetype.hasInsertObserver) {
+                world.triggerObservers(
+                    ON_INSERT,
+                    entity,
+                    archetype_after_insert.iter_inserted()
+                )
+            }
+        } else {
+            // InsertMode === Keep
+            world.triggerOnInsert(
+                new_archetype,
+                entity,
+                archetype_after_insert.iter_added()
+            )
 
-        //     if (new_archetype.has_insert_observer()) {
-        //         this.#world.trigger_observers(
-        //             ON_INSERT,
-        //             entity,
-        //             archetype_after_insert.iter_added()
-        //         )
-        //     }
-        // }
+            if (new_archetype.hasInsertObserver) {
+                world.triggerObservers(
+                    ON_INSERT,
+                    entity,
+                    archetype_after_insert.iter_added()
+                )
+            }
+        }
 
 
         return new_location;
@@ -1320,34 +1362,33 @@ export class BundleSpawner {
 
         // @ts-ignore
         entities.__set(index(entity), location);
+        const world = new DeferredWorld(this.#world);
+        world.triggerOnAdd(
+            archetype,
+            entity,
+            bundle_info.iterContributedComponents()
+        )
+        if (archetype.hasAddObserver) {
+            world.triggerObservers(
+                ON_ADD,
+                entity,
+                bundle_info.iterContributedComponents()
+            )
+        }
 
-        // const archetype = this.#archetype;
-        // this.world.trigger_on_add(
-        //     archetype,
-        //     entity,
-        //     bundle_info.iter_contributed_components()
-        // )
-        // if (archetype.has_add_observer()) {
-        //     this.#world.trigger_observers(
-        //         ON_ADD,
-        //         entity,
-        //         bundle_info.iter_contributed_components()
-        //     )
-        // }
+        world.triggerOnInsert(
+            archetype,
+            entity,
+            bundle_info.iterContributedComponents()
+        )
 
-        // this.world.trigger_on_insert(
-        //     archetype,
-        //     entity,
-        //     bundle_info.iter_contributed_components()
-        // )
-
-        // if (archetype.has_insert_observer()) {
-        //     this.#world.trigger_observers(
-        //         ON_INSERT,
-        //         entity,
-        //         bundle.iter_contributed_components()
-        //     )
-        // }
+        if (archetype.hasInsertObserver) {
+            world.triggerObservers(
+                ON_INSERT,
+                entity,
+                bundle_info.iterContributedComponents()
+            )
+        }
 
         return location;
     }
@@ -1489,7 +1530,7 @@ export class ThinBundles {
     }
 }
 
-export class Bundles {
+class Bundles {
     #bundle_infos: BundleInfo[];
     #bundle_ids: Map<string, BundleId>;
     // Cache dynamic `BundleId` with multiple components
@@ -1512,13 +1553,11 @@ export class Bundles {
         return define_bundle(bundle);
     }
 
-
     static init_state() { }
 
     static get_param(_state: void, _system_meta: SystemMeta, world: World) {
         return world.bundles
     }
-
 
     get(bundle_id: BundleId): Option<BundleInfo> {
         return this.#bundle_infos[bundle_id];
@@ -1542,7 +1581,7 @@ export class Bundles {
             const component_ids: number[] = [];
             bundle.componentIds(components, id => component_ids.push(id))
             const id = bundle_infos.length;
-            const bundle_info = new BundleInfo(bundle.name, storages, components, component_ids, id)
+            const bundle_info = new BundleInfo(bundle.type_id, storages, components, component_ids, id)
             bundle_infos.push(bundle_info)
             this.#bundle_ids.set(bundle.type_id, id);
             return id;
@@ -1632,6 +1671,10 @@ export class Bundles {
     }
 
 }
+
+defineParam(Bundles);
+
+export { Bundles }
 
 /**
  * Asserts that all components are part of `Components`

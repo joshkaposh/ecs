@@ -6,17 +6,16 @@ import { defineComponent, defineMarker } from 'define';
 const A = defineComponent(class A { constructor(public value = 'A') { } });
 const B = defineComponent(class B { constructor(public value = 'B') { } });
 const C = defineComponent(class C { constructor(public value = 'C') { } });
-
 const MarkerA = defineMarker()
 const MarkerB = defineMarker()
 
 test('archetype', () => {
-    const archetypes = new Archetypes();
+    const components = new Components();
+    const archetypes = new Archetypes(components);
 
     assert(is_some(archetypes.get(0)) === true)
     assert(is_some(archetypes.get(1)) === false)
 
-    const components = new Components();
     const storages = new Storages();
 
     const a_id = components.registerComponent(A)
@@ -49,8 +48,8 @@ test('archetype', () => {
     assert(sparse_set_ma != null)
     assert(sparse_set_mb != null)
 
-    const arch_a_id = archetypes.getIdOrSet(table_id, columns, sparse_ids_ma);
-    const arch_b_id = archetypes.getIdOrSet(table_id, columns, sparse_ids_mb);
+    const arch_a_id = archetypes.getIdOrSet(components, table_id, columns, sparse_ids_ma);
+    const arch_b_id = archetypes.getIdOrSet(components, table_id, columns, sparse_ids_mb);
     const arch_a = archetypes.get(arch_a_id)!;
     const arch_b = archetypes.get(arch_b_id)!;
 

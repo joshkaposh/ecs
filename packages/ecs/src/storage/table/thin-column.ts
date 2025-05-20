@@ -386,7 +386,7 @@ export class ThinColumn {
      * Removes the element from `other` at `src_row` and inserts it
      * into the current column to initialize the values at `dst_row`
      */
-    initializeFromUnchecked(other: ThinColumn, other_last_element_index: number, src_row: TableRow, dst_row: TableRow) {
+    initializeFromUnchecked(other: ThinColumn, _other_last_element_index: number, src_row: TableRow, dst_row: TableRow) {
 
         for (let i = 0; i < this.data.length; i++) {
             const data = this.data[i];

@@ -2,7 +2,6 @@ import { assert, expect, test } from "vitest";
 import { Access, AccessConflicts, AccessFilters, FilteredAccess, FilteredAccessSet } from 'ecs';
 import { FixedBitSet } from "fixed-bit-set";
 
-test('', () => { })
 
 function create_sample_access() {
     const access = new Access();

@@ -1,7 +1,10 @@
 import { type Option, u32 } from "joshkaposh-option";
-import { type Component, type ComponentId, type Resource, type SystemMeta, type World, defineParam, is_newer_than, SystemParamValidationError, Tick } from 'ecs';
+import type { Component, ComponentId, Resource, Tick } from './component';
+import { is_newer_than } from './component';
 import type { DeepReadonly, Instance } from "./util";
 import { assert } from "joshkaposh-iterator/src/util";
+import { type SystemMeta, SystemParamValidationError, defineParam } from "./system";
+import type { World } from "./world";
 
 export const CHECK_TICK_THRESHOLD = 518_400_000;
 
@@ -47,17 +50,119 @@ export function $read_and_write<T>(type: Instance<T>, ticks: TicksMut) {
     return proxy as T;
 }
 
-type TickCells = {
+interface TickCells {
     added: Tick;
     changed: Tick;
 }
 
-export abstract class DetectChanges<T extends any> {
-    abstract v: T
-    abstract ticks: Ticks;
+interface TickCellsDetectChanges extends TickCells {
+    last_run: Tick;
+    this_run: Tick;
+}
 
-    deref() {
-        return this.v;
+export interface DetectChanges<T extends any> {
+    v: Instance<T>;
+    ticks: TickCellsDetectChanges;
+
+    isAdded(): boolean;
+    isChanged(): boolean;
+    lastChanged(): number;
+}
+
+export interface DetectChangesMut<T extends any> extends DetectChanges<T> {
+    ticks: TickCellsDetectChanges;
+
+    setChanged(): void;
+
+    bypassChangeDetection(): Instance<T>;
+
+    mapUnchanged<U>(f: (value: Instance<T>) => Instance<U>): any;
+
+    filterMapUnchanged<U>(f: (value: Instance<T>) => Option<Instance<U>>): void
+
+    setIfNeq(value: T): void;
+
+    replaceIfNeq(value: T): void;
+}
+
+export class Ticks {
+    #ticks: TickCells
+    last_run: Tick;
+    this_run: Tick;
+
+    constructor(
+        ticks: TickCells,
+        last_run: Tick,
+        this_run: Tick,
+    ) {
+        this.#ticks = ticks;
+        this.last_run = last_run;
+        this.this_run = this_run;
+
+    }
+
+    get added() {
+        return this.#ticks.added;
+    }
+
+    get changed() {
+        return this.#ticks.changed;
+    }
+
+    clone() {
+        return new Ticks(this.#ticks, this.last_run, this.this_run)
+    }
+
+}
+
+export class TicksMut {
+    #ticks: {
+        added: Tick,
+        changed: Tick
+    }
+    last_run: Tick;
+    this_run: Tick;
+
+    constructor(
+        ticks: {
+            added: Tick,
+            changed: Tick
+        },
+        last_run: Tick,
+        this_run: Tick
+    ) {
+        this.#ticks = ticks;
+        this.last_run = last_run;
+        this.this_run = this_run;
+    }
+
+    get added() {
+        return this.#ticks.added;
+    }
+
+    get changed() {
+        return this.#ticks.changed;
+    }
+
+    set changed(changed) {
+        this.#ticks.changed = changed;
+    }
+
+    clone() {
+        return new TicksMut(this.#ticks, this.last_run, this.this_run)
+    }
+}
+
+export class Ref<T> implements DetectChanges<T> {
+    #inner: Instance<T>;
+    ticks: Ticks;
+    constructor(value: Instance<T>, ticks: Ticks) {
+        this.#inner = value;
+        this.ticks = ticks;
+    }
+
+    get v() {
+        return this.#inner;
     }
 
     isAdded() {
@@ -73,149 +178,23 @@ export abstract class DetectChanges<T extends any> {
     lastChanged() {
         return this.ticks.changed;
     }
+
 }
 
-export abstract class DetectChangesMut<T extends any> extends DetectChanges<T> {
-    abstract v: T;
-    abstract ticks: Ticks;
-
-    deref() {
-        return this.v as Instance<T>
-    }
-
-    derefMut() {
-        this.setChanged();
-        return this.v as Instance<T>
-    }
-
-    intoInner() {
-        this.setChanged();
-        return this, this.v;
-    }
-
-    mapUnchanged<U>(f: (value: T) => U): Mut<U> {
-        return this.constructor(f(this.v), this.ticks);
-    }
-
-    filterMapUnchanged<U>(f: (value: T) => Option<U>) {
-        const value = f(this.v);
-        if (value != null) {
-            return this.constructor(value, this.ticks)
-        }
-    }
-
-    setChanged() {
-        // const { changed, this_run } = this.ticks;
-        // changed.set(this_run.get());
-        this.ticks.changed = this.ticks.this_run;
-    }
-
-    setLastChanged(last_changed: Tick) {
-        this.ticks.changed = last_changed;
-    }
-
-    setIfNeq(value: T) {
-        const old = this.bypassChangeDetection();
-        if (old !== value) {
-            this.v = value;
-            this.setChanged();
-            return true;
-        } else {
-            return false
-        }
-    }
-
-    replaceIfNeq(value: T) {
-        const old = this.bypassChangeDetection();
-        if (old !== value) {
-            const prev = old;
-            this.v = value;
-            return prev;
-        } {
-            return
-        }
-    }
-
-    bypassChangeDetection(): Instance<T> {
-        return this.v as Instance<T>;
-    }
-}
-
-export class Ticks {
-    added: Tick;
-    changed: Tick;
-    last_run: Tick;
-    this_run: Tick;
-
-    constructor(
-        added: Tick = 0,
-        changed: Tick = 0,
-        last_run: Tick = 0,
-        this_run: Tick = 0,
-    ) {
-        this.added = added;
-        this.changed = changed;
-        this.last_run = last_run;
-        this.this_run = this_run;
-    }
-
-    clone() {
-        return new Ticks(this.added, this.changed, this.last_run, this.this_run)
-    }
-
-    static from(ticks: TicksMut): Ticks {
-        return new Ticks(ticks.added, ticks.changed, ticks.last_run, ticks.this_run);
-    }
-
-    static fromTickCells(cells: TickCells, last_run: Tick, this_run: Tick) {
-        return new Ticks(cells.added, cells.changed, last_run, this_run);
-    }
-}
-
-export class TicksMut {
-    added: Tick;
-    changed: Tick;
-    last_run: Tick;
-    this_run: Tick;
-
-    constructor(
-        added: Tick = 0,
-        changed: Tick = 0,
-        last_run: Tick = 0,
-        this_run: Tick = 0
-    ) {
-        this.added = added;
-        this.changed = changed;
-        this.last_run = last_run;
-        this.this_run = this_run;
-    }
-
-    static fromTickCells(ticks: { added: Tick; changed: Tick }, last_run: Tick, this_run: Tick) {
-        return new TicksMut(ticks.added, ticks.changed, last_run, this_run);
-    }
-
-    clone() {
-        return new TicksMut(this.added, this.changed, this.last_run, this.this_run)
-    }
-}
-
-export class Ref<T> extends DetectChanges<T> {
-    v: Instance<T>;
-    ticks: Ticks;
-    constructor(value: Instance<T>, ticks: Ticks) {
-        super();
-        this.v = value;
-        this.ticks = ticks;
-    }
-}
-
-export class Mut<T> extends DetectChangesMut<T> {
+export class Mut<T> implements DetectChangesMut<T> {
     #value: Instance<T>;
     ticks: TicksMut;
     constructor(value: Instance<T>, ticks: TicksMut) {
-        super();
         this.#value = value;
         this.ticks = ticks;
+    }
+
+    set last_changed(changed: Tick) {
+        this.ticks.changed = changed;
+    }
+
+    set v(value) {
+        this.#value = value;
     }
 
     get v() {
@@ -223,27 +202,99 @@ export class Mut<T> extends DetectChangesMut<T> {
         return this.#value;
     }
 
+    setChanged(): void {
+        this.ticks.changed = this.ticks.this_run;
+    }
+
+    isAdded() {
+        const ticks = this.ticks;
+        return is_newer_than(ticks.added, ticks.last_run, ticks.this_run);
+    }
+
+    isChanged() {
+        const ticks = this.ticks;
+        return is_newer_than(ticks.changed, ticks.last_run, ticks.this_run);
+    }
+
+    lastChanged(): number {
+        return this.ticks.changed;
+    }
+
     hasChangedSince(tick: Tick) {
         const ticks = this.ticks;
         return is_newer_than(ticks.changed, tick, ticks.this_run);
     }
+
+    bypassChangeDetection(): Instance<T> {
+        return this.#value;
+    }
+
+    filterMapUnchanged<U>(f: (value: Instance<T>) => Option<Instance<U>>) {
+        const value = f(this.v);
+        if (value != null) {
+            return new Mut(value as any, this.ticks)
+        }
+
+        return;
+    }
+
+    mapUnchanged<U>(f: (value: Instance<T>) => Instance<U>): Mut<U> {
+        return new Mut(f(this.#value), this.ticks) as Mut<U>;
+    }
+
+    setIfNeq(value: Instance<T>): boolean {
+        const old = this.bypassChangeDetection();
+        if (old !== value) {
+            this.#value = value;
+            this.setChanged();
+            return true;
+        } else {
+            return false
+        }
+    }
+
+    replaceIfNeq(value: Instance<T>): Option<Instance<T>> {
+        const old = this.bypassChangeDetection();
+        if (old !== value) {
+            const prev = old;
+            this.#value = value;
+            return prev;
+        } {
+            return
+        }
+    }
 }
 
-class Res<T> extends DetectChanges<T> {
+class Res<T> implements DetectChanges<T> {
     v: Instance<T>;
     ticks: Ticks;
 
-    // static State: ComponentId;
-    // static Item: Instance<Resource>
-
     constructor(type: Instance<T>, ticks: Ticks) {
-        super()
         this.v = type;
         this.ticks = ticks;
     }
 
-    static from<T extends Resource>(res: ResMut<Instance<T>>): Res<T> {
-        return new Res(res.v, res.ticks);
+    isAdded() {
+        const ticks = this.ticks;
+        return is_newer_than(ticks.added, ticks.last_run, ticks.this_run);
+    }
+
+    isChanged() {
+        const ticks = this.ticks;
+        return is_newer_than(ticks.changed, ticks.last_run, ticks.this_run);
+    }
+
+    lastChanged(): number {
+        return this.ticks.changed;
+    }
+
+    hasChangedSince(tick: Tick) {
+        const ticks = this.ticks;
+        return is_newer_than(ticks.changed, tick, ticks.this_run);
+    }
+
+    clone() {
+        return new Res(this.v, this.ticks.clone())
     }
 
     static init_state<T extends Resource>(world: World, system_meta: SystemMeta, resource: T) {
@@ -276,22 +327,11 @@ class Res<T> extends DetectChanges<T> {
 
         const [ptr, ticks] = tuple;
 
-        return new Res<T>(ptr as Instance<T>, new Ticks(ticks.added, ticks.changed, system_meta.last_run, change_tick))
-    }
-
-    hasChangedSince(tick: Tick) {
-        const ticks = this.ticks;
-        return is_newer_than(ticks.changed, tick, ticks.this_run);
-    }
-
-    clone() {
-        return new Res(this.v, this.ticks.clone())
+        return new Res<T>(ptr as Instance<T>, new Ticks(ticks, system_meta.last_run, change_tick))
     }
 }
 
-(await (import('./system/system-param'))).defineParam(Res);
-
-export { Res }
+defineParam(Res);
 
 const OptRes = {
     init_state<T extends Resource>(world: World, system_meta: SystemMeta, type: T) {
@@ -305,25 +345,92 @@ const OptRes = {
         }
 
         const [ptr, ticks] = tuple;
-        return new Res(ptr, new Ticks(ticks.added, ticks.changed, system_meta.last_run, change_tick));
+        return new Res(ptr, new Ticks(ticks, system_meta.last_run, change_tick));
     },
 };
 
-(await (import('./system/system-param'))).defineParam(OptRes);
+defineParam(OptRes);
 
-export { OptRes }
-
-class ResMut<T> extends DetectChangesMut<T> {
-    v: Instance<T>;
+class ResMut<T> implements DetectChangesMut<T> {
+    #inner: Instance<T>;
     ticks: TicksMut;
     constructor(type: Instance<T>, ticks: TicksMut) {
-        super();
-        this.v = type;
+        this.#inner = type;
         this.ticks = ticks;
+    }
+
+    get v() {
+        this.ticks.changed = this.ticks.this_run;
+        return this.#inner;
+    }
+
+    set last_changed(changed: Tick) {
+        this.ticks.changed = changed;
+    }
+
+    clone() {
+        return new ResMut(this.v, this.ticks.clone())
+    }
+
+    setChanged() {
+        this.ticks.changed = this.ticks.this_run;
+    }
+
+    isAdded() {
+        const ticks = this.ticks;
+        return is_newer_than(ticks.added, ticks.last_run, ticks.this_run);
+    }
+
+    isChanged() {
+        const ticks = this.ticks;
+        return is_newer_than(ticks.changed, ticks.last_run, ticks.this_run);
+    }
+
+    lastChanged(): number {
+        return this.ticks.changed;
+    }
+
+    setIfNeq(value: Instance<T>): boolean {
+        const old = this.bypassChangeDetection();
+        if (old !== value) {
+            this.#inner = value;
+            this.setChanged();
+            return true;
+        } else {
+            return false
+        }
+    }
+
+    replaceIfNeq(value: Instance<T>): Option<Instance<T>> {
+        const old = this.bypassChangeDetection();
+        if (old !== value) {
+            const prev = old;
+            this.#inner = value;
+            return prev;
+        } {
+            return
+        }
+    }
+
+    mapUnchanged<U>(f: (value: Instance<T>) => Instance<U>): ResMut<U> {
+        return new ResMut(f(this.#inner), this.ticks) as ResMut<U>;
+    }
+
+    filterMapUnchanged<U>(f: (value: Instance<T>) => Option<Instance<U>>): Option<ResMut<U>> {
+        const value = f(this.v);
+        if (value != null) {
+            return new ResMut(value as Instance<U>, this.ticks)
+        }
+        return
+    }
+
+    bypassChangeDetection(): Instance<T> {
+        return this.v
     }
 
     static init_state(world: World, system_meta: SystemMeta, resource: Resource) {
         const component_id = world.components.registerResource(resource);
+
         const archetype_component_id = world.__initializeResourceInternal(component_id).id;
 
         const combined_access = system_meta.__component_access_set.combined_access();
@@ -352,18 +459,11 @@ class ResMut<T> extends DetectChangesMut<T> {
 
         const [ptr, ticks] = tuple;
 
-        return new ResMut(ptr as Instance<T>, new TicksMut(ticks.added, ticks.changed, system_meta.last_run, change_tick))
-    }
-
-
-    clone() {
-        return new Res(this.v, this.ticks.clone())
+        return new ResMut(ptr as Instance<T>, new TicksMut(ticks, system_meta.last_run, change_tick))
     }
 }
 
-(await (import('./system/system-param'))).defineParam(ResMut);
-
-export { ResMut }
+defineParam(ResMut);
 
 const OptResMut = {
     init_state(world: World, system_meta: SystemMeta, resource: Resource) {
@@ -378,10 +478,15 @@ const OptResMut = {
 
         const { v, ticks } = mut;
 
-        return new ResMut(v as Instance<T>, new TicksMut(ticks.added, ticks.changed, system_meta.last_run, change_tick))
+        return new ResMut(v as Instance<T>, new TicksMut(ticks, system_meta.last_run, change_tick))
     },
 };
 
-(await (import('./system/system-param'))).defineParam(OptResMut);
+defineParam(OptResMut);
 
-export { OptResMut }
+export {
+    Res,
+    OptRes,
+    ResMut,
+    OptResMut,
+}

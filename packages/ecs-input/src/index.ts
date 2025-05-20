@@ -1,30 +1,14 @@
+import { defineEvent } from 'define';
+import { EventWriter } from 'ecs';
 import { App, Plugin } from 'ecs-app';
 import { AccumulatedMouseMotion, MouseButton, MouseButtonInput, MouseMotion } from './mouse';
 import { KeyboardButtonInput, Key } from './keyboard';
-import { ButtonInput, ButtonState } from './button_input';
-import { defineEvent, defineResource } from 'define';
-import { Event, Events, EventWriter, ResMut } from '../../../src';
+import { ButtonInput } from './button_input';
 
 export * from './button_input';
 export * from './keyboard';
 export * from './mouse';
 export * from './common_conditions';
-
-const Mouse = defineResource(class Mouse {
-    /**
-     * The last recorded x position.
-     */
-    x: number;
-    /**
-     * The last recorded y position.
-     */
-    y: number;
-
-    constructor(x = Infinity, y = Infinity) {
-        this.x = x;
-        this.y = y;
-    }
-})
 
 const MouseButtonEvent = defineEvent(MouseEvent);
 

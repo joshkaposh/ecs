@@ -1,24 +1,18 @@
 import { assert, expect, test } from 'vitest'
+import { TypedArray } from 'joshkaposh-option';
+
 import {
-    Column,
-    Component,
+    Added,
+    Entity,
     index,
     StorageType,
-    Table,
-    ThinTable,
     ThinWorld,
     World,
 } from 'ecs';
 import {
-    Class,
-    ComponentRecord,
     defineComponent,
     defineComponent2,
-    ThinComponent,
 } from 'define'
-import { skip } from '../constants';
-import { TypedArray } from 'joshkaposh-option';
-
 
 const A = defineComponent(class A { constructor(public value = 'A') { } })
 const B = defineComponent(class B { constructor(public value = 'B') { } })
@@ -131,12 +125,24 @@ test('spawn/spawn_batch', () => {
     for (let i = 0; i < 200; i++) {
         w.spawn([new A(), new B(), new C()])
     }
+
     assert(w.entities.length === 200 as number);
 
-    const batch = Array.from({ length: 100 }, () => [new A(), new B(), new C()]);
+    w.clearTrackers();
+
+    const batch = Array.from({ length: 100 }, (_, i) => [new A(`${i}`), new B(`${i}`), new C(`${i}`)]);
     w.spawnBatch(batch);
 
     assert(w.entities.length === 300);
+
+    assert(100 === w.queryFiltered([A, B, C], [Added(A), Added(B), Added(C)]).iter(w).count());
+    // console.log(w.queryFiltered([A, B, C], [Added(A), Added(B), Added(C)]).iter(w).collect())
+
+    // expect(w.queryFiltered([A, B, C], [Added(A), Added(B), Added(C)]).iter(w).collect())
+    // .toEqual(batch);
+
+
+
 })
 
 test('thin world spawn/spawn_batch', () => {

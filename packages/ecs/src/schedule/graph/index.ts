@@ -1,15 +1,14 @@
+import { type Iterator } from 'joshkaposh-iterator';
 import { assert } from 'joshkaposh-iterator/src/util';
-import { TypeId } from 'define';
-import { InternedSystemSet, SystemSet } from '../set';
 import { FixedBitSet } from 'fixed-bit-set';
+import type { InternedSystemSet, SystemSet } from '../set';
 import { NodeId } from './node';
 import { DiGraph, Direction, Incoming, Outgoing } from './graphmap';
-import { iter, Iterator } from 'joshkaposh-iterator';
-import { entry } from '../../util';
+import { entry, TypeId } from '../../util';
 
 export * from './node';
-export * from './graphmap'
-export { new_tarjan_scc } from './tarjan_scc'
+export * from './graphmap';
+export { new_tarjan_scc } from './tarjan_scc';
 
 export type DependencyKind = typeof DependencyKind[keyof typeof DependencyKind];
 export const DependencyKind = {
@@ -18,12 +17,6 @@ export const DependencyKind = {
     // node should be succeeded
     After: 1,
 } as const
-
-// export type Dependency = {
-//     kind: DependencyKind;
-//     set: SystemSet;
-//     options: Map<any, any>;
-// }
 
 export class Dependency {
     kind: DependencyKind;
@@ -76,8 +69,8 @@ export function row_col(index: number, num_cols: number): [number, number] {
     return [Math.floor(index / num_cols), Math.floor(index % num_cols)]
 }
 
-type NodeIdPrimitive = `${'system' | 'set'}:${number}`;
-type Connected = Set<`${NodeIdPrimitive}-${NodeIdPrimitive}`>;
+type ConnectedNodes = `${`${'system' | 'set'}:${number}`}-${`${'system' | 'set'}:${number}`}`
+type Connected = Set<ConnectedNodes>;
 
 export type CheckGraphResults = {
     reachable: FixedBitSet;
@@ -158,7 +151,7 @@ export function check_graph(graph: DiGraph, topological_order: NodeId[]): CheckG
                     if (!visited.contains(index_c)) {
                         visited.insert(index_c);
                         transitive_closure.add_edge(a, c);
-                        reachable.insert(index(index_a, index_c, n))
+                        reachable.insert(index(index_a, index_c, n));
                     }
                 }
             } else {
@@ -176,7 +169,7 @@ export function check_graph(graph: DiGraph, topological_order: NodeId[]): CheckG
             const [a, b] = row_col(ix, n)
             const pair = [topological_order[a], topological_order[b]] as [NodeId, NodeId]
             if (reachable.contains(ix)) {
-                connected.add(`${pair[0].to_primitive() as NodeIdPrimitive}-${pair[1].to_primitive() as NodeIdPrimitive}`);
+                connected.add(pair.join('-') as ConnectedNodes);
             } else {
                 disconnected.push(pair);
             }
@@ -217,26 +210,27 @@ export function simple_cycles_in_component(graph: DiGraph, scc: NodeId[]): [Node
         // path of nodes that may form a cycle
         const path = [];
         // we mark nodes as blocked to avoid finding permutations of the same cycles
-        const blocked = new Set<string>();
+        const blocked = new Set<NodeId>();
         // connects nodes along path segments that can't be part of a cycle (given current root)
         // those nodes can be unblocked at the same time
-        const unblock_together = new Map<string, Set<string>>();
+        const unblock_together = new Map<NodeId, Set<NodeId>>();
         // stack for ublocking nodes
-        const unblock_stack = [];
+        const unblock_stack: NodeId[] = [];
         // nodes can be involved in multiple cycles
-        const maybe_in_more_cycles = new Set<string>();
+        const maybe_in_more_cycles = new Set<NodeId>();
         // DFS stack
-        const stack: [string, Iterator<NodeId>][] = [];
+        const stack: [NodeId, Iterator<NodeId>][] = [];
 
         const root = scc.pop()!;
         path.length = 0;
         path.push(root);
         // mark this node as blocked
-        blocked.add(root.to_primitive())
+        blocked.add(root)
 
         // DFS
         stack.length = 0;
-        stack.push([root.to_primitive(), subgraph.iter_neighbors(root)])
+        stack.push([root, subgraph.iter_neighbors(root)]);
+
         while (stack.length !== 0) {
             const [node, successors] = stack[stack.length - 1];
 
@@ -245,25 +239,25 @@ export function simple_cycles_in_component(graph: DiGraph, scc: NodeId[]): [Node
                 if (next.eq(root)) {
                     // found a cycle
                     for (let i = 0; i < path.length; i++) {
-                        maybe_in_more_cycles.add(path[i].to_primitive())
+                        maybe_in_more_cycles.add(path[i])
                     }
-                    cycles.push(structuredClone(path) as [NodeId, NodeId])
-                } else if (!blocked.has(next.to_primitive())) {
+                    // @ts-expect-error
+                    cycles.push(...path)
+
+                } else if (!blocked.has(next)) {
                     // first time seeing `next` on this path
-                    maybe_in_more_cycles.delete(next.to_primitive());
+                    maybe_in_more_cycles.delete(next);
                     path.push(next);
-                    blocked.add(next.to_primitive());
-                    stack.push([next.to_primitive(), subgraph.iter_neighbors(next)])
+                    blocked.add(next);
+                    stack.push([next, subgraph.iter_neighbors(next)])
                     continue
-                } else {
-                    // not first time seeing `next` on this path
                 }
             }
 
             if (successors.peekable().peek().done) {
                 unblock_stack.push(node);
                 if (maybe_in_more_cycles.has(node)) {
-                    let n: string;
+                    let n;
                     while (n = unblock_stack.pop()!) {
                         if (blocked.delete(n)) {
                             const unblocked_predecessors = entry(unblock_together, n, () => new Set())
@@ -273,9 +267,9 @@ export function simple_cycles_in_component(graph: DiGraph, scc: NodeId[]): [Node
                     }
                 } else {
                     // if its descendants can be unblocked later, this node will be too
-                    const successors = subgraph.neighbors(NodeId.to_node_id(node));
+                    const successors = subgraph.neighbors(node);
                     for (let i = 0; i < successors.length; i++) {
-                        entry(unblock_together, successors[i].to_primitive(), () => new Set()).add(node)
+                        entry(unblock_together, successors[i], () => new Set()).add(node)
                     }
                 }
                 // remove node from path and DFS stack

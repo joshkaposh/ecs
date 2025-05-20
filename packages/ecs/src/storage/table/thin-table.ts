@@ -1,7 +1,7 @@
 import { Option, TypedArray, View } from "joshkaposh-option";
-import { alloc, reserve, TableId, TableRow, ThinColumn, ThinSparseSet } from "..";
+import { TableId, TableRow, ThinColumn, ThinSparseSet } from "..";
 import { split_at, swap, swap_remove_typed, view } from "../../array-helpers";
-import { ComponentId, ThinComponentInfo, ThinComponents } from "../../component";
+import type { ComponentId, ThinComponentInfo, ThinComponents } from "../../component";
 import { Tick } from "../../tick";
 import { debug_assert, entry } from "../../util";
 import { iter } from "joshkaposh-iterator";
@@ -284,6 +284,7 @@ export class ThinTable {
 
 export class ThinTableBuilder {
     #columns: ThinSparseSet<ThinColumn>;
+    // @ts-expect-error
     #capacity: number;
 
     constructor(columns: ThinSparseSet<ThinColumn>, capacity: number) {

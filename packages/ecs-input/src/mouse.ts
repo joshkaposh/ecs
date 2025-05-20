@@ -1,6 +1,6 @@
-import { defineSystem, defineEvent } from "ecs";
-import { ButtonInput, ButtonState } from "./button_input";
-import { defineResource } from "define";
+import { defineSystem, defineResource } from "ecs";
+import { defineEvent } from "define";
+import { ButtonInput } from "./button_input";
 
 export type MouseButton = 0 | 1 | 2 | 3 | 4 | (number & {})
 export const MouseButton = {
@@ -100,8 +100,8 @@ export const AccumulatedMouseMotion = defineResource(class AccumulatedMouseMotio
 })
 
 export const accumulate_mouse_motion_system = defineSystem(b => b.reader(MouseMotion).resMut(AccumulatedMouseMotion), function accumulate_mouse_motion_system(
-    mouse_motion_event,
-    accumulated_mouse_motion
+    _mouse_motion_event,
+    _accumulated_mouse_motion
 ) {
     // const delta = [0, 0];
 

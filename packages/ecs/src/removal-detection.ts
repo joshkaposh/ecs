@@ -1,15 +1,16 @@
 import { type Iterator, iter } from "joshkaposh-iterator";
 import type { Option } from "joshkaposh-option";
-import type { Component, ComponentId, Tick } from "./component";
+import { defineEvent } from "define";
+import type { ComponentId, Tick } from "./component/component.types";
 import type { Entity } from "./entity";
 import type { SystemMeta } from "./system";
 import type { World } from "./world";
 import type { Archetype } from "./archetype";
 import { type StorageType, SparseSet } from "./storage";
-import { type EventId, EventCursor, Events, defineEvent } from "./event";
+import { EventCursor, Events } from "./event";
 import { unit } from "./util";
 
-class RemovedComponentEntity {
+export class RemovedComponentEntity {
     static readonly type_id: UUID;
     static readonly storage_type: StorageType;
     static from_world: (world: World) => InstanceType<typeof RemovedComponentEntity>
@@ -22,7 +23,8 @@ class RemovedComponentEntity {
         return this.entity;
     }
 }
-await defineEvent(RemovedComponentEntity);
+
+defineEvent(RemovedComponentEntity)
 
 export class RemovedComponentEvents {
     State!: unit;
@@ -59,7 +61,7 @@ export class RemovedComponentEvents {
         return world.removedComponents;
     }
 
-    static apply(_state: typeof unit, _system_meta: SystemMeta, _world: World): void {
+    static exec(_state: typeof unit, _system_meta: SystemMeta, _world: World): void {
 
     }
 
@@ -71,43 +73,35 @@ export class RemovedComponentEvents {
 
     }
 
-    static validate_param(_state: typeof unit, _system_meta: SystemMeta, _world: World): boolean {
-        return true;
+    static validate_param(_state: typeof unit, _system_meta: SystemMeta, _world: World) {
     }
 }
 
-// @ts-expect-error
-export class RemovedComponentReader<T extends Component> {
-    constructor(public reader: EventCursor<typeof RemovedComponentEntity>) { }
+export type RemovedComponentReader = EventCursor<typeof RemovedComponentEntity>
+// export class RemovedComponentReader<T extends Component> {
+//     constructor(reader: EventCursor<typeof RemovedComponentEntity>) { }
+// }
 
-    static default<T extends Component>() {
-        return new RemovedComponentReader<T>(new EventCursor())
-    }
-}
-export class RemovedComponents<T extends Component> {
-    State!: any;
-    Item!: any;
+export class RemovedComponents {
     #component_id: ComponentId;
-    #reader: RemovedComponentReader<T>;
+    #reader: RemovedComponentReader;
     #event_sets: RemovedComponentEvents;
 
-    constructor(component_id: ComponentId, reader: RemovedComponentReader<T>, event_sets: RemovedComponentEvents) {
+    constructor(component_id: ComponentId, reader: RemovedComponentReader, event_sets: RemovedComponentEvents) {
         this.#component_id = component_id;
         this.#reader = reader;
         this.#event_sets = event_sets;
     }
 
-    //* SystemParam methods
-
-    static init_state(world: World, system_meta: SystemMeta, component_id: ComponentId) {
+    static init_state(world: World, _system_meta: SystemMeta, component_id: ComponentId) {
         return world.removedComponents.get(component_id);
     }
 
-    static get_param(_state: any, _system_meta: SystemMeta, _world: World, _change_tick: Tick) {
+    static get_param(_state: Option<Events<typeof RemovedComponentEntity>>, _system_meta: SystemMeta, _world: World, _change_tick: Tick) {
         return this;
     }
 
-    static apply(_state: any, _system_meta: SystemMeta, _world: World): void {
+    static exec(_state: any, _system_meta: SystemMeta, _world: World): void {
 
     }
 
@@ -119,31 +113,28 @@ export class RemovedComponents<T extends Component> {
 
     }
 
-    static validate_param(_state: any, _system_meta: SystemMeta, _world: World): boolean {
-        return true;
+    static validate_param(_state: any, _system_meta: SystemMeta, _world: World) {
     }
-
-    //* SystemParam methods end
 
     get length() {
         const events = this.events();
-        return events ? this.#reader.reader.len(events) : 0
+        return events ? this.#reader.length(events) : 0
     }
 
     get isEmpty() {
         const events = this.events();
-        return events ? this.#reader.reader.is_empty(events) : true;
+        return events ? this.#reader.is_empty(events) : true;
     }
 
     reader(): EventCursor<typeof RemovedComponentEntity> {
-        return this.#reader.reader
+        return this.#reader
     }
 
     events(): Option<Events<typeof RemovedComponentEntity>> {
         return this.#event_sets.get(this.#component_id);
     }
 
-    reader_mut_with_events(): Option<[RemovedComponentReader<T>, Events<typeof RemovedComponentEntity>]> {
+    reader_mut_with_events(): Option<[RemovedComponentReader, Events<typeof RemovedComponentEntity>]> {
         const events = this.#event_sets.get(this.#component_id);
         return events ? [this.#reader, events] as const : undefined
     }
@@ -153,7 +144,6 @@ export class RemovedComponents<T extends Component> {
         if (tuple) {
             const [reader, events] = tuple;
             return reader
-                .reader
                 .read(events)
                 .map(e => e.entity);
         }
@@ -165,20 +155,18 @@ export class RemovedComponents<T extends Component> {
         if (tup) {
             const [reader, events] = tup
             return reader
-                .reader
-                .read_with_id(events)
-                .flatten()
-                .map(map_id_events)
+                .readWithId(events)
+                .map(([entity, id]) => [entity.entity, id])
         }
         return;
     }
 
     clear() {
         const tuple = this.reader_mut_with_events();
-        if (tuple) tuple[0].reader.clear(tuple[1]);
+        if (tuple) tuple[0].clear(tuple[1]);
     }
 }
 
-function map_id_events([entity, id]: [RemovedComponentEntity, EventId<Entity>]): [Entity, EventId<RemovedComponentEntity>] {
-    return [entity.clone().into(), id];
-}
+// function map_id_events([entity, id]: [RemovedComponentEntity, EventId<Entity>]): [Entity, EventId<RemovedComponentEntity>] {
+//     return [entity.into(), id];
+// }

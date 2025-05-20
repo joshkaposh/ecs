@@ -1,25 +1,66 @@
 import { iter } from "joshkaposh-iterator";
-import { type Option } from 'joshkaposh-option';
-import { Class, ComponentRecord, ThinComponent, ThinResource, TypeId } from "define";
-import { StorageType } from "./storage";
-import { FromWorld, World } from "./world";
-import { Prettify, TODO } from "joshkaposh-iterator/src/util";
-import { Table, TableRow } from "./storage/table";
-import { SparseSets } from "./storage/sparse-set";
-import { Entity } from "./entity";
-import { debug_assert, entry, is_class } from "./util";
-import { Tick } from "./tick";
-import { SystemMeta } from "./system";
-import { v4 } from "uuid";
+import { TODO } from "joshkaposh-iterator/src/util";
+import { u32, type Option } from 'joshkaposh-option';
+import type { ThinComponent, ThinResource } from "define";
+import { StorageType } from "../storage";
+import type { World } from "../world";
+import type { Table, TableRow, SparseSets } from "../storage";
+import type { Entity } from "../entity";
+import type { SystemMeta } from "../system/function-system";
+import { entry, is_class, type TypeId } from "../util";
 
-export * from './tick';
+import type { Component, ComponentId, ComponentMetadata, Resource, ResourceId, Tick } from './component.types'
+import { MAX_CHANGE_AGE } from "../change_detection";
+import { ArchetypeFlags } from "../archetype";
 
-export type ComponentId = number;
-export type ComponentMetadata = TypeId & { readonly storage_type: StorageType };
-export type Component<T extends Class = Class> = T & Prettify<ComponentMetadata>;
+export function relative_to(tick: number, other: number) {
+    return u32.wrapping_sub(tick, other);
+}
 
-export type ResourceId = number;
-export type Resource<R extends new (...args: any[]) => any = Component> = R extends Class ? R & ComponentMetadata & FromWorld<R> : never;
+export function is_newer_than(tick: number, last_run: number, this_run: number) {
+    const ticks_since_insert = Math.min(relative_to(this_run, tick), MAX_CHANGE_AGE);
+    const ticks_since_system = Math.min(relative_to(this_run, last_run), MAX_CHANGE_AGE);
+
+    return ticks_since_system > ticks_since_insert;
+}
+
+export function check_tick(self: number, tick: number) {
+    return relative_to(tick, self) > MAX_CHANGE_AGE;
+}
+
+export function check_tick_and_assign(self: number, tick: number) {
+    return check_tick(self, tick) ? relative_to(tick, MAX_CHANGE_AGE) : self;
+}
+
+export class ComponentTicks {
+    added: Tick;
+    changed: Tick;
+
+    constructor(added: Tick, changed: Tick) {
+        this.added = added;
+        this.changed = changed;
+    }
+
+    static new(change_tick: Tick) {
+        return new ComponentTicks(change_tick, change_tick)
+    }
+
+    static default() {
+        return ComponentTicks.new(0);
+    }
+
+    is_added(last_run: Tick, this_run: Tick) {
+        return is_newer_than(this.added, last_run, this_run);
+    }
+
+    is_changed(last_run: Tick, this_run: Tick) {
+        return is_newer_than(this.changed, last_run, this_run);
+    }
+
+    set_changed(change_tick: Tick) {
+        this.changed = change_tick;
+    }
+}
 
 export function is_component(ty: any): ty is Component {
     return is_class(ty) && 'type_id' in ty && 'storage_type' in ty;
@@ -36,7 +77,9 @@ class ComponentIds { }
  * A `Components` wrapper that enables additional features, like registration.
  */
 export class ComponentsRegistrator {
+    // @ts-expect-error
     #components: Components;
+    // @ts-expect-error
     #ids: ComponentIds;
 
     constructor(components: Components, ids: ComponentIds) {
@@ -169,15 +212,29 @@ export class ComponentInfo {
     #name: string;
     readonly descriptor: ComponentDescriptor;
     // #required_components: RequiredComponents;
-    // #required_by: Set<ComponentId>
+    #required_by: Set<ComponentId>
+    #hooks: {
+        readonly on_add: number;
+        readonly on_insert: number;
+        readonly on_replace: number;
+        readonly on_remove: number;
+    }
 
     constructor(id: ComponentId, descriptor: ComponentDescriptor) {
         this.#id = id;
         this.descriptor = descriptor;
         this.#name = descriptor.type.name;
         // this.#required_components = new RequiredComponents();
-        // this.#required_by = new Set();
+        this.#required_by = new Set();
+        this.#hooks = {
+            on_add: 0,
+            on_insert: 0,
+            on_remove: 0,
+            on_replace: 0
+        }
     }
+
+
 
     get name(): string {
         return this.#name;
@@ -201,6 +258,14 @@ export class ComponentInfo {
 
     get typeId(): UUID {
         return this.descriptor.type.type_id;
+    }
+
+    get hooks() {
+        return this.#hooks;
+    }
+
+    updateArchetypeFlags(flags: ArchetypeFlags) {
+
     }
 }
 
@@ -241,6 +306,10 @@ export class ThinComponentInfo {
 
     get typeId(): UUID {
         return this.descriptor.type.type_id;
+    }
+
+    updateArchetypeFlags(flags: ArchetypeFlags) {
+
     }
 }
 
@@ -372,8 +441,9 @@ export class Components {
     }
 
     registerResource(type: Resource) {
-        return this.#getOrRegisterResourceWith(type.type_id, () => {
-            return { type: type, storage_type: StorageType.SparseSet }
+        return this.#getOrRegisterResource(type.type_id, {
+            type,
+            storage_type: StorageType.SparseSet
         })
     }
 
@@ -523,7 +593,7 @@ export class Components {
     }
 
     getInfo(id: ComponentId): Option<ComponentInfo> {
-        return this.#components[id]
+        return this.#components[id];
     }
 
     info(id: ComponentId) {
@@ -568,9 +638,8 @@ export class Components {
         return id;
     }
 
-    #getOrRegisterResourceWith(type_id: UUID, fn: () => ComponentDescriptor) {
-        const components = this.#components;
-        return entry(this.#resource_indices, type_id, () => Components.#registerComponentInner(components, fn()))
+    #getOrRegisterResource(type_id: UUID, descriptor: ComponentDescriptor) {
+        return entry(this.#resource_indices, type_id, () => Components.#registerComponentInner(this.#components, descriptor))
     }
 
     iter() {
@@ -828,16 +897,36 @@ export class ThinComponents {
     }
 }
 
-export function defineComponent<T>(ty: T, storage_type: StorageType = 0): T & Prettify<ComponentMetadata> {
-    // @ts-expect-error
-    ty.type_id = v4()
-    // @ts-expect-error
-    ty.storage_type = storage_type;
-    return ty as T & ComponentMetadata;
-}
+// interface ComponentConfig {
+//     storage_type: StorageType;
+//     relationship_target?: any;
+// }
 
-export function defineMarker(): Component {
-    const marker = class { }
-    defineComponent(marker, 1);
-    return marker as Component
-}
+// export function defineComponent<T>(ty: T, { storage_type }: ComponentConfig = {
+//     storage_type: 0
+// }): T & Prettify<ComponentMetadata> {
+//     // @ts-expect-error
+//     ty.type_id = v4();
+//     // @ts-expect-error
+//     ty.storage_type = storage_type;
+//     return ty as T & ComponentMetadata;
+// }
+
+// export function defineMarker(): Component {
+//     const marker = class { }
+//     defineComponent(marker, { storage_type: 1 });
+//     return marker as Component
+// }
+
+// export function defineResource<R extends Class>(ty: R & Partial<ComponentMetadata> & Partial<ComponentMetadata> & {}): Resource<R> {
+//     // @ts-expect-error
+//     ty.type_id = v4();
+//     // @ts-expect-error
+//     ty.storage_type = 1;
+//     // @ts-expect-error
+//     ty.from_world ??= (_world: World) => {
+//         return new ty() as InstanceType<R>;
+//     }
+
+//     return ty as Resource<R>
+// }

@@ -1,10 +1,10 @@
-import { Tick } from "..";
-import { Archetype } from "../archetype";
-import { FilteredAccess, FilteredAccessSet, QueryData, QueryFilter, QueryState } from "../query";
-import { DeferredWorld, FromWorld, World } from "../world";
-import { SystemMeta } from './function-system';
-import { Class, Instance } from "../util";
-import { ErrorType, Option, Result } from "joshkaposh-option";
+import type { Tick } from "../tick";
+import type { Archetype } from "../archetype";
+import type { FilteredAccess, FilteredAccessSet, QueryData, QueryFilter, QueryState } from "../query";
+import type { DeferredWorld, FromWorld, World } from "../world";
+import type { SystemMeta } from './function-system';
+import type { Class, Instance } from "../util";
+import type { ErrorType, Option, Result } from "joshkaposh-option";
 
 // TODO: implement Array<SystemParam> ... somehow
 
@@ -21,18 +21,18 @@ export interface SystemParam<State = any, Item = any> {
      * **Safety**
      * `archetype` must be from the [`World`] used to initialize `state` in [`SystemParam.init_state`]
      */
-    new_archetype(_state: State, _archetype: Archetype, _system_meta: SystemMeta): void;
+    new_archetype?(state: State, archetype: Archetype, system_meta: SystemMeta): void;
 
     /**
      * Applies any deferred mutations stored in this [`SystemParam`]'s state.
      * This is used to apply [`Commands`] during [`ApplyDeferred`]
      */
-    exec?(_state: State, _system_meta: SystemMeta, _world: World): void;
+    exec?(state: State, system_meta: SystemMeta, world: World): void;
 
     /**
      * Queues any deferred mutations to be applied at the next [`ApplyDeferred`].
      */
-    queue(_state: State, _system_meta: SystemMeta, _world: DeferredWorld): void;
+    queue?(state: State, system_meta: SystemMeta, world: DeferredWorld): void;
 
     /**
      * Validates that the param can be acquired by the [`get_param`] method.
@@ -63,7 +63,7 @@ export interface SystemParam<State = any, Item = any> {
      * - `world` must be the same [`World`] that was used to initialize `state`.
      * - All `world`s archetypes have been processed by [`SystemParam.new_archetype`].
      */
-    validate_param(_state: State, _system_meta: SystemMeta, _world: World): Result<Option<void>, SystemParamValidationError>;
+    validate_param?(state: State, system_meta: SystemMeta, world: World): Result<Option<void>, SystemParamValidationError>;
 
     /**
      * Creates a parameter to be passed into a [`SystemParamFunction`].
@@ -77,78 +77,78 @@ export interface SystemParam<State = any, Item = any> {
     get_param(state: State, system: SystemMeta, world: World, change_tick: Tick): Item;
 }
 
-export interface SystemParamDefinition<State = any, Item = any> {
-    /**
-     * Registers any [`World`] access used by this [`SystemParam`]
-     * and creates a new instance of this param's [`State`].
-     */
-    init_state(world: World, system_meta: SystemMeta, ...additional: any[]): State;
+// export interface SystemParamDefinition<State = any, Item = any> {
+//     /**
+//      * Registers any [`World`] access used by this [`SystemParam`]
+//      * and creates a new instance of this param's [`State`].
+//      */
+//     init_state(world: World, system_meta: SystemMeta, ...additional: any[]): State;
 
-    /**
-     * Creates a parameter to be passed into a [`SystemParamFunction`].
-     * 
-     * **Safety**
-     *
-     * - The passed `world` must have access to any world data registered in [`SystemParam.init_state`].
-     * - `world` must be the same [`World`] that was used to initialize `state`.
-     * - All `world`s archetypes have been processed by [`SystemParam.new_archetype`].
-     */
-    get_param(state: State, system: SystemMeta, world: World, change_tick: Tick): Item;
-
-
-
-    /**
-     * For the specified [`Archetype`], registers the components accessed by this [`SystemParam`] (if applicable)
-     * 
-     * **Safety**
-     * `archetype` must be from the [`World`] used to initialize `state` in [`SystemParam.init_state`]
-     */
-    new_archetype?(_state: State, _archetype: Archetype, _system_meta: SystemMeta): void;
-
-    /**
-     * Applies any deferred mutations stored in this [`SystemParam`]'s state.
-     * This is used to apply [`Commands`] during [`ApplyDeferred`]
-     */
-    exec?(_state: State, _system_meta: SystemMeta, _world: World): void;
-
-    /**
-     * Queues any deferred mutations to be applied at the next [`ApplyDeferred`].
-     */
-    queue?(_state: State, _system_meta: SystemMeta, _world: DeferredWorld): void;
-
-    /**
-     * Validates that the param can be acquired by the [`get_param`] method.
-     * 
-     * Built-in executors use this to prevent systems with invalid params from running,
-     * and any failures here will be bubbled up to the default error handler defined in ecs::error,
-     * with a value of type [`SystemParamValidationError`].
-     * 
-     * For nested [`SystemParam`]s validation will fail if any delegated validation fails.
-     * 
-     * However calling and respecting [`SystemParam.validate_param`] is not a strict requirement, [`SystemParam.get_param`] should
-     * provide it's own safety mechanism to prevent undefined behaviour.
-     * 
-     * The `world` can only be used to read param's data
-     * and world metadata. No data can be written.
-     * 
-     * When using system parameters that require `change_tick`,
-     * you can use `world.changeTick`. Even if this isn't the exact same tick used for [`SystemParam.get_param`], the world access
-     * ensures that the queried data will be the same in both calls.
-     * 
-     * This method has to be called directly before [`SystemParam.get_param`] with no other (relevant)
-     * world mutation in-between. Otherwise, while it won't lead to any undefined behaviour,
-     * the validity of the param may change.
-     * 
-     * **Safety**
-     * 
-     * - The passed `world` must have read-only access to world data registered in [`SystemParam.init_state`].
-     * - `world` must be the same [`World`] that was used to initialize `state`.
-     * - All `world`s archetypes have been processed by [`SystemParam.new_archetype`].
-     */
-    validate_param?(_state: State, _system_meta: SystemMeta, _world: World): Result<Option<void>, SystemParamValidationError>;
+//     /**
+//      * Creates a parameter to be passed into a [`SystemParamFunction`].
+//      * 
+//      * **Safety**
+//      *
+//      * - The passed `world` must have access to any world data registered in [`SystemParam.init_state`].
+//      * - `world` must be the same [`World`] that was used to initialize `state`.
+//      * - All `world`s archetypes have been processed by [`SystemParam.new_archetype`].
+//      */
+//     get_param(state: State, system: SystemMeta, world: World, change_tick: Tick): Item;
 
 
-}
+
+//     /**
+//      * For the specified [`Archetype`], registers the components accessed by this [`SystemParam`] (if applicable)
+//      * 
+//      * **Safety**
+//      * `archetype` must be from the [`World`] used to initialize `state` in [`SystemParam.init_state`]
+//      */
+//     new_archetype?(_state: State, _archetype: Archetype, _system_meta: SystemMeta): void;
+
+//     /**
+//      * Applies any deferred mutations stored in this [`SystemParam`]'s state.
+//      * This is used to apply [`Commands`] during [`ApplyDeferred`]
+//      */
+//     exec?(_state: State, _system_meta: SystemMeta, _world: World): void;
+
+//     /**
+//      * Queues any deferred mutations to be applied at the next [`ApplyDeferred`].
+//      */
+//     queue?(_state: State, _system_meta: SystemMeta, _world: DeferredWorld): void;
+
+//     /**
+//      * Validates that the param can be acquired by the [`get_param`] method.
+//      * 
+//      * Built-in executors use this to prevent systems with invalid params from running,
+//      * and any failures here will be bubbled up to the default error handler defined in ecs::error,
+//      * with a value of type [`SystemParamValidationError`].
+//      * 
+//      * For nested [`SystemParam`]s validation will fail if any delegated validation fails.
+//      * 
+//      * However calling and respecting [`SystemParam.validate_param`] is not a strict requirement, [`SystemParam.get_param`] should
+//      * provide it's own safety mechanism to prevent undefined behaviour.
+//      * 
+//      * The `world` can only be used to read param's data
+//      * and world metadata. No data can be written.
+//      * 
+//      * When using system parameters that require `change_tick`,
+//      * you can use `world.changeTick`. Even if this isn't the exact same tick used for [`SystemParam.get_param`], the world access
+//      * ensures that the queried data will be the same in both calls.
+//      * 
+//      * This method has to be called directly before [`SystemParam.get_param`] with no other (relevant)
+//      * world mutation in-between. Otherwise, while it won't lead to any undefined behaviour,
+//      * the validity of the param may change.
+//      * 
+//      * **Safety**
+//      * 
+//      * - The passed `world` must have read-only access to world data registered in [`SystemParam.init_state`].
+//      * - `world` must be the same [`World`] that was used to initialize `state`.
+//      * - All `world`s archetypes have been processed by [`SystemParam.new_archetype`].
+//      */
+//     validate_param?(_state: State, _system_meta: SystemMeta, _world: World): Result<Option<void>, SystemParamValidationError>;
+
+
+// }
 
 export interface SystemBuffer<T extends any = any> extends FromWorld<T> {
     exec(system_meta: SystemMeta, world: World): void;
@@ -156,20 +156,33 @@ export interface SystemBuffer<T extends any = any> extends FromWorld<T> {
     get(): Instance<T>;
 }
 
-export function defineParam<T extends SystemParamDefinition>(type: T) {
+type DS<T> = T extends SystemParam<infer State> ? State : never;
+type DI<T> = T extends SystemParam<any, infer Item> ? Item : never;
+
+export function defineParam<T extends SystemParam>(type: T): Required<SystemParam<DS<T>, DI<T>>> {
     type.new_archetype ??= function new_archetype() { }
     type.validate_param ??= function validate_param() { }
     type.exec ??= function exec() { }
     type.queue ??= function queue() { }
+
+    return type as Required<SystemParam<DS<T>, DI<T>>>;
 }
 
-export const Deferred = {
+export type Deferred<T> = SystemParam;
+const Deferred = {
+    from_world() { },
+
     init_state<T extends SystemBuffer>(world: World, system_meta: SystemMeta, type: T) {
         system_meta.setHasDeferred();
         return type.from_world(world);
     },
 
-    apply(state: SystemBuffer, system_meta: SystemMeta, world: World) {
+    validate_param(_state: SystemBuffer, _system_meta: SystemMeta, _world: World) { },
+
+    new_archetype(_state: SystemBuffer, _archetype: Archetype, _system_meta: SystemMeta) {
+    },
+
+    exec(state: SystemBuffer, system_meta: SystemMeta, world: World) {
         state.exec(system_meta, world);
     },
 
@@ -179,9 +192,14 @@ export const Deferred = {
 
     get_param<T extends SystemBuffer>(state: T, _system_meta: SystemMeta, _world: World, _change_tick: Tick) {
         return state.get();
-    }
+    },
+
+    get() { }
 
 } as const;
+
+defineParam(Deferred);
+export { Deferred }
 
 export type SystemParamItem<T> = T extends SystemParam<any, infer Item> ? Item : never;
 export type SystemParamState<T> = T extends SystemParam<infer State> ? State : never;
@@ -268,11 +286,11 @@ class Local<T> {
     }
 
     static init_state<T>(world: World, _system_meta: SystemMeta, type: T & Partial<FromWorld<T>>) {
-        return type.from_world?.(world) ?? type;
+        return new Local(type.from_world?.(world) ?? type);
     }
 
     static get_param<T>(state: T) {
-        return new Local(state);
+        return state;
     }
 }
 

@@ -1,50 +1,28 @@
-import { $Last, App, AppExit, plugin } from 'ecs-app';
-import { Added, Changed, Entity, EntityWorldMut, StorageType, With, World, run_once, set } from 'ecs';
-import { defineComponent, defineResource, defineSystem, defineCondition } from 'define'
-import { AccumulatedMouseMotion, input_pressed, InputPlugin, MouseButton, MouseButtonInput } from '../../../packages/ecs-input';
-import { $PostUpdate, $PreUpdate, $Startup, $Update } from 'ecs-app';
-import { swap } from 'ecs/src/array-helpers';
+import { Commands, defineComponent, defineCondition, defineResource, defineSystem, Entity, EntityRef, EntityWorldMut, on_event, res, set, StorageType, With, World } from 'ecs';
+import { $Last, $PostUpdate, $PreUpdate, $Startup, $Update, App, AppExit, plugin, ScheduleRunnerPlugin } from 'ecs-app';
+import { AccumulatedMouseMotion, input_pressed, InputPlugin, MouseButton, MouseButtonInput } from 'ecs-input'
 import { HTMLAttributes } from 'ecs-ui';
-import { unit } from 'ecs/src/util';
+import { swap } from 'ecs/src/array-helpers';
+
 
 const TicTacToePlugin = plugin(app => {
-    app.initResource(Board)
+    app
+        .initResource(Render)
+        .initResource(Board)
         .addSystems($Startup, spawn_squares)
-        .addSystems($PreUpdate, set(render_selected, render_grid).chain())
-        // .addSystems($PreUpdate, render_selected.after(render_grid))
-
-
         .addSystems($Update,
-            select_square.runIf(can_select as any) as any,
+            set(
+                select_square.runIf(can_select as any),
+                game_over.runIf(check_win)
+            )
         )
-        .addSystems($PostUpdate,
-            game_over.runIf(check_win),
-        )
+        .addSystems($PostUpdate, set(render_grid, render_selected).chain())
+
+    // .addSystems($Last, game_over.runIf(check_win))
+    // .addSystems($Last, spawn_game_over_button.runIf(app_exitted))
+
+
 })
-
-// const Time = defineResource(class Time {
-//     delta: number;
-//     elapsed: number;
-//     #lastFrame: number | null;
-//     constructor() {
-//         this.delta = 0;
-//         this.elapsed = 0;
-//         this.#lastFrame = null;
-//     }
-
-//     step() {
-//         if (this.#lastFrame == null) {
-//             this.#lastFrame = performance.now();
-//             this.elapsed = 0;
-//             return;
-//         }
-
-//         const now = performance.now();
-//         this.delta = (now - this.#lastFrame) / 1000;
-//         this.#lastFrame = now;
-//         this.elapsed! += this.delta;
-//     }
-// })
 
 const Square = defineComponent(class Square {
     x: number;
@@ -73,6 +51,7 @@ const Selected = defineComponent(class Selected {
     }
 }, StorageType.SparseSet);
 
+
 // type EventListener<E extends HTMLElement, K extends keyof HTMLElementEventMap = keyof HTMLElementEventMap> = (this: E, ev: HTMLElementEventMap[K]) => any;
 
 // type EventListenerMap<E extends HTMLElement, K extends keyof HTMLElementEventMap = keyof HTMLElementEventMap> = Partial<{
@@ -85,7 +64,7 @@ function UI_Node<K extends keyof HTMLElementTagNameMap>(type: K) {
     type ElementType = HTMLElementTagNameMap[K];
     const UIElement = class {
         #node: ElementType;
-        #entity: number;
+        #entity!: number;
         constructor(
             parent: HTMLElement = document.getElementById('root')!,
             attributes: Partial<UINodeAttribute<K>> = Object.create(null)
@@ -94,7 +73,7 @@ function UI_Node<K extends keyof HTMLElementTagNameMap>(type: K) {
             this.#node = element;
 
             for (const key in attributes) {
-                element[key] = attributes[key];
+                element[key as keyof typeof element] = attributes[key as keyof typeof attributes];
             }
 
             parent.appendChild(element);
@@ -116,7 +95,7 @@ function UI_Node<K extends keyof HTMLElementTagNameMap>(type: K) {
 const Button = UI_Node('button');
 
 const Board = defineResource(class Board {
-    #entities: Entity[];
+    #entities: EntityRef[];
 
     cols: number;
     rows: number;
@@ -140,7 +119,7 @@ const Board = defineResource(class Board {
         this.y = 0;
         this.w = nColsRows * size;
         this.h = nColsRows * size;
-        this.#active = ['X', 'O']
+        this.#active = ['X', 'O'];
     }
 
     get active() {
@@ -151,19 +130,17 @@ const Board = defineResource(class Board {
         return this.#entities;
     }
 
-    reset(entities: number[]) {
+    set entities(new_entities) {
+        console.log('entities setter');
+
+        this.#entities = new_entities;
+    }
+
+    reset(entities: EntityRef[]) {
         this.#entities = entities;
         this.#active = ['X', 'O'];
     }
 
-    set_entities(entities: number[]) {
-        this.#entities = entities;
-    }
-
-    select(ref: EntityWorldMut) {
-        ref.insert(new Selected(this.active));
-        this.toggle_player();
-    }
 
     toggle_player() {
         swap(this.#active, 0, 1);
@@ -171,17 +148,18 @@ const Board = defineResource(class Board {
 
     entity(x: number, y: number) {
         const size = this.tilesize;
-        return this.#entities[Math.floor(y / size) * this.rows + Math.floor(x / size)];
+        return this.#entities[Math.floor(y / size) * this.rows + Math.floor(x / size)].id;
     }
 
-    check_state(world: World, state: readonly [number, number, number]) {
-        for (const symbol of this.#active) {
-            if (state.every(index => world.get(this.#entities[index], Selected)?.symbol === symbol)) {
-                return true;
-            }
-        }
-        return false;
+    check_state(commands: Commands, state: readonly [number, number, number]) {
+        // for (const symbol of this.#active) {
+        //     if (state.every(index => commands.get(this.#entities[index], Selected)?.symbol === symbol)) {
+        //         return true;
+        //     }
+        // }
+        // return false;
     }
+
 })
 
 const Render = defineResource(class Render {
@@ -230,10 +208,10 @@ const aabbPointRect = defineCondition(b => b.res(AccumulatedMouseMotion).res(Boa
     const { x: px, y: py } = point.v;
     const { x, y, w, h } = rect.v;
 
-    return px >= x
-        && px <= w
-        && py >= y
-        && py <= h
+    return px > x
+        && px < w
+        && py > y
+        && py < h
 })
 
 const squareNotOccupied = defineCondition(b => b.world().res(AccumulatedMouseMotion).res(Board), function SquareNotOccupied(w, mouse, board) {
@@ -241,22 +219,42 @@ const squareNotOccupied = defineCondition(b => b.world().res(AccumulatedMouseMot
     return w.get(board.v.entity(x, y), Selected) == null;
 })
 
-const can_select = aabbPointRect
-    .and(input_pressed(MouseButton.Left, MouseButtonInput).setName('MouseButtonPressed') as any)
-    .and(squareNotOccupied)
+const can_select = input_pressed(MouseButton.Left, MouseButtonInput)
+    .and(aabbPointRect)
+    .and(squareNotOccupied);
 
-const check_win = defineCondition(b => b.world().res(Board), function check_win(w, board) {
-    return WIN_STATE.some(
-        state => board.v.check_state(w, state)
-    )
-        || board.v.entities.every(id => w.get(id, Selected) != null)
+const check_win = defineCondition(b => b.query([Square, Selected]).res(Board), function check_win(query, board) {
+    return query.count() === 9
+        || WIN_STATE.some(
+            state => ['X', 'O'].some(
+                type => state.every(
+                    i => board.v.entities[i].get(Selected)?.symbol === type)
+            )
+        );
 })
 
-const game_over = defineSystem(b => b.world().writer(AppExit), function game_over(w, exit) {
-    exit.send(AppExit.Success());
+const game_over = defineSystem(b => b.writer(AppExit), function game_over(exit) {
+    console.log('GAME OVER');
+    exit.v.send(AppExit.Success());
+});
 
+const spawn_squares = defineSystem(b => b.world().res(Board), function spawn_squares(w, board) {
+    const { cols, rows, tilesize } = board.v;
+    const entities: EntityRef[] = [];
+    for (let row = 0; row < rows; row++) {
+        for (let col = 0; col < cols; col++) {
+            const index = row * rows + col;
+            const x = col * tilesize;
+            const y = row * tilesize;
+            entities.push(w.spawn(new Square(x, y, tilesize, index)).readonly());
+        }
+    }
 
-    const btn = new Button(
+    board.v.entities = entities;
+})
+
+const spawn_game_over_button = defineSystem(b => b.world(), function spawnGameOverButton(world) {
+    const button = new Button(
         document.getElementById('root')!,
         {
             id: 'reset',
@@ -268,34 +266,13 @@ const game_over = defineSystem(b => b.world().writer(AppExit), function game_ove
             }
         }
     )
-    const id = w.spawn(btn).id;
-    btn.entity = id;
-
-});
-
-const spawn_squares = defineSystem(b => b.world().resMut(Board), function spawn_squares(w, board) {
-    const { cols, rows, tilesize } = board.v;
-    const entities: number[] = [];
-    for (let row = 0; row < rows; row++) {
-        for (let col = 0; col < cols; col++) {
-            const index = row * rows + col;
-            const x = col * tilesize;
-            const y = row * tilesize;
-            entities.push(w.spawn(new Square(x, y, tilesize, index)).id);
-        }
-    }
-
-    board.v.set_entities(entities);
+    button.entity = world.spawn(button).id;
 })
 
-// const spawn_ui = defineSystem(b => b.world(), (w) => {
-
-// })
-
-const select_square = defineSystem(b => b.res(AccumulatedMouseMotion).resMut(Board).query([EntityWorldMut, Square]), function select_square(mouse, board, squares) {
+const select_square = defineSystem(b => b.commands().res(AccumulatedMouseMotion).resMut(Board).query([Entity, Square]), function select_square(commands, mouse, board, squares) {
     const { x, y } = mouse.v;
 
-    const id = squares.iter().find_map(([id, square]) => {
+    const entity = squares.iter().find_map(([id, square]) => {
         const mCol = Math.floor(x / square.size);
         const mRow = Math.floor(y / square.size);
 
@@ -309,13 +286,12 @@ const select_square = defineSystem(b => b.res(AccumulatedMouseMotion).resMut(Boa
         return
     })
 
-    if (id != null) {
-        console.log('inserted selected: ', board.v.active);
+    console.log('select entity', entity);
 
-        id.insert(new Selected(board.v.active));
+    if (entity != null) {
+        commands.entity(entity).insert(new Selected(board.v.active));
         board.v.toggle_player();
     }
-
 })
 
 const render_grid = defineSystem(b => b.res(Render).res(Board), function render_grid(render, grid) {
@@ -341,30 +317,11 @@ const render_grid = defineSystem(b => b.res(Render).res(Board), function render_
 const render_selected = defineSystem(b => b.res(Render).query([Selected, Square]), function render_selected(render, selected) {
     const r = render.v;
     r.fill = '#ffffff';
+    r.stroke = '#ffffff'
 
     for (const [ty, s] of selected) {
         const offset = Math.floor(s.size / 2);
         r.text(s.x + offset, s.y + offset, ty.symbol);
-    }
-})
-
-// const render_perf_stats = defineSystem(b => b.res(Render).res(Time), (render, time) => {
-//     const midX = canvas.clientWidth / 2;
-//     const midY = canvas.clientHeight / 2;
-//     const x = canvas.clientLeft;
-//     const y = canvas.clientTop;
-
-//     render.v.fill = '#fff';
-//     render.v.text(x + midX, y + midY, `FPS: ${1 / time.v.delta}`);
-// })
-
-// const accumulate_time = defineSystem(b => b.resMut(Time), time => time.bypassChangeDetection().step())
-
-const log_added = defineSystem(b => b.world(), function log_added(w) {
-    const added = w.queryFiltered([Square], [Added(Square)]);
-    const count = added.iter(w).count();
-    console.log('added: ', count);
-    if (count > 0) {
     }
 })
 
@@ -381,51 +338,35 @@ const WIN_STATE = [
     [2, 4, 6]
 ] as const;
 
-
-function run_app(_app: App): AppExit {
-    resize();
-    animate();
-
-    return undefined as unknown as AppExit
-}
-
 function init() {
+    resize();
     app
-        .initResource(Render)
+        .addPlugin(ScheduleRunnerPlugin.runLoop())
         .addPlugin(new InputPlugin())
         .addPlugin(new TicTacToePlugin())
-        .setRunner(run_app)
-        .run();
+        .run()
 }
 
 function reset() {
+
     app.getEvent(AppExit)?.clear();
 
     app.world.clearEntities();
 
     const board = app.world.resource(Board);
     const { cols, rows, tilesize } = board;
-    const entities: number[] = [];
+    const entities = [];
     for (let row = 0; row < rows; row++) {
         for (let col = 0; col < cols; col++) {
             const index = row * rows + col;
             const x = col * tilesize;
             const y = row * tilesize;
-            entities.push(app.world.spawn(new Square(x, y, tilesize, index)).id);
+            entities.push(app.world.spawn(new Square(x, y, tilesize, index)).readonly());
         }
     }
 
     board.reset(entities);
-
-    app.setRunner(run_app);
-
     app.run();
-}
-
-function animate() {
-    if (!app.shouldExit()) requestAnimationFrame(animate);
-
-    app.update();
 }
 
 init();

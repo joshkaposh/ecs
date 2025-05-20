@@ -10,6 +10,6 @@
     "test": "vitest"
   },
   "dependencies": {
-    "joshkaposh-index-map": "^1.1.0"
+    "joshkaposh-index-map": "^1.2.1"
   }
 }

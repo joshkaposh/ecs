@@ -1,5 +1,4 @@
-import { ButtonInput, ButtonState } from "./button_input";
-
+import { ButtonInput } from "./button_input";
 
 export type Key = keyof typeof Key;
 /**

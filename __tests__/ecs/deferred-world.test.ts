@@ -1,10 +1,11 @@
 import { test } from 'vitest'
-import { World, DeferredWorld } from 'ecs';
 import { defineComponent } from 'define';
+import { World, DeferredWorld } from 'ecs';
 
 const A = defineComponent(class A { constructor(public value = 'A') { } })
 const B = defineComponent(class B { constructor(public value = 'B') { } })
 const C = defineComponent(class C { constructor(public value = 'C') { } })
+
 
 test('deferred_world', () => {
     const w = new World();

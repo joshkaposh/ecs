@@ -14,23 +14,23 @@ test('events', () => {
 
     // this reader will miss event_0 and event_1 because it wont read them over the course of
     // two updates
-    const reader_missed = events.get_cursor();
+    const reader_missed = events.getCursor();
 
-    const reader_a = events.get_cursor();
+    const reader_a = events.getCursor();
 
     events.send(event_0)
 
     expect(get_events(events, reader_a)).toEqual([event_0]);
     expect(get_events(events, reader_a)).toEqual([]);
 
-    const reader_b = events.get_cursor();
+    const reader_b = events.getCursor();
 
     expect(get_events(events, reader_b)).toEqual([event_0]);
     expect(get_events(events, reader_b)).toEqual([]);
 
     events.send(event_1);
 
-    const reader_c = events.get_cursor();
+    const reader_c = events.getCursor();
 
     expect(get_events(events, reader_c)).toEqual([event_0, event_1])
     expect(get_events(events, reader_c)).toEqual([])
@@ -39,7 +39,7 @@ test('events', () => {
 
     events.update();
 
-    const reader_d = events.get_cursor();
+    const reader_d = events.getCursor();
 
     events.send(event_2);
 
@@ -60,7 +60,7 @@ const E = defineEvent(class E { constructor(public value: number) { } })
 
 function events_clear_and_read_impl(clear_func: (events: Events<typeof E>) => void) {
     const events = new Events(E);
-    const reader = events.get_cursor();
+    const reader = events.getCursor();
 
     assert(reader.read(events).next().done);
 
@@ -86,7 +86,7 @@ test('events_clear_and_read_impl', () => {
 
 test('events_extend_impl', () => {
     const events = new Events(TestEvent);
-    const reader = events.get_cursor();
+    const reader = events.getCursor();
 
     events.extend([new TestEvent(0), new TestEvent(1)] as any);
 
@@ -95,26 +95,26 @@ test('events_extend_impl', () => {
 
 test('events_empty', () => {
     const events = new Events(TestEvent);
-    assert(events.is_empty());
+    assert(events.isEmpty);
     events.send(new TestEvent(0))
-    assert(!events.is_empty());
+    assert(!events.isEmpty);
     events.update();
-    assert(!events.is_empty());
+    assert(!events.isEmpty);
     // events are only empty after the second call to update
     // due to double buffering.
     events.update();
-    assert(events.is_empty());
+    assert(events.isEmpty);
 })
 
 test('events_reader_len empty/filled', () => {
     const events = new Events(TestEvent);
 
-    assert(events.get_cursor().len(events) === 0);
-    assert(events.get_cursor().is_empty(events));
+    assert(events.getCursor().length(events) === 0);
+    assert(events.getCursor().is_empty(events));
 
     events.send(new TestEvent(0));
-    assert(events.get_cursor().len(events) === 1);
-    assert(!events.get_cursor().is_empty(events));
+    assert(events.getCursor().length(events) === 1);
+    assert(!events.getCursor().is_empty(events));
 })
 
 test('event_iter_len_updated', () => {
@@ -122,7 +122,7 @@ test('event_iter_len_updated', () => {
     events.send(new TestEvent(0))
     events.send(new TestEvent(1))
     events.send(new TestEvent(2))
-    const reader = events.get_cursor();
+    const reader = events.getCursor();
     const iter = reader.read(events);
     assert(iter.len() === 3)
     iter.next();
@@ -136,22 +136,21 @@ test('event_iter_len_updated', () => {
 test('event_reader_len_current', () => {
     const events = new Events(TestEvent);
     events.send(new TestEvent(0))
-    const reader = events.get_cursor_current()
+    const reader = events.getCursorCurrent()
     assert(reader.is_empty(events));
     events.send(new TestEvent(0));
-    assert(reader.len(events) === 1);
+    assert(reader.length(events) === 1);
     assert(!reader.is_empty(events));
 })
-
 
 test('event_reader_len_update', () => {
     const events = new Events(TestEvent);
     events.send(new TestEvent(0))
     events.send(new TestEvent(0))
-    const reader = events.get_cursor();
-    assert(reader.len(events) === 2);
+    const reader = events.getCursor();
+    assert(reader.length(events) === 2);
     events.update();
     events.send(new TestEvent(0));
-    assert(reader.len(events) === 3)
+    assert(reader.length(events) === 3)
     events.update();
 })

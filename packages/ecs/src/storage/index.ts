@@ -1,17 +1,9 @@
-import { ComponentInfo, ThinComponentInfo } from "../component";
+import type { ComponentInfo, ThinComponentInfo } from "../component/component";
 import { Resources, ThinResources } from "./resources";
 import { SparseSets, ThinSparseSets } from "./sparse-set";
 import { Tables, ThinTables } from "./table";
-
-export type StorageTypeTable = 0;
-export type StorageTypeSparseSet = 1;
-
-export type StorageType = StorageTypeTable | StorageTypeSparseSet;
-export const StorageType = {
-    Table: 0,
-    SparseSet: 1
-} as const
-
+import { StorageType } from './storage-type';
+export * from './storage-type';
 export * from './table';
 export * from './sparse-set';
 export * from './resources';

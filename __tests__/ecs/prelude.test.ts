@@ -1,10 +1,11 @@
 import { assert, test } from 'vitest';
-import { StorageType, World } from 'ecs'
 import { defineComponent } from 'define';
+import { StorageType, World } from 'ecs'
 
 const TableStored = defineComponent(class TableStored { constructor(public value: string) { } })
 const SparseStored = defineComponent(class SparseStored { constructor(public value: number) { } }
-    , StorageType.SparseSet)
+    , { storage_type: StorageType.SparseSet }
+)
 
 test('random_access', () => {
     const world = new World();
