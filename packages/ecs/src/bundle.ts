@@ -1,15 +1,17 @@
 import type { Option } from 'joshkaposh-option'
 import { iter, Iterator } from 'joshkaposh-iterator';
 import { Ord } from 'joshkaposh-index-map/src/map';
-import { ThinComponent } from 'define';
+import { $Bundle, defineBundle, hash_bundles, ThinComponent } from 'define';
 import { Archetype, ArchetypeId, Archetypes, BundleComponentStatus, ComponentStatus, SpawnBundleStatus, ArchetypeAfterBundleInsert } from "./archetype";
-import { Component, ComponentId, ComponentMetadata, Components, ComponentsRegistrator, RequiredComponents, ThinComponents, Tick } from "./component";
+import { Component, ComponentId, Components, ComponentsRegistrator, RequiredComponents, ThinComponents, Tick } from "./component";
 import { Entity, EntityLocation, index } from "./entity";
 import { StorageType, type Storages, type ThinSparseSets, type ThinStorages, type ThinTable, type SparseSets, type Table, type TableRow } from "./storage";
 import { entry, Instance, type TypeId } from "./util";
-import { DeferredWorld, EntityWorldMut, ON_ADD, ON_INSERT, ON_REPLACE } from './world';
-import { ThinWorld, World } from './world/world';
+import { BundleInput, EntityWorldMut, ON_ADD, ON_INSERT, ON_REPLACE, triggerObservers, triggerOnAdd, triggerOnInsert, triggerOnReplace } from './world';
+import { World } from './world/world';
 import { defineParam, SystemMeta } from './system';
+
+type ThinWorld = any;
 
 // TODO: enable reusing a bundle to spawn/insert components.
 // TODO: this will allow less object instantion
@@ -30,7 +32,7 @@ export interface BundleFromComponents {
 
     // ! Safety
     // Caller must return data for each component in the bundle, in the order of this bundle's `Components`s.
-    fromComponents<T extends Component>(ctx: T, fn: (value: Instance<T>) => Instance<T>): T;
+    fromComponents<T extends Component>(ctx: T, fn: (value: Instance<T>) => Instance<T>): Bundle;
 }
 
 // The parts from the `Bundle` that don't require statically knowing the components of the bundle.
@@ -47,15 +49,12 @@ export interface DynamicBundle<Effect extends BundleEffect = BundleEffect> {
     getComponents(func: (storage_type: StorageType, ptr: InstanceType<Component>) => void): void;
 };
 
-export interface BundleEffect {
-    apply(entity: EntityWorldMut): void;
-}
-
-export interface Bundle extends TypeId, DynamicBundle {
+export interface Bundle<Effect extends BundleEffect = BundleEffect> extends TypeId, DynamicBundle<Effect> {
     // Gets this `Bundle`s component_ids, in the order of this bundle's `Component`s
     componentIds(components: Components, ids: (component_id: ComponentId) => void): void;
     getComponentIds(components: Components, ids: (component_id: Option<ComponentId>) => void): void;
     registerRequiredComponents(components: ComponentsRegistrator, required_components: RequiredComponents): void;
+    [$Bundle]: true;
     [Symbol.toStringTag](): string;
 }
 
@@ -84,69 +83,14 @@ export interface ThinBundle extends TypeId, ThinDynamicBundle, ThinBundleFromCom
     getComponentIds(components: ThinComponents, ids: (component_id: Option<ComponentId>) => void): void;
 }
 
+export interface BundleEffect {
+    apply(entity: EntityWorldMut): void;
+}
+
 export const BundleEffect = {
     NoEffect: { apply(_entity: EntityWorldMut) { } }
 } as const;
 
-// function componentIds(this: Component, components: Components, ids: (component_id: ComponentId) => void) {
-//     ids(components.registerComponent(this))
-// }
-
-// function getComponentIds(this: Component, components: Components, ids: (component_id: Option<ComponentId>) => void) {
-//     ids(components.getId(this));
-// }
-
-// function fromComponents<T>(ctx: T, func: (value: T) => T) {
-//     return func(ctx);
-// }
-
-// function getComponents<T extends Component>(this: T, ptr: InstanceType<T>) {
-//     return (func: (storage_type: StorageType, ptr: {}) => void) => func(this.storage_type, ptr);
-// }
-
-// function BundleForComponent<T extends Component>(type: T & Partial<Bundle>): T & Bundle {
-//     type.componentIds = componentIds;
-//     type.getComponentIds = getComponentIds;
-//     type.fromComponents = fromComponents;
-//     // @ts-expect-error
-//     type.getComponents = getComponents(type);
-
-//     return type as T & Bundle;
-// }
-
-function componentIds(this: Component, components: Components, ids: (component_id: ComponentId) => void) {
-    ids(components.registerComponent(this));
-}
-// fromComponents(ctx, func) {
-//     return func(ctx);
-// },
-function getComponentIds(this: Component, components: Components, ids: (component_id: Option<ComponentId>) => void) {
-    ids(components.getId(this))
-}
-
-function getComponents(this: Component, ptr: InstanceType<Component>, func: (storage_type: StorageType, ptr: InstanceType<Component>) => void) {
-    func(this.storage_type, ptr)
-}
-
-function registerRequiredComponents(_components: ComponentsRegistrator, _required_components: RequiredComponents) {
-
-}
-
-function addBundleToComponent(component: Component): Bundle {
-    const actual = component;
-    const type = actual.type_id ? actual : actual.constructor as Component;
-
-    type.Effect ??= BundleEffect.NoEffect;
-    type.componentIds ??= componentIds.bind(type);
-    type.getComponentIds ??= getComponentIds.bind(type);
-    type.registerRequiredComponents ??= registerRequiredComponents.bind(type);
-    // TODO: this mutates the component type every time this bundle is created, this is called by `Bundles.dynamic_bundle` which is called by `World.spawn` and `World.spawnBatch`
-    type.getComponents = getComponents.bind(type, actual);
-
-    return type;
-}
-
-const BundleRegistry = new Map<UUID, Bundle>();
 const ThinBundleRegistry = new Map<UUID, ThinBundle>();
 
 function ThinComponentBundle(bundles: (ThinComponent & ThinBundle)[], hash: UUID): ThinBundle {
@@ -177,10 +121,6 @@ function ThinComponentBundle(bundles: (ThinComponent & ThinBundle)[], hash: UUID
     }
 }
 
-function hash_bundles(bundles: Bundle[] | ThinBundle[]) {
-    return bundles.map((b, i) => `${i}:${b.type_id}`).join(',') as UUID;
-}
-
 type A<T> = T[];
 type Part = A<A<ThinBundle | A<ThinBundle>> | ThinBundle>;
 
@@ -188,55 +128,6 @@ export function define_thin_bundle(bundle: Part): ThinBundle {
     const bundles = bundle.flat(Infinity) as ThinComponent[];
     const hash = hash_bundles(bundles);
     return ThinComponentBundle(bundles, hash);
-}
-
-// TODO: compare precompute hash and get bundle if it exists, or create a new one if one does not exist.
-export function define_bundle(bundle: any[], Effect: BundleEffect = BundleEffect.NoEffect): Bundle {
-    const bundles = bundle.flat(Infinity).map(c => addBundleToComponent(c));
-
-    const hash = hash_bundles(bundles);
-
-    const existing = BundleRegistry.get(hash);
-
-    if (existing) {
-        return existing;
-    } else {
-        const formatted = bundles.reduce(
-            // @ts-expect-error
-            (acc, x) => acc += `\n(${x.name ? `Component ${x.name}` : `${x.type_id}`})`
-            ,
-            'Bundle {'
-        ) + '\n}';
-
-        const bundle_impl: Bundle = {
-            type_id: hash,
-            Effect: Effect,
-            componentIds(components, ids) {
-                for (let i = 0; i < bundles.length; i++) {
-                    bundles[i].componentIds(components, ids)
-                }
-            },
-            getComponents(func) {
-                bundles.forEach(b => b.getComponents(func))
-            },
-
-            getComponentIds(components, ids) {
-                bundles.forEach(b => b.getComponentIds(components, ids))
-            },
-            registerRequiredComponents(components, required_components) {
-                bundles.forEach(b => b.registerRequiredComponents(components, required_components))
-            },
-
-            [Symbol.toStringTag]() {
-                return formatted;
-            }
-        }
-
-        BundleRegistry.set(hash, bundle_impl);
-
-        return bundle_impl;
-    }
-
 }
 
 export class ThinBundleInfo {
@@ -287,7 +178,7 @@ export class ThinBundleInfo {
         // required_components.remove_explicit_components(component_ids);
 
         const required_components_array = []
-        required_components.map.forEach((v, component_id) => {
+        required_components.inner.forEach((v, component_id) => {
             const info = components.getInfo(component_id)!;
             storages.prepare_component(info);
             component_ids.push(component_id);
@@ -323,8 +214,8 @@ export class ThinBundleInfo {
         entity: Entity,
         table_row: TableRow,
         change_tick: Tick,
+        insert_mode: InsertMode,
         bundle: T,
-        insert_mode: InsertMode
     ) {
         // NOTE: get_components calls this closure on each component in "bundle order".
         // bundle_info.componentIds are also in "bundle order"
@@ -380,7 +271,7 @@ export class ThinBundleInfo {
                 bundle_status.push(ComponentStatus.Added)
                 added.push(component_id);
                 const component_info = components.getInfo(component_id)!;
-                if (StorageType.Table === component_info.storageType) {
+                if (StorageType.Table === component_info.storage_type) {
                     new_table_components.push(component_id)
                 } else {
                     new_sparse_set_components.push(component_id)
@@ -394,7 +285,7 @@ export class ThinBundleInfo {
         //         added.push(component_id)
         //     } else {
         //         const component_info = components.getInfo(component_id)!;
-        //         if (component_info.storageType === StorageType.Table) {
+        //         if (component_info.storage_type === StorageType.Table) {
         //             new_table_components.push(component_id)
         //         } else {
         //             new_sparse_set_components.push(component_id)
@@ -484,7 +375,7 @@ export class ThinBundleInfo {
 
                 if (current_archetype.has(component_id)) {
                     const component_info = components.getInfo(component_id)!;
-                    if (component_info.storageType === StorageType.Table) {
+                    if (component_info.storage_type === StorageType.Table) {
                         removed_table_components.push(component_id)
                     } else {
                         removed_sparse_set_components.push(component_id)
@@ -566,16 +457,17 @@ export class BundleInfo {
         const explicit_components_len = component_ids.length;
 
         const required_components = new RequiredComponents();
+
         for (let i = 0; i < component_ids.length; i++) {
             const component_id = component_ids[i];
             const info = components.getInfo(component_id)!;
             // required_components.merge(info.required_components())
-            storages.prepare_component(info)
+            storages.prepare_component(info);
         }
         // required_components.remove_explicit_components(component_ids);
 
         const required_components_array = []
-        required_components.map.forEach((v, component_id) => {
+        required_components.inner.forEach((v, component_id) => {
             const info = components.getInfo(component_id)!;
             storages.prepare_component(info);
             component_ids.push(component_id);
@@ -586,6 +478,22 @@ export class BundleInfo {
         this.#component_ids = Object.freeze(component_ids);
         this.#required_component_ids = Object.freeze([]);
         this.#explicit_components_len = explicit_components_len;
+    }
+
+    static initializeRequiredComponent(
+        table: Table,
+        sparse_sets: SparseSets,
+        change_tick: Tick,
+        table_row: TableRow,
+        entity: Entity,
+        component_id: ComponentId,
+        storage_type: StorageType,
+        component_ptr: InstanceType<Component>
+    ) {
+
+        storage_type === StorageType.Table ?
+            table.getColumn(component_id)!.__initialize(table_row, component_ptr, change_tick) :
+            sparse_sets.get(component_id)!.__set(entity, component_ptr, change_tick);
     }
 
     id() {
@@ -604,15 +512,15 @@ export class BundleInfo {
         return this.#component_ids;
     }
 
-    writeComponents<T extends DynamicBundle>(
+    writeComponents(
         table: Table,
         sparse_sets: SparseSets,
         bundle_component_status: BundleComponentStatus,
         entity: Entity,
         table_row: TableRow,
         change_tick: Tick,
-        bundle: T,
-        insert_mode: InsertMode
+        insert_mode: InsertMode,
+        bundle: DynamicBundle,
     ) {
         // NOTE: get_components calls this closure on each component in "bundle order".
         // bundle_info.componentIds are also in "bundle order"
@@ -625,14 +533,12 @@ export class BundleInfo {
                 const status = bundle_component_status.get_status(bundle_component);
                 const column = table.getColumn(component_id)!;
                 if (ComponentStatus.Added === status) {
-                    // @ts-ignore
                     column.__initialize(
                         table_row,
                         component_ptr,
                         change_tick
                     );
                 } else if (ComponentStatus.Existing === status && insert_mode === InsertMode.Replace) {
-                    // @ts-ignore
                     column.__replace(
                         table_row,
                         component_ptr,
@@ -641,7 +547,6 @@ export class BundleInfo {
                 }
             } else if (storage_type === StorageType.SparseSet) {
                 const sparse_set = sparse_sets.get(component_id)!;
-                // @ts-ignore
                 sparse_set.__set(
                     entity,
                     component_ptr,
@@ -651,6 +556,55 @@ export class BundleInfo {
 
             bundle_component += 1;
         })
+    }
+
+    writeComponentsFast(
+        table: Table,
+        sparse_sets: SparseSets,
+        bundle_component_status: BundleComponentStatus,
+        entity: Entity,
+        table_row: TableRow,
+        change_tick: Tick,
+        insert_mode: InsertMode,
+        bundles: DynamicBundle[],
+    ) {
+        // NOTE: get_components calls this closure on each component in "bundle order".
+        // bundle_info.componentIds are also in "bundle order"
+        let bundle_component = 0;
+
+        for (let i = 0; i < bundles.length; i++) {
+            bundles[i].getComponents((storage_type, component_ptr) => {
+                const component_id = this.#component_ids[bundle_component];
+                if (storage_type === StorageType.Table) {
+                    const status = bundle_component_status.get_status(bundle_component);
+                    const column = table.getColumn(component_id)!;
+                    if (ComponentStatus.Added === status) {
+                        column.__initialize(
+                            table_row,
+                            component_ptr,
+                            change_tick
+                        );
+                    } else if (ComponentStatus.Existing === status && insert_mode === InsertMode.Replace) {
+                        column.__replace(
+                            table_row,
+                            component_ptr,
+                            change_tick
+                        );
+                    }
+                } else if (storage_type === StorageType.SparseSet) {
+                    console.log('write components', component_id, component_ptr);
+
+                    const sparse_set = sparse_sets.get(component_id)!;
+                    sparse_set.__set(
+                        entity,
+                        component_ptr,
+                        change_tick
+                    );
+                }
+
+                bundle_component += 1;
+            })
+        }
     }
 
     insertBundleIntoArchetype(
@@ -684,7 +638,7 @@ export class BundleInfo {
                 bundle_status.push(ComponentStatus.Added)
                 added.push(component_id);
                 const component_info = components.getInfo(component_id)!;
-                if (StorageType.Table === component_info.storageType) {
+                if (StorageType.Table === component_info.storage_type) {
                     new_table_components.push(component_id)
                 } else {
                     new_sparse_set_components.push(component_id)
@@ -698,7 +652,7 @@ export class BundleInfo {
         //         added.push(component_id)
         //     } else {
         //         const component_info = components.getInfo(component_id)!;
-        //         if (component_info.storageType === StorageType.Table) {
+        //         if (component_info.storage_type === StorageType.Table) {
         //             new_table_components.push(component_id)
         //         } else {
         //             new_sparse_set_components.push(component_id)
@@ -787,7 +741,7 @@ export class BundleInfo {
 
                 if (current_archetype.has(component_id)) {
                     const component_info = components.getInfo(component_id)!;
-                    if (component_info.storageType === StorageType.Table) {
+                    if (component_info.storage_type === StorageType.Table) {
                         removed_table_components.push(component_id)
                     } else {
                         removed_sparse_set_components.push(component_id)
@@ -905,12 +859,10 @@ export class BundleInserter {
                 change_tick
             )
         } else {
-
             const [archetype, new_archetype] = world.archetypes.__get2Mut(archetype_id, new_archetype_id);
             const archetype_after_insert = archetype
                 .edges()
                 .get_archetype_after_bundle_insert_internal(bundle_id)!;
-
 
             const table_id = archetype.tableId;
             const new_table_id = new_archetype.tableId;
@@ -952,13 +904,13 @@ export class BundleInserter {
         const archetype_after_insert = this.#archetype_after_insert;
         const table = this.#table;
         const archetype = this.#archetype;
-        const world = new DeferredWorld(this.#world);
+        const world = this.#world;
 
         if (insert_mode === InsertMode.Replace) {
             if (archetype.hasReplaceObserver) {
-                world.triggerObservers(ON_REPLACE, entity, archetype_after_insert.iter_existing());
+                triggerObservers(world, ON_REPLACE, entity, archetype_after_insert.iter_existing());
             }
-            world.triggerOnReplace(archetype, entity, archetype_after_insert.iter_existing());
+            triggerOnReplace(world, archetype, entity, archetype_after_insert.iter_existing());
         }
 
         let new_location,
@@ -973,8 +925,8 @@ export class BundleInserter {
                 entity,
                 location.table_row,
                 this.#change_tick,
+                insert_mode,
                 bundle,
-                insert_mode
             )
             new_archetype = archetype;
             new_location = location;
@@ -982,13 +934,11 @@ export class BundleInserter {
             // NewArchetypeSameTable
             const new_archetype_ = this.#archetype_move_type.new_archetype;
             const entities = this.#world.entities;
-            // @ts-ignore
             const result = archetype.__swapRemove(location.archetype_row);
             if (result.swapped_entity) {
                 const { swapped_entity } = result
                 const swapped_location = entities.get(swapped_entity)!;
 
-                // @ts-ignore
                 entities.__set(index(swapped_entity), {
                     archetype_id: swapped_location.archetype_id,
                     archetype_row: location.archetype_row,
@@ -996,9 +946,7 @@ export class BundleInserter {
                     table_row: swapped_location.table_row
                 })
             }
-            // @ts-ignore
             const new_location_ = new_archetype_.allocate(entity, result.table_row);
-            // @ts-ignore
             entities.__set(index(entity), new_location_);
             bundle_info.writeComponents(
                 table,
@@ -1007,8 +955,8 @@ export class BundleInserter {
                 entity,
                 result.table_row,
                 this.#change_tick,
+                insert_mode,
                 bundle,
-                insert_mode
             )
             new_archetype = new_archetype_;
             new_location = new_location_;
@@ -1018,12 +966,10 @@ export class BundleInserter {
             const { new_archetype: new_archetype_, new_table } = this.#archetype_move_type
             const archetypes_ptr = this.#world.archetypes.inner;
             const entities = this.#world.entities;
-            // @ts-ignore
             const result = archetype.__swapRemove(location.archetype_row);
             if (result.swapped_entity) {
                 const { swapped_entity } = result
                 const swapped_location = entities.get(swapped_entity)!;
-                // @ts-ignore
                 entities.__set(index(swapped_entity), {
                     archetype_id: swapped_location.archetype_id,
                     archetype_row: location.archetype_row,
@@ -1032,11 +978,8 @@ export class BundleInserter {
                 })
             }
 
-            // @ts-ignore
             const move_result = table.__moveToSupersetUnchecked(result.table_row, new_table);
-            // @ts-ignore
             const new_location_ = new_archetype_.allocate(entity, move_result.new_row);
-            // @ts-ignore
             entities.__set(index(entity), new_location_);
 
             if (move_result.swapped_entity) {
@@ -1067,9 +1010,8 @@ export class BundleInserter {
                 entity,
                 move_result.new_row,
                 this.#change_tick,
+                insert_mode,
                 bundle,
-                insert_mode
-
             )
 
             new_archetype = new_archetype_
@@ -1077,14 +1019,16 @@ export class BundleInserter {
         }
 
         new_archetype;
-        world.triggerOnAdd(
+        triggerOnAdd(
+            world,
             new_archetype,
             entity,
             archetype_after_insert.iter_added()
         )
 
         if (new_archetype.hasAddObserver) {
-            world.triggerObservers(
+            triggerObservers(
+                world,
                 ON_ADD,
                 entity,
                 archetype_after_insert.iter_added()
@@ -1092,13 +1036,15 @@ export class BundleInserter {
         }
 
         if (insert_mode === InsertMode.Replace) {
-            world.triggerOnInsert(
+            triggerOnInsert(
+                world,
                 new_archetype,
                 entity,
                 archetype_after_insert.iter_inserted()
             )
             if (new_archetype.hasInsertObserver) {
-                world.triggerObservers(
+                triggerObservers(
+                    world,
                     ON_INSERT,
                     entity,
                     archetype_after_insert.iter_inserted()
@@ -1106,14 +1052,16 @@ export class BundleInserter {
             }
         } else {
             // InsertMode === Keep
-            world.triggerOnInsert(
+            triggerOnInsert(
+                world,
                 new_archetype,
                 entity,
                 archetype_after_insert.iter_added()
             )
 
             if (new_archetype.hasInsertObserver) {
-                world.triggerObservers(
+                triggerObservers(
+                    world,
                     ON_INSERT,
                     entity,
                     archetype_after_insert.iter_added()
@@ -1215,8 +1163,8 @@ export class ThinBundleSpawner {
             entity,
             table_row,
             this.#change_tick,
-            bundle,
             InsertMode.Replace,
+            bundle,
         )
 
         // @ts-ignore
@@ -1254,7 +1202,7 @@ export class ThinBundleSpawner {
     }
 
     spawn(bundle: ThinBundle): Entity {
-        const entity = this.entities().alloc();
+        const entity = this.#world.entities.alloc();
         this.spawnNonExistent(entity, bundle);
         return entity;
     }
@@ -1295,7 +1243,19 @@ export class BundleSpawner {
         this.#change_tick = change_tick;
     }
 
-    static new(
+    static new(bundle: BundleInput, world: World, change_tick: Tick) {
+        return BundleSpawner.newWithId(
+            world,
+            world.bundles.registerInfoFast(
+                bundle,
+                world.components,
+                world.storages
+            ),
+            change_tick
+        )
+    }
+
+    static newOld(
         bundle: Bundle,
         world: World,
         change_tick: Tick
@@ -1335,18 +1295,15 @@ export class BundleSpawner {
         )
     }
 
-    spawnNonExistent(entity: Entity, bundle: Bundle): EntityLocation {
-        const bundle_info = this.#bundle_info;
+    spawnNonExistentOld(entity: Entity, bundle: Bundle): EntityLocation {
+        const bundle_info = this.#bundle_info,
+            table = this.#table,
+            archetype = this.#archetype,
+            w = this.#world,
+            sparse_sets = w.storages.sparse_sets,
+            entities = w.entities;
 
-        const table = this.#table;
-        const archetype = this.#archetype;
-        const w = this.#world;
-        const sparse_sets = w.storages.sparse_sets
-        const entities = w.entities;
-
-        // @ts-ignore
         const table_row = table.allocate(entity);
-        // @ts-ignore
         const location = archetype.allocate(entity, table_row);
 
         bundle_info.writeComponents(
@@ -1356,34 +1313,38 @@ export class BundleSpawner {
             entity,
             table_row,
             this.#change_tick,
+            InsertMode.Replace,
             bundle,
-            InsertMode.Replace
         )
 
-        // @ts-ignore
         entities.__set(index(entity), location);
-        const world = new DeferredWorld(this.#world);
-        world.triggerOnAdd(
+
+        triggerOnAdd(
+            w,
             archetype,
             entity,
             bundle_info.iterContributedComponents()
         )
+
         if (archetype.hasAddObserver) {
-            world.triggerObservers(
+            triggerObservers(
+                w,
                 ON_ADD,
                 entity,
                 bundle_info.iterContributedComponents()
             )
         }
 
-        world.triggerOnInsert(
+        triggerOnInsert(
+            w,
             archetype,
             entity,
             bundle_info.iterContributedComponents()
         )
 
         if (archetype.hasInsertObserver) {
-            world.triggerObservers(
+            triggerObservers(
+                w,
                 ON_INSERT,
                 entity,
                 bundle_info.iterContributedComponents()
@@ -1393,20 +1354,83 @@ export class BundleSpawner {
         return location;
     }
 
-    spawn(bundle: Bundle): Entity {
-        const entity = this.entities().alloc();
-        this.spawnNonExistent(entity, bundle);
+    spawnNonExistent(entity: Entity, bundle: (Bundle | Component | InstanceType<Component>)[]): EntityLocation {
+        const bundle_info = this.#bundle_info,
+            table = this.#table,
+            archetype = this.#archetype,
+            w = this.#world,
+            sparse_sets = w.storages.sparse_sets,
+            entities = w.entities;
+
+        const table_row = table.allocate(entity);
+        const location = archetype.allocate(entity, table_row);
+
+        bundle_info.writeComponentsFast(
+            table,
+            sparse_sets,
+            SpawnBundleStatus,
+            entity,
+            table_row,
+            this.#change_tick,
+            InsertMode.Replace,
+            bundle as DynamicBundle[],
+        )
+
+        entities.__set(index(entity), location);
+
+        triggerOnAdd(
+            w,
+            archetype,
+            entity,
+            bundle_info.iterContributedComponents()
+        )
+
+        if (archetype.hasAddObserver) {
+            triggerObservers(
+                w,
+                ON_ADD,
+                entity,
+                bundle_info.iterContributedComponents()
+            )
+        }
+
+        triggerOnInsert(
+            w,
+            archetype,
+            entity,
+            bundle_info.iterContributedComponents()
+        )
+
+        if (archetype.hasInsertObserver) {
+            triggerObservers(
+                w,
+                ON_INSERT,
+                entity,
+                bundle_info.iterContributedComponents()
+            )
+        }
+
+        return location;
+    }
+
+    spawn(bundles: (Bundle | Component | InstanceType<Component>)[]): Entity {
+        const entity = this.#world.entities.alloc();
+        this.spawnNonExistent(entity, bundles);
+        return entity;
+    }
+
+    spawnOld(bundle: Bundle): Entity {
+        const entity = this.#world.entities.alloc();
+        this.spawnNonExistentOld(entity, bundle);
         return entity;
     }
 
     reserveStorage(additional: number) {
-        // @ts-ignore
         this.#archetype.__reserve(additional);
-        // @ts-ignore
         this.#table.__reserve(additional);
     }
 
-    entities() {
+    get entities() {
         return this.#world.entities;
     }
 
@@ -1549,8 +1573,8 @@ class Bundles {
         this.#dynamic_bundle_storages = new Map();
     }
 
-    static dynamicBundle(bundle: (Bundle | Component | InstanceType<Component>)[]): Bundle {
-        return define_bundle(bundle);
+    static dynamicBundle(bundle: (Bundle | Component | InstanceType<Component>)[] | Bundle, effect: BundleEffect = BundleEffect.NoEffect): Bundle {
+        return defineBundle(bundle, effect);
     }
 
     static init_state() { }
@@ -1571,39 +1595,42 @@ class Bundles {
         return this.#bundle_ids.get(type_id);
     }
 
+    registerInfoFast(bundle: (Bundle | Component | InstanceType<Component>)[], components: Components, storages: Storages) {
+        const bundle_infos = this.#bundle_infos;
+        const hash = hash_bundles(bundle as Bundle[]);
+
+        return entry(this.#bundle_ids, hash, () => {
+            const component_ids: number[] = [];
+            componentIds(bundle as Bundle[], components, id => component_ids.push(id));
+            const id = bundle_infos.length;
+            bundle_infos.push(new BundleInfo(hash, storages, components, component_ids, id));
+            return id;
+
+        })
+    }
+
     registerInfo(bundle: Bundle, components: Components, storages: Storages): BundleId {
         const bundle_infos = this.#bundle_infos;
-        const id = this.#bundle_ids.get(bundle.type_id)!;
 
-        if (id != null) {
-            return id;
-        } else {
+        return entry(this.#bundle_ids, bundle.type_id, () => {
             const component_ids: number[] = [];
-            bundle.componentIds(components, id => component_ids.push(id))
+            bundle.componentIds(components, id => component_ids.push(id));
             const id = bundle_infos.length;
-            const bundle_info = new BundleInfo(bundle.type_id, storages, components, component_ids, id)
-            bundle_infos.push(bundle_info)
-            this.#bundle_ids.set(bundle.type_id, id);
+            bundle_infos.push(new BundleInfo(bundle.type_id, storages, components, component_ids, id))
             return id;
-        }
+        })
     }
 
     registerThinInfo(bundle: ThinBundle, components: ThinComponents, storages: ThinStorages): BundleId {
-        const id = this.#bundle_ids.get(bundle.type_id)!;
-
-
-        if (id != null) {
-            return id;
-        } else {
-            const bundle_infos = this.#bundle_infos;
+        const bundle_infos = this.#bundle_infos;
+        return entry(this.#bundle_ids, bundle.type_id, () => {
             const component_ids: number[] = [];
             bundle.componentIds(components, id => component_ids.push(id))
             const id = bundle_infos.length;
             const bundle_info = new ThinBundleInfo(bundle.name, storages, components, component_ids, id)
             bundle_infos.push(bundle_info as any)
-            this.#bundle_ids.set(bundle.type_id, id);
             return id;
-        }
+        })
     }
 
     getStorageUnchecked(id: BundleId) {
@@ -1630,14 +1657,13 @@ class Bundles {
         const hash = bundle.type_id;
         const id = entry(this.#bundle_ids, hash, () => {
             const id = bundle_infos.length;
-            const bundle_info = new BundleInfo(bundle.constructor?.name ?? '<bundle>', storages, components, ids, id)
+            const bundle_info = new BundleInfo(`<Bundle:${bundle.type_id}>`, storages, components, ids, id)
             bundle_infos.push(bundle_info);
-            this.#bundle_ids.set(hash, id);
             return id;
         })
 
         // ! SAFETY: index either exists, or was initialized
-        return this.#bundle_infos[id];
+        return bundle_infos[id];
     }
 
     /**
@@ -1648,7 +1674,7 @@ class Bundles {
      */
     initDynamicInfo(components: Components, storages: Storages, component_ids: ComponentId[]): BundleId {
         const bundle_infos = this.#bundle_infos;
-        const bundle_id = entry(this.#dynamic_bundle_ids, component_ids.map(id => components.getInfo(id)!.descriptor.type).join(''), () => {
+        const bundle_id = entry(this.#dynamic_bundle_ids, hash_bundles(component_ids.map(id => components.getInfo(id)!.descriptor)), () => {
             const [id, storage_types] = initialize_dynamic_bundle(bundle_infos, storages, components, component_ids)
             this.#dynamic_bundle_storages.set(id, storage_types)
             return id;
@@ -1676,6 +1702,25 @@ defineParam(Bundles);
 
 export { Bundles }
 
+// function getComponents(bundles: Bundle[], func: (storage_type: StorageType, ptr: InstanceType<Component>) => void) {
+//     for (let i = 0; i < bundles.length; i++) {
+//         bundles[i].getComponents(func)
+//     }
+// }
+
+// function getComponentIds(bundles: Bundle[], components: Components, ids: (component_id: Option<ComponentId>) => void) {
+//     for (let i = 0; i < bundles.length; i++) {
+//         bundles[i].getComponentIds(components, ids);
+//     }
+// }
+
+function componentIds(bundles: Bundle[], components: Components, ids: (component_id: ComponentId) => void) {
+    for (let i = 0; i < bundles.length; i++) {
+        bundles[i].componentIds(components, ids);
+    }
+}
+
+
 /**
  * Asserts that all components are part of `Components`
  * and initializes a `BundleInfo`.
@@ -1691,7 +1736,7 @@ function initialize_dynamic_bundle(
         if (!info) {
             throw new Error(`init_dynamic_info() called with component id ${id} which doesn't exist in this world.`)
         }
-        return info.storageType;
+        return info.storage_type;
     })
     const id = bundle_infos.length;
     const bundle_info = new BundleInfo('<dynamic bundle>', storages, components, component_ids, id);
@@ -1714,7 +1759,7 @@ function initialize_dynamic_thin_bundle(
         if (!info) {
             throw new Error(`init_dynamic_info() called with component id ${id} which doesn't exist in this world.`)
         }
-        return info.storageType;
+        return info.storage_type;
     })
     const id = bundle_infos.length;
     const bundle_info = new ThinBundleInfo('<dynamic bundle>', storages, components, component_ids, id);

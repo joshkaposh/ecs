@@ -28,7 +28,56 @@ type HookContext = {
     relationship_hook_mode: RelationshipHookMode;
 }
 
-function hook(world: DeferredWorld, context: HookContext) {
+function hook(_world: World, _context: HookContext) {
+
+}
+
+
+export function triggerOnAdd(world: World, archetype: Archetype, entity: Entity, target: Iterable<ComponentId>) {
+    if (archetype.hasAddHook) {
+        for (const component_id of iter(target)) {
+            const hooks = world.components.getInfo(component_id)!.hooks
+            if (hooks.on_add) {
+                hook(world, { entity, component_id, relationship_hook_mode: RelationshipHookMode.Run })
+            }
+        }
+    }
+}
+
+export function triggerOnInsert(world: World, archetype: Archetype, entity: Entity, target: Iterable<ComponentId>) {
+    if (archetype.hasInsertHook) {
+        for (const component_id of iter(target)) {
+            const hooks = world.components.getInfo(component_id)!.hooks
+            if (hooks.on_insert) {
+                hook(world, { entity, component_id, relationship_hook_mode: RelationshipHookMode.Run })
+            }
+        }
+    }
+}
+
+export function triggerOnReplace(world: World, archetype: Archetype, entity: Entity, target: Iterable<ComponentId>) {
+    if (archetype.hasReplaceHook) {
+        for (const component_id of iter(target)) {
+            const hooks = world.components.getInfo(component_id)!.hooks
+            if (hooks.on_replace) {
+                hook(world, { entity, component_id, relationship_hook_mode: RelationshipHookMode.Run })
+            }
+        }
+    }
+}
+
+export function triggerOnRemove(world: World, archetype: Archetype, entity: Entity, target: Iterable<ComponentId>) {
+    if (archetype.hasRemoveHook) {
+        for (const component_id of iter(target)) {
+            const hooks = world.components.getInfo(component_id)!.hooks
+            if (hooks.on_remove) {
+                hook(world, { entity, component_id, relationship_hook_mode: RelationshipHookMode.Run })
+            }
+        }
+    }
+}
+
+export function triggerObservers(_world: World, _type: ObserverId, _entity: Entity, _target: Iterable<ComponentId>) {
 
 }
 
@@ -96,53 +145,8 @@ export class DeferredWorld {
         }
 
         const archetype = cell.archetype;
-        this.triggerOnReplace(archetype, entity, [component_id],)
+        triggerOnReplace(this.#world, archetype, entity, [component_id],)
         return cell
-    }
-
-    triggerOnAdd(archetype: Archetype, entity: Entity, target: Iterable<ComponentId>) {
-        if (archetype.hasAddHook) {
-            for (const component_id of iter(target)) {
-                const hooks = this.#world.components.getInfo(component_id)!.hooks
-                if (hooks.on_add) {
-                    hook(this, { entity, component_id, relationship_hook_mode: RelationshipHookMode.Run })
-                }
-            }
-        }
-    }
-    triggerOnInsert(archetype: Archetype, entity: Entity, target: Iterable<ComponentId>) {
-        if (archetype.hasInsertHook) {
-            for (const component_id of iter(target)) {
-                const hooks = this.#world.components.getInfo(component_id)!.hooks
-                if (hooks.on_insert) {
-                    hook(this, { entity, component_id, relationship_hook_mode: RelationshipHookMode.Run })
-                }
-            }
-        }
-    }
-    triggerOnReplace(archetype: Archetype, entity: Entity, target: Iterable<ComponentId>) {
-        if (archetype.hasReplaceHook) {
-            for (const component_id of iter(target)) {
-                const hooks = this.#world.components.getInfo(component_id)!.hooks
-                if (hooks.on_replace) {
-                    hook(this, { entity, component_id, relationship_hook_mode: RelationshipHookMode.Run })
-                }
-            }
-        }
-    }
-
-    triggerOnRemove(archetype: Archetype, entity: Entity, target: Iterable<ComponentId>) {
-        if (archetype.hasRemoveHook) {
-            for (const component_id of iter(target)) {
-                const hooks = this.#world.components.getInfo(component_id)!.hooks
-                if (hooks.on_remove) {
-                    hook(this, { entity, component_id, relationship_hook_mode: RelationshipHookMode.Run })
-                }
-            }
-        }
-    }
-    triggerObservers(type: ObserverId, entity: Entity, target: Iterable<ComponentId>) {
-
     }
 
     getEntityMut<T extends WorldEntityFetch>(entities: T) {

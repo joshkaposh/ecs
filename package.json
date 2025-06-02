@@ -22,6 +22,7 @@
     "vitest": "^3.1.2"
   },
   "dependencies": {
+    "dotenv": "^16.5.0",
     "fixed-bit-set": "^1.2.0",
     "joshkaposh-graph": "^1.0.16",
     "joshkaposh-heap": "^1.2.1",
@@ -31,11 +32,6 @@
     "uuid": "^9.0.1"
   },
   "workspaces": [
-    "packages/ecs",
-    "packages/ecs-app",
-    "packages/define",
-    "packages/ecs-input",
-    "packages/ecs-ui",
-    "packages/ecs-math"
+    "packages/*"
   ]
 }

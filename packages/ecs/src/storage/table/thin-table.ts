@@ -284,12 +284,15 @@ export class ThinTable {
 
 export class ThinTableBuilder {
     #columns: ThinSparseSet<ThinColumn>;
-    // @ts-expect-error
     #capacity: number;
 
     constructor(columns: ThinSparseSet<ThinColumn>, capacity: number) {
         this.#capacity = capacity;
         this.#columns = columns;
+    }
+
+    get capacity() {
+        return this.#capacity;
     }
 
     static withCapacity(capacity: number, column_capacity: number) {

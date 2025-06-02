@@ -1,10 +1,11 @@
 import { Result, Option, ErrorExt } from "joshkaposh-option";
+import { set } from "define";
 import { DeferredWorld, ScheduleGraph, SystemParamValidationError, Tick, World } from "..";
 import { Access } from "../query";
 import { AndCondition, AndMarker, Condition, NandCondition, NandMarker, NorCondition, NorMarker, OrCondition, OrMarker, XnorCondition, XnorMarker, XorCondition, XorMarker } from "../schedule/condition";
 import { Schedulable, ScheduleConfig, ScheduleConfigs } from "../schedule/config";
 import { Ambiguity, NodeId } from "../schedule/graph";
-import { InternedSystemSet, IntoSystemSet, set, SystemSet, SystemTypeSet } from "../schedule/set";
+import { InternedSystemSet, IntoSystemSet, SystemSet, SystemTypeSet } from "../schedule/set";
 import { SystemInput } from "./input";
 import { System, SystemIn } from "./system";
 
@@ -89,28 +90,28 @@ export class CombinatorSystem<
         return this.intoConfig().inSet(set);
     }
 
-    before<M>(set: IntoSystemSet<M>) {
+    before(set: IntoSystemSet) {
         return this.intoConfig().before(set);
     }
 
-    beforeIgnoreDeferred<M>(set: IntoSystemSet<M>) {
+    beforeIgnoreDeferred(set: IntoSystemSet) {
         return this.intoConfig().beforeIgnoreDeferred(set);
 
     }
 
-    after<M>(set: IntoSystemSet<M>) {
+    after(set: IntoSystemSet) {
         return this.intoConfig().after(set);
     }
 
-    afterIgnoreDeferred<M>(set: IntoSystemSet<M>) {
+    afterIgnoreDeferred(set: IntoSystemSet) {
         return this.intoConfig().afterIgnoreDeferred(set);
     }
 
-    distributiveRunIf<M>(condition: Condition<M, boolean>) {
+    distributiveRunIf(condition: Condition<any>) {
         return this.intoConfig().distributiveRunIf(condition);
     }
 
-    runIf<M>(condition: Condition<M, boolean>) {
+    runIf(condition: Condition<any>) {
         return this.intoConfig().runIf(condition);
     }
 
@@ -122,7 +123,7 @@ export class CombinatorSystem<
         return this.intoConfig().chainIgnoreDeferred();
     }
 
-    ambiguousWith<M>(set: IntoSystemSet<M>) {
+    ambiguousWith(set: IntoSystemSet) {
         return this.intoConfig().ambiguousWith(set);
     }
 
@@ -152,7 +153,7 @@ export class CombinatorSystem<
         const b = other.intoSystem();
         const name = `${a.name} && ${b.name}`;
 
-        return new CombinatorSystem(new AndMarker(), a, b, name) as any;
+        return new CombinatorSystem(AndMarker, a, b, name) as any;
     }
 
     /**
@@ -168,7 +169,7 @@ export class CombinatorSystem<
         const a = this.#a.intoSystem();
         const b = other.intoSystem();
         const name = `${a.name} && ${b.name}`;
-        return new CombinatorSystem(new NandMarker(), a, b, name) as any;
+        return new CombinatorSystem(NandMarker, a, b, name) as any;
     }
 
 
@@ -185,7 +186,7 @@ export class CombinatorSystem<
         const a = this.#a.intoSystem();
         const b = other.intoSystem();
         const name = `${a.name} && ${b.name}`;
-        return new CombinatorSystem(new OrMarker(), a, b, name) as any;
+        return new CombinatorSystem(OrMarker, a, b, name) as any;
 
     }
 
@@ -202,7 +203,7 @@ export class CombinatorSystem<
         const a = this.#a.intoSystem();
         const b = other.intoSystem();
         const name = `${a.name} && ${b.name}`;
-        return new CombinatorSystem(new NorMarker(), a, b, name) as any;
+        return new CombinatorSystem(NorMarker, a, b, name) as any;
     }
 
     /**
@@ -218,7 +219,7 @@ export class CombinatorSystem<
         const a = this.#a.intoSystem();
         const b = other.intoSystem();
         const name = `${a.name} && ${b.name}`;
-        return new CombinatorSystem(new XorMarker(), a, b, name) as any;
+        return new CombinatorSystem(XorMarker, a, b, name) as any;
     }
 
     /**
@@ -234,11 +235,11 @@ export class CombinatorSystem<
         const a = this.#a.intoSystem();
         const b = other.intoSystem();
         const name = `${a.name} && ${b.name}`;
-        return new CombinatorSystem(new XnorMarker(), a, b, name) as any;
+        return new CombinatorSystem(XnorMarker, a, b, name) as any;
     }
 
-    clone(): System<any, any> {
-        return new CombinatorSystem(this.#type, this.#a.clone(), this.#b.clone(), this.name)
+    clone() {
+        return new CombinatorSystem(this.#type, this.#a.clone(), this.#b.clone(), this.name);
     }
 
     componentAccess() {
@@ -388,11 +389,11 @@ export class PipeSystem<A extends System<any, any>, B extends System<any, any>> 
         )
     }
 
-    before<M>(other: IntoSystemSet<M>) {
+    before(other: IntoSystemSet) {
         return this.intoConfig!().before(other);
     }
 
-    after<M>(other: IntoSystemSet<M>) {
+    after(other: IntoSystemSet) {
         return this.intoConfig!().after(other);
     }
 
@@ -400,11 +401,11 @@ export class PipeSystem<A extends System<any, any>, B extends System<any, any>> 
         return this.intoConfig!().inSet(set);
     }
 
-    afterIgnoreDeferred<M>(set: IntoSystemSet<M>) {
+    afterIgnoreDeferred(set: IntoSystemSet) {
         return this.intoConfig!().afterIgnoreDeferred(set);
     }
 
-    beforeIgnoreDeferred<M>(set: IntoSystemSet<M>) {
+    beforeIgnoreDeferred(set: IntoSystemSet) {
         return this.intoConfig!().beforeIgnoreDeferred(set);
     }
 
@@ -416,7 +417,7 @@ export class PipeSystem<A extends System<any, any>, B extends System<any, any>> 
         return this.intoConfig!().distributiveRunIf(condition);
     }
 
-    ambiguousWith<M>(set: IntoSystemSet<M>) {
+    ambiguousWith(set: IntoSystemSet) {
         return this.intoConfig!().ambiguousWith(set);
     }
 

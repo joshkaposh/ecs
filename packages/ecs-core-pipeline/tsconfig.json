@@ -1,0 +1,21 @@
+{
+    "extends": "../../tsconfig.json",
+    "include": [
+        "src"
+    ],
+    "compilerOptions": {
+        "emitDeclarationOnly": true,
+        "outDir": "./dist",
+        "paths": {
+            "@packages/ecs-core-pipeline": [
+                "../ecs-core-pipeline/src"
+            ],
+            "@packages/define": [
+                "../define/src"
+            ],
+            "references": [
+                "../define"
+            ]
+        }
+    }
+}

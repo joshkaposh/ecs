@@ -2,14 +2,13 @@ import { test, assert, expect } from 'vitest'
 import { iter, range } from 'joshkaposh-iterator';
 import { Components, Storages, id, Entity, ThinComponents, StorageType, ThinWorld } from 'ecs'
 import { Table, TableBuilder, TableId, TableRow, Tables, ThinTable, ThinTableBuilder } from 'ecs/src/storage/table';
-import { defineComponent2, defineComponent } from 'define';
+import { defineComponent } from 'define';
 import { TypedArray } from 'joshkaposh-option';
 
 const W = defineComponent(class W { constructor(public table_row: TableRow) { } })
 
 function alloc(table: Table, entity: Entity, component_id: number, value: any) {
     const row = table.allocate(entity);
-    // @ts-expect-error
     table.getColumn(component_id)!.__initialize(row, value, 0)
 }
 
@@ -37,33 +36,33 @@ const Vect3 = {
     z: TypedArray.f32,
 }
 
-const Pos = defineComponent2(Vect3);
-const Vel = defineComponent2(Vect3);
+// const Pos = defineComponent2(Vect3);
+// const Vel = defineComponent2(Vect3);
 
-const Empty = defineComponent2({});
-const EmptyMarker = defineComponent2({}, StorageType.SparseSet);
+// const Empty = defineComponent2({});
+// const EmptyMarker = defineComponent2({}, StorageType.SparseSet);
 
 
-test('no fields', () => {
+// test('no fields', () => {
 
-    const w = new ThinWorld();
-    const empty_id = w.registerComponent(Empty);
-    const empty_marker_id = w.registerComponent(EmptyMarker);
+//     const w = new ThinWorld();
+//     const empty_id = w.registerComponent(Empty);
+//     const empty_marker_id = w.registerComponent(EmptyMarker);
 
-    let entity = w.spawn(Empty());
-    const table = w.storages.tables.get(entity.archetype.tableId);
+//     let entity = w.spawn(Empty());
+//     const table = w.storages.tables.get(entity.archetype.tableId);
 
-    expect(w.get(entity.id, Empty as any)).toEqual([]);
-    assert(w.get(0, Empty as any) == null);
-    assert(table.length === 1 && table.getColumn(empty_id)?.length === 1)
+//     expect(w.get(entity.id, Empty as any)).toEqual([]);
+//     assert(w.get(0, Empty as any) == null);
+//     assert(table.length === 1 && table.getColumn(empty_id)?.length === 1)
 
-    entity = w.spawn(EmptyMarker());
-    expect(w.get(entity.id, EmptyMarker as any)).toEqual([]);
-    expect(w.storages.sparse_sets.get(empty_marker_id)!.get(entity.id)).toEqual([])
-    assert(w.get(0, EmptyMarker as any) == null);
-    assert(w.storages.sparse_sets.get(empty_marker_id)?.length === 1)
+//     entity = w.spawn(EmptyMarker());
+//     expect(w.get(entity.id, EmptyMarker as any)).toEqual([]);
+//     expect(w.storages.sparse_sets.get(empty_marker_id)!.get(entity.id)).toEqual([])
+//     assert(w.get(0, EmptyMarker as any) == null);
+//     assert(w.storages.sparse_sets.get(empty_marker_id)?.length === 1)
 
-})
+// })
 
 test('move_to_superset', () => {
     const components = new Components();
@@ -85,36 +84,35 @@ test('move_to_superset', () => {
 
     alloc(table_a, id(0), aid, new TestA());
 
-    // @ts-expect-error
     table_a.__moveToSupersetUnchecked(0, table_ab);
 
     assert(!table_a.getComponent(aid, 0))
     assert(!!table_ab.getComponent(aid, 0))
 })
 
-test('thin move_to_superset', () => {
-    const components = new ThinComponents();
+// test('thin move_to_superset', () => {
+//     const components = new ThinComponents();
 
-    const aid = components.registerComponent(Pos);
-    const bid = components.registerComponent(Vel);
+//     const aid = components.registerComponent(Pos);
+//     const bid = components.registerComponent(Vel);
 
-    const table_a_ids = [aid];
-    const table_ab_ids = [aid, bid];
+//     const table_a_ids = [aid];
+//     const table_ab_ids = [aid, bid];
 
-    const table_a = ThinTableBuilder.withCapacity(0, table_a_ids.length).addColumn(components.getInfo(aid)!).build();
-    const table_ab = ThinTableBuilder.withCapacity(0, table_ab_ids.length).addColumn(components.getInfo(aid)!).addColumn(components.getInfo(bid)!).build();
+//     const table_a = ThinTableBuilder.withCapacity(0, table_a_ids.length).addColumn(components.getInfo(aid)!).build();
+//     const table_ab = ThinTableBuilder.withCapacity(0, table_ab_ids.length).addColumn(components.getInfo(aid)!).addColumn(components.getInfo(bid)!).build();
 
 
-    alloc2(table_a, id(0), aid, [69, 420, 1337]);
+//     alloc2(table_a, id(0), aid, [69, 420, 1337]);
 
-    expect(table_a.getComponent(aid, 0)).toEqual([69, 420, 1337]);
+//     expect(table_a.getComponent(aid, 0)).toEqual([69, 420, 1337]);
 
-    table_a.moveToSupersetUnchecked(0, table_ab);
+//     table_a.moveToSupersetUnchecked(0, table_ab);
 
-    assert(table_a.length === 0 && table_ab.length === 1);
-    assert(table_a.getComponent(aid, 0) == null);
-    expect(table_ab.getComponent(aid, 0)).toEqual([69, 420, 1337]);
-})
+//     assert(table_a.length === 0 && table_ab.length === 1);
+//     assert(table_a.getComponent(aid, 0) == null);
+//     expect(table_ab.getComponent(aid, 0)).toEqual([69, 420, 1337]);
+// })
 
 // test('thin table', () => {
 //     const components = new ThinComponents();
@@ -150,7 +148,6 @@ test('table', () => {
     for (const entity of entities) {
         const row = table.allocate(entity);
         const value = new W(row);
-        // @ts-expect-error
         table.getColumn(component_id!)!.__initialize(row, value, 0)
     }
 

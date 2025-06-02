@@ -1,11 +1,11 @@
-import { type Option, is_none } from "joshkaposh-option";
+import type { Option } from "joshkaposh-option";
 import type { World } from "./world";
 import type { Component, ComponentId } from "../component";
 import type { Entity, EntityLocation } from "../entity";
 import { ComponentTicks, type Tick } from "../tick";
 import { QueryDataTuple } from "../query";
 import { StorageType } from "../storage";
-import { AsQueryItem } from "../query";
+import { QueryItem } from "../query";
 // import {
 //     type World,
 //     type Component,
@@ -41,7 +41,7 @@ export function get_mut_using_ticks<T extends Component>(
     return new Mut(value, new TicksMut(cells, last_change_tick, change_tick))
 }
 
-export function unsafe_entity_cell_get_mut_by_id<T extends Component>(world: World, entity: Entity, location: EntityLocation, component_id: ComponentId): Option<Mut<T>> {
+export function get_mut_by_id<T extends Component>(world: World, entity: Entity, location: EntityLocation, component_id: ComponentId): Option<Mut<T>> {
     const info = world.components.getInfo(component_id);
     if (!info) {
         return null
@@ -50,7 +50,7 @@ export function unsafe_entity_cell_get_mut_by_id<T extends Component>(world: Wor
     const tuple = get_component_and_ticks_inner<T>(
         world,
         component_id,
-        info.storageType,
+        info.storage_type,
         entity,
         location
     );
@@ -62,51 +62,51 @@ export function unsafe_entity_cell_get_mut_by_id<T extends Component>(world: Wor
     return new Mut(value, new TicksMut(cells, world.lastChangeTick, world.changeTick))
 }
 
-export function unsafe_entity_cell_get_change_ticks_by_id(world: World, entity: Entity, loc: EntityLocation, component_id: ComponentId): Option<ComponentTicks> {
+export function get_ticks_by_id(world: World, entity: Entity, loc: EntityLocation, component_id: ComponentId): Option<ComponentTicks> {
     const info = world.components.getInfo(component_id)!;
-    return get_ticks_inner(world, component_id, info.storageType, entity, loc);
+    return get_ticks_inner(world, component_id, info.storage_type, entity, loc);
 
 }
 
-export function unsafe_entity_cell_contains_type_id(world: World, loc: EntityLocation, type_id: UUID): boolean {
+export function contains_type_id(world: World, loc: EntityLocation, type_id: UUID): boolean {
     const id = world.components.getIdTypeId(type_id);
     if (id == null) {
         return false;
     }
 
-    return unsafe_entity_cell_contains_id(world, loc, id);
+    return contains_id(world, loc, id);
 }
 
-export function unsafe_entity_cell_contains(world: World, loc: EntityLocation, component: Component): boolean {
-    return unsafe_entity_cell_contains_type_id(world, loc, component.type_id);
+export function contains(world: World, loc: EntityLocation, component: Component): boolean {
+    return contains_type_id(world, loc, component.type_id);
 }
 
-export function unsafe_entity_cell_contains_id(
+export function contains_id(
     world: World,
     loc: EntityLocation,
     component_id: ComponentId
 ): boolean {
-    return unsafe_entity_cell_archetype(world, loc).has(component_id);
+    return archetype(world, loc).has(component_id);
 
 }
 
-export function unsafe_entity_cell_archetype(world: World, loc: EntityLocation) {
+export function archetype(world: World, loc: EntityLocation) {
     return world.archetypes.get(loc.archetype_id)!;
 
 }
 
-export function unsafe_entity_cell_get_change_ticks(world: World, entity: Entity, loc: EntityLocation, type: Component): Option<ComponentTicks> {
+export function get_ticks(world: World, entity: Entity, loc: EntityLocation, type: Component): Option<ComponentTicks> {
     const component_id = world.components.getId(type)!;
 
     return get_ticks_inner(world, component_id, type.storage_type, entity, loc);
 
 }
 
-export function unsafe_entity_cell_get_ref<T extends Component>(world: World, entity: Entity, loc: EntityLocation, component: T) {
+export function get_ref<T extends Component>(world: World, entity: Entity, loc: EntityLocation, component: T): Option<Ref<T>> {
     const last_change_tick = world.lastChangeTick;
     const change_tick = world.changeTick;
     const component_id = world.components.getId(component);
-    if (is_none(component_id)) {
+    if (component_id == null) {
         return
     }
 
@@ -119,13 +119,13 @@ export function unsafe_entity_cell_get_ref<T extends Component>(world: World, en
     return new Ref(value as InstanceType<T>, new Ticks(cells, last_change_tick, change_tick));
 }
 
-export function unsafe_entity_cell_components<Q extends readonly any[]>(world: World, entity: Entity, loc: EntityLocation, query: Q): AsQueryItem<Q> {
-    const components = unsafe_entity_cell_get_components(world, entity, loc, query);
+export function components<const Q extends any[]>(query: Q, world: World, loc: EntityLocation, entity: Entity): QueryItem<Q> {
+    const components = get_components(query, world, loc, entity);
     if (!components) throw new Error('Query Mismatch Error');
     return components;
 }
 
-export function unsafe_entity_cell_get_components<Q extends readonly any[]>(world: World, entity: Entity, location: EntityLocation, query: Q): Option<AsQueryItem<Q>> {
+export function get_components<const Q extends any[]>(query: Q, world: World, location: EntityLocation, entity: Entity): Option<QueryItem<Q>> {
     const q = new QueryDataTuple(query);
 
     const state = q.get_state(world.components);
@@ -147,12 +147,12 @@ export function unsafe_entity_cell_get_components<Q extends readonly any[]>(worl
 
         q.set_archetype(fetch, state, archetype, table);
 
-        return q.fetch(fetch, entity, location.table_row) as AsQueryItem<Q>;
+        return q.fetch(fetch, entity, location.table_row) as QueryItem<Q>;
     }
     return
 }
 
-export function unsafe_entity_cell_get<T extends Component>(world: World, entity: Entity, loc: EntityLocation, type: T): Option<InstanceType<T>> {
+export function get<T extends Component>(world: World, entity: Entity, loc: EntityLocation, type: T): Option<InstanceType<T>> {
     const component_id = world.components.getId(type);
 
     if (component_id == null) {
@@ -173,7 +173,7 @@ export function unsafe_entity_cell_get<T extends Component>(world: World, entity
     return $readonly(component as Component) as InstanceType<T>;
 }
 
-export function unsafe_entity_cell_get_by_id<T extends Component>(world: World, entity: Entity, loc: EntityLocation, component_id: ComponentId): Option<InstanceType<T>> {
+export function get_by_id<T extends Component>(world: World, entity: Entity, loc: EntityLocation, component_id: ComponentId): Option<InstanceType<T>> {
     const info = world.components.getInfo(component_id);
     if (!info) {
         return null;
@@ -182,13 +182,13 @@ export function unsafe_entity_cell_get_by_id<T extends Component>(world: World, 
     return get_component_inner(
         world,
         component_id,
-        info.storageType,
+        info.storage_type,
         entity,
         loc
     ) as InstanceType<T>;
 }
 
-export function unsafe_entity_cell_get_mut<T extends Component>(world: World, entity: Entity, loc: EntityLocation, type: T): Option<Mut<T>> {
+export function get_mut<T extends Component>(world: World, entity: Entity, loc: EntityLocation, type: T): Option<Mut<T>> {
     const component_id = world.components.getId(type);
     if (typeof component_id !== 'number') {
         return;

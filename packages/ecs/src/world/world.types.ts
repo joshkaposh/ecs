@@ -10,5 +10,5 @@ export type * from './world';
 export type * from './deferred-world';
 
 export interface FromWorld<T> {
-    from_world(world: World): Instance<T>
+    from_world(world: World): Instance<T>;
 }

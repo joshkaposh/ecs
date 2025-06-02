@@ -1,0 +1,15 @@
+{
+    "extends": "../../tsconfig.json",
+    "include": [
+        "src"
+    ],
+    "compilerOptions": {
+        "emitDeclarationOnly": true,
+        "outDir": "./dist",
+        "paths": {
+            "@packages/ecs-internal": [
+                "../ecs-internal/src"
+            ],
+        }
+    }
+}

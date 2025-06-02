@@ -1,0 +1,13 @@
+{
+  "name": "ecs-util",
+  "version": "0.0.1",
+  "description": "utility types and function for the ecs",
+  "license": "MIT",
+  "author": "",
+  "type": "module",
+  "main": "src/index.ts",
+  "scripts": {
+    "test": "vitest"
+  },
+  "devDependencies": {}
+}

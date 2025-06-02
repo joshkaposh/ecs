@@ -1,5 +1,5 @@
 import type { World } from "./world";
-import { type Entity, EntityDoesNotExistDetails } from "../entity";
+import { type Entity } from "../entity";
 import { EntityFetchError } from "./error";
 import { EntityMut, EntityRef, EntityWorldMut } from "./entity-ref";
 import { ErrorExt, type Result } from "joshkaposh-option";
@@ -19,7 +19,7 @@ type HandleFetch<T extends WorldEntityFetch, R extends EntityRef | EntityMut | E
 //     T extends Set<Entity> ? R :
 //     never;
 
-type FetchResult<T> = Result<T, EntityFetchError>;
+// type FetchResult<T> = Result<T, EntityFetchError>;
 
 
 

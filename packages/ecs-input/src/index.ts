@@ -46,7 +46,8 @@ function handleKeyup(this: InstanceType<typeof KeyboardButtonInput>, e: Keyboard
     this.release(e.code as Key);
 }
 
-export class InputPlugin extends Plugin {
+export const InputPlugin = Plugin({
+    name: 'InputPlugin',
     build(app: App): void {
         app
             .initResource(MouseButtonInput)
@@ -71,4 +72,4 @@ export class InputPlugin extends Plugin {
 
 
     }
-}
+})

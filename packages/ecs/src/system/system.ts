@@ -25,7 +25,7 @@ export interface IntoSystem<In, Out> {
     intoSystem(): System<In, Out>;
 }
 
-export interface System<In, Out> extends IntoSystemSet<any>, IntoSystem<In, Out>, ProcessScheduleConfig, IntoScheduleConfig<Schedulable> {
+export interface System<In, Out> extends IntoSystemSet, IntoSystem<In, Out>, ProcessScheduleConfig, IntoScheduleConfig<Schedulable> {
     /**
      * Property indicating if this system returns a boolean.
      */
@@ -278,31 +278,31 @@ export const ApplyDeferred: System<unit, unit> & IntoScheduleConfig<Schedulable>
         return this.intoConfig().inSet(set)
     },
 
-    before<M>(set: IntoSystemSet<M>): ScheduleConfigs<Schedulable> {
+    before(set: IntoSystemSet): ScheduleConfigs<Schedulable> {
         return this.intoConfig().before(set)
     },
 
-    beforeIgnoreDeferred<M>(set: IntoSystemSet<M>): ScheduleConfigs<Schedulable> {
+    beforeIgnoreDeferred(set: IntoSystemSet): ScheduleConfigs<Schedulable> {
         return this.intoConfig().beforeIgnoreDeferred(set);
     },
 
-    after<M>(set: IntoSystemSet<M>): ScheduleConfigs<Schedulable> {
+    after(set: IntoSystemSet): ScheduleConfigs<Schedulable> {
         return this.intoConfig().after(set);
     },
 
-    afterIgnoreDeferred<M>(set: IntoSystemSet<M>): ScheduleConfigs<Schedulable> {
+    afterIgnoreDeferred(set: IntoSystemSet): ScheduleConfigs<Schedulable> {
         return this.intoConfig().afterIgnoreDeferred(set)
     },
 
-    distributiveRunIf<M>(condition: Condition<M>): ScheduleConfigs<Schedulable> {
+    distributiveRunIf(condition: Condition<any>): ScheduleConfigs<Schedulable> {
         return this.intoConfig().distributiveRunIf(condition)
     },
 
-    runIf<M>(condition: Condition<M>): ScheduleConfigs<Schedulable> {
+    runIf(condition: Condition<any>): ScheduleConfigs<Schedulable> {
         return this.intoConfig().runIf(condition);
     },
 
-    ambiguousWith<M>(set: IntoSystemSet<M>): ScheduleConfigs<Schedulable> {
+    ambiguousWith(set: IntoSystemSet): ScheduleConfigs<Schedulable> {
         return this.intoConfig().ambiguousWith(set);
     },
 

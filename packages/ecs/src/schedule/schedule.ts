@@ -1,5 +1,6 @@
 import { v4 } from 'uuid';
 import { Iterator, iter } from "joshkaposh-iterator";
+import { assert } from 'joshkaposh-iterator/src/util';
 import { ErrorExt, type Option, type Result } from 'joshkaposh-option'
 import { FixedBitSet } from "fixed-bit-set";
 import BTree from "sorted-btree";
@@ -17,7 +18,6 @@ import { AnonymousSet, InternedSystemSet, IntoSystemSet, SystemSet } from "./set
 import { Condition } from "./condition";
 import type { ScheduleBuildPassObj } from "./pass";
 import { AutoInsertApplyDeferredPass } from "./auto-insert-apply-deferred";
-import { assert } from 'joshkaposh-iterator/src/util';
 
 type BTreeSet<T> = BTree<T, undefined>;
 type ScheduleSystem = System<any, any>;
@@ -42,6 +42,7 @@ export class Schedules {
     ignored_scheduling_ambiguities: BTreeSet<ComponentId>;
     static readonly type_id = v4() as UUID;
     static readonly storage_type = 1;
+    static readonly MUTABLE = true;
     static from_world() {
         return new Schedules();
     }
@@ -146,7 +147,7 @@ export class Schedules {
         return this;
     }
 
-    ignoreAmbiguity<M1, M2, S1 extends IntoSystemSet<M1>, S2 extends IntoSystemSet<M2>>(schedule: ScheduleLabel, a: S1, b: S2) {
+    ignoreAmbiguity<S1 extends IntoSystemSet, S2 extends IntoSystemSet>(schedule: ScheduleLabel, a: S1, b: S2) {
         this.entry(schedule).ignoreAmbiguity(a, b);
         return this;
     }
@@ -187,7 +188,7 @@ export class Schedule {
         return this;
     }
 
-    ignoreAmbiguity<M1, M2, S1 extends IntoSystemSet<M1>, S2 extends IntoSystemSet<M2>>(a: S1, b: S2) {
+    ignoreAmbiguity<S1 extends IntoSystemSet, S2 extends IntoSystemSet>(a: S1, b: S2) {
         a = a.intoSystemSet() as unknown as S1;
         b = b.intoSystemSet() as unknown as S2;
         const a_id = this.#graph.systemSetIds.get(`${a}`)
@@ -245,7 +246,7 @@ export class Schedule {
     initialize(world: World) {
         if (this.#graph.__changed) {
             this.#graph.initialize(world);
-            const ignored_ambiguities = world.getResourceOrInit(Schedules).v.ignored_scheduling_ambiguities.clone();
+            const ignored_ambiguities = world.getResourceOrInit(Schedules as any).v.ignored_scheduling_ambiguities.clone();
             const err = this.#graph.updateSchedule(
                 world,
                 this.#executable,

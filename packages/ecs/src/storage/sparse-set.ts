@@ -202,17 +202,14 @@ export class ComponentSparseSet {
         this.#sparse.length = 0;
     }
 
-    // @ts-ignore
-    private __set(entity: Entity, value: {}, change_tick: Tick) {
+    __set(entity: Entity, value: {}, change_tick: Tick) {
         const i = index(entity);
         const dense_index = this.#sparse[i];
         if (dense_index != null) {
-            // @ts-expect-error
             this.#dense.__replace(dense_index, value, change_tick);
         } else {
             const dense_index = this.#dense.length;
-            // @ts-expect-error
-            this.#dense.__push(value, ComponentTicks.new(change_tick));
+            this.#dense.__push(value, new ComponentTicks(change_tick, change_tick));
             this.#sparse[i] = dense_index;
             this.#entities.push(i);
         }
@@ -273,8 +270,7 @@ export class ComponentSparseSet {
         return this.#dense.getTicksUnchecked(dense_index);
     }
 
-    // @ts-ignore
-    private __deleteAndForget(entity: Entity) {
+    __deleteAndForget(entity: Entity) {
         const i = index(entity);
         const dense_index = this.#sparse[i];
         this.#sparse[i] = null;
@@ -284,8 +280,7 @@ export class ComponentSparseSet {
         }
         swap_remove(this.#entities, dense_index);
         const is_last = dense_index === this.#dense.length - 1;
-        // @ts-expect-error
-        const [value] = this.#dense.__swap_remove_unchecked(dense_index) as any
+        const [value] = this.#dense.__swapRemoveUnchecked(dense_index)!;
         if (!is_last) {
             const index = this.#entities[dense_index];
             this.#sparse[index] = dense_index
@@ -294,8 +289,7 @@ export class ComponentSparseSet {
         return value;
     }
 
-    // @ts-ignore
-    private __delete(entity: Entity) {
+    __delete(entity: Entity) {
         const i = index(entity)
         const dense_index = this.#sparse[i];
         this.#sparse[i] = null;
@@ -307,7 +301,6 @@ export class ComponentSparseSet {
         swap_remove(this.#entities, dense_index)
         const is_last = dense_index === this.#dense.length - 1;
 
-        // @ts-expect-error
         this.#dense.__swapRemoveUnchecked(dense_index);
 
         if (!is_last) {
@@ -594,11 +587,8 @@ export class SparseSet<T> {
     }
 
     forEach(callback: (index: number, value: Instance<T>) => void) {
-        const indices = this.#indices;
         const dense = this.#dense;
-        for (let i = 0; i < indices.length; i++) {
-            callback(indices[i], dense[i])
-        }
+        this.#indices.forEach((index, i) => callback(index, dense[i]));
     }
 }
 

@@ -34,6 +34,20 @@ export function split_at<T>(array: T[], index: number): Option<[T[], T[]]> {
     return
 }
 
+export function split_first<T>(array: T[]): Option<[T, T[]]> {
+    if (array.length > 0) {
+        return [array[0], array.slice(1, array.length)]
+    }
+    return;
+}
+
+export function split_last<T>(array: T[]): Option<[T, T[]]> {
+    if (array.length > 0) {
+        return [array[array.length - 1], array.slice(0, array.length - 1)]
+    }
+    return;
+}
+
 export function typed_pop(array: View<ArrayBuffer>): Option<number> {
     if (array.length === 0) {
         return

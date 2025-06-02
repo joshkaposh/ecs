@@ -1,5 +1,6 @@
 import { Class, } from "ecs/src/util";
-import { Resource, defineResource } from "ecs";
+import { Resource } from "ecs";
+import { defineResource } from "define";
 
 export type ButtonState = 0 | 1;
 export const ButtonState = {

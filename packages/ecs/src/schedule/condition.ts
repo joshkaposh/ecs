@@ -1,7 +1,6 @@
 import { System, SystemInput } from "../system";
 import { CombinatorSystem, Combine } from "../system/combinator";
 
-
 // TODO: Condition does not need `IntoScheduleConfig` or `IntoSystemSet`
 export interface Condition<In, Out extends boolean = boolean> extends System<In, Out> {
     clone(): Condition<In, Out>;
@@ -77,45 +76,52 @@ export interface Condition<In, Out extends boolean = boolean> extends System<In,
     xnor<C extends Condition<any>>(other: C): XnorCondition<Condition<In, Out>, C>;
 }
 
-export class AndMarker implements Combine<System<any, any>, System<any, any>> {
+export type AndMarker = typeof AndMarker;
+export const AndMarker: Combine<System<any, any>, System<any, any>> = {
     combine(input: SystemInput, a: (input: any) => any, b: (input: any) => any) {
         return a(input) && b(input);
     }
-}
+} as const;
 
-export class NandMarker implements Combine<System<any, any>, System<any, any>> {
+export type NandMarker = typeof NandMarker;
+export const NandMarker: Combine<System<any, any>, System<any, any>> = {
     combine(input: SystemInput, a: (input: any) => any, b: (input: any) => any) {
         return !a(input) && b(input);
     }
-}
+} as const;
 
-export class NorMarker implements Combine<System<any, any>, System<any, any>> {
-    combine(input: SystemInput, a: (input: any) => any, b: (input: any) => any) {
-        return !a(input) || b(input);
-    }
-}
-
-export class OrMarker implements Combine<System<any, any>, System<any, any>> {
+export type OrMarker = typeof OrMarker;
+export const OrMarker: Combine<System<any, any>, System<any, any>> = {
     combine(input: SystemInput, a: (input: any) => any, b: (input: any) => any) {
         return a(input) || b(input);
     }
-}
+} as const;
 
-export class XnorMarker implements Combine<System<any, any>, System<any, any>> {
+export type NorMarker = typeof NorMarker;
+export const NorMarker: Combine<System<any, any>, System<any, any>> = {
     combine(input: SystemInput, a: (input: any) => any, b: (input: any) => any) {
-        return !(a(input) ^ b(input));
+        return !a(input) || b(input);
     }
-}
+} as const;
 
-export class XorMarker implements Combine<System<any, any>, System<any, any>> {
+export type XorMarker = typeof XorMarker;
+export const XorMarker: Combine<System<any, any>, System<any, any>> = {
     combine(input: SystemInput, a: (input: any) => any, b: (input: any) => any) {
         return a(input) ^ b(input);
     }
-}
+} as const
 
-export type AndCondition<A extends System<any, any>, B extends System<any, any>> = CombinatorSystem<AndMarker, A, B>
-export type NandCondition<A extends System<any, any>, B extends System<any, any>> = CombinatorSystem<NandMarker, A, B>
-export type NorCondition<A extends System<any, any>, B extends System<any, any>> = CombinatorSystem<NorMarker, A, B>
-export type OrCondition<A extends System<any, any>, B extends System<any, any>> = CombinatorSystem<OrMarker, A, B>
-export type XnorCondition<A extends System<any, any>, B extends System<any, any>> = CombinatorSystem<XnorMarker, A, B>
-export type XorCondition<A extends System<any, any>, B extends System<any, any>> = CombinatorSystem<XorMarker, A, B>
+export type XnorMarker = typeof XnorMarker;
+export const XnorMarker: Combine<System<any, any>, System<any, any>> = {
+    combine(input: SystemInput, a: (input: any) => any, b: (input: any) => any) {
+        return !(a(input) ^ b(input));
+    }
+} as const;
+
+
+export type AndCondition<A extends Condition<any>, B extends Condition<any>> = CombinatorSystem<AndMarker, A, B>
+export type NandCondition<A extends Condition<any>, B extends Condition<any>> = CombinatorSystem<NandMarker, A, B>
+export type NorCondition<A extends Condition<any>, B extends Condition<any>> = CombinatorSystem<NorMarker, A, B>
+export type OrCondition<A extends Condition<any>, B extends Condition<any>> = CombinatorSystem<OrMarker, A, B>
+export type XnorCondition<A extends Condition<any>, B extends Condition<any>> = CombinatorSystem<XnorMarker, A, B>
+export type XorCondition<A extends Condition<any>, B extends Condition<any>> = CombinatorSystem<XorMarker, A, B>

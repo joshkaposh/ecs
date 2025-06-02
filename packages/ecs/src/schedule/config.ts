@@ -3,10 +3,10 @@ import { Chain } from "./schedule";
 import { Ambiguity, Dependency, DependencyKind, GraphInfo } from './graph'
 import { assert } from "joshkaposh-iterator/src/util";
 import { InternedSystemSet, IntoSystemSet, SystemSet } from "./set";
-import { System, SystemFn } from "../system";
+import { System } from "../system";
 import { IgnoreDeferred } from "./auto-insert-apply-deferred";
 
-function newCondition<M>(condition: Condition<M>): any {
+function newCondition(condition: Condition<any>): any {
     const condition_system = condition.intoSystem();
     assert(condition_system.is_send, `Condition ${condition_system.name} accesses \`NonSend\` resources. This is currently unsupported`)
     return condition_system
@@ -42,7 +42,7 @@ export interface IntoScheduleConfig<T extends Schedulable> {
      * Calling [`chain`] is often more convenient and ensures that all systems are added to the schedule.
      * Please check the [caveats section] `of ScheduleConfig.after` for details.
      */
-    before<M>(set: IntoSystemSet<M>): ScheduleConfigs<T>;
+    before(set: IntoSystemSet): ScheduleConfigs<T>;
 
     /**
      * Run after all systems in `set`. If `set` has any systems that produce `Commands` or other `Deferred` operations, all systems in `self` will see their effect.
@@ -64,21 +64,21 @@ export interface IntoScheduleConfig<T extends Schedulable> {
      * Another caveat is that is `SystemB` is placed in a different schedule that `SystemA`,
      * any ordering calls between them - whether using `.before`, `.after`, or `.chain` - will be silently ignored.
      */
-    after<M>(set: IntoSystemSet<M>): ScheduleConfigs<T>;
+    after(set: IntoSystemSet): ScheduleConfigs<T>;
 
     /**
      * Run before all systems in `set`.
      * 
      * Unlike [`before`], this will not cause the systems in `set` to wait for the deferred effects of `self` to be applied.
      */
-    beforeIgnoreDeferred<M>(set: IntoSystemSet<M>): ScheduleConfigs<T>;
+    beforeIgnoreDeferred(set: IntoSystemSet): ScheduleConfigs<T>;
 
     /**
      * Run after all systems in `set`.
      * 
      * Unlike [`after`], this will not cause the systems in `set` to wait for the deferred effects of `self` to be applied.
      */
-    afterIgnoreDeferred<M>(set: IntoSystemSet<M>): ScheduleConfigs<T>;
+    afterIgnoreDeferred(set: IntoSystemSet): ScheduleConfigs<T>;
 
     /**
      * Add a run condition to each contained system.
@@ -133,7 +133,7 @@ export interface IntoScheduleConfig<T extends Schedulable> {
      * Suppresses warning and errors that would result from these systems having ambiguities
      * (conflicting access but indeterminate order) with systems in `set`.
      */
-    ambiguousWith<M>(set: IntoSystemSet<M>): ScheduleConfigs<T>;
+    ambiguousWith(set: IntoSystemSet): ScheduleConfigs<T>;
 
     /**
      * Suppresses warning and erros that would result from these systems having ambiguities
@@ -175,11 +175,11 @@ export function IntoScheduleConfig<S extends System<any, any>, T extends Schedul
         )
     }
 
-    type.before = function before<P2>(other: IntoSystemSet<System<P2, ReturnType<SystemFn<P2, boolean>>>>) {
+    type.before = function before(other: IntoSystemSet) {
         return this.intoConfig!().before(other) as ScheduleConfigs<T>;
     }
 
-    type.after = function after<P2>(other: IntoSystemSet<System<P2, ReturnType<SystemFn<P2, boolean>>>>) {
+    type.after = function after(other: IntoSystemSet) {
         return this.intoConfig!().after(other) as ScheduleConfigs<T>;
     }
 
@@ -187,11 +187,11 @@ export function IntoScheduleConfig<S extends System<any, any>, T extends Schedul
         return this.intoConfig!().inSet(set) as ScheduleConfigs<T>;
     }
 
-    type.afterIgnoreDeferred = function afterIgnoreDeferred<M>(set: IntoSystemSet<M>) {
+    type.afterIgnoreDeferred = function afterIgnoreDeferred(set: IntoSystemSet) {
         return this.intoConfig!().afterIgnoreDeferred(set) as ScheduleConfigs<T>;
     }
 
-    type.beforeIgnoreDeferred = function beforeIgnoreDeferred<M>(set: IntoSystemSet<M>) {
+    type.beforeIgnoreDeferred = function beforeIgnoreDeferred(set: IntoSystemSet) {
         return this.intoConfig!().beforeIgnoreDeferred(set) as ScheduleConfigs<T>;
     }
 
@@ -203,7 +203,7 @@ export function IntoScheduleConfig<S extends System<any, any>, T extends Schedul
         return this.intoConfig!().distributiveRunIf(condition) as ScheduleConfigs<T>;
     }
 
-    type.ambiguousWith = function ambiguousWith<M>(set: IntoSystemSet<M>) {
+    type.ambiguousWith = function ambiguousWith(set: IntoSystemSet) {
         return this.intoConfig!().ambiguousWith(set) as ScheduleConfigs<T>;
     }
 
@@ -275,7 +275,7 @@ export class ScheduleConfig<T extends Schedulable> implements IntoScheduleConfig
         this.graph_info.dependencies.push(new Dependency(DependencyKind.Before, set));
     }
 
-    before<M>(set: IntoSystemSet<M>) {
+    before(set: IntoSystemSet) {
         this.beforeInner(set.intoSystemSet().intern());
         return this;
     }
@@ -284,7 +284,7 @@ export class ScheduleConfig<T extends Schedulable> implements IntoScheduleConfig
         this.graph_info.dependencies.push(new Dependency(DependencyKind.After, set));
     }
 
-    after<M>(set: IntoSystemSet<M>) {
+    after(set: IntoSystemSet) {
         this.afterInner(set.intoSystemSet().intern());
         return this;
     }
@@ -293,7 +293,7 @@ export class ScheduleConfig<T extends Schedulable> implements IntoScheduleConfig
         this.graph_info.dependencies.push(new Dependency(DependencyKind.Before, set).add_config(IgnoreDeferred))
     }
 
-    beforeIgnoreDeferred<M>(set: IntoSystemSet<M>) {
+    beforeIgnoreDeferred(set: IntoSystemSet) {
         this.beforeIgnoreDeferredInner(set.intoSystemSet().intern());
         return this
     }
@@ -302,26 +302,26 @@ export class ScheduleConfig<T extends Schedulable> implements IntoScheduleConfig
         this.graph_info.dependencies.push(new Dependency(DependencyKind.After, set).add_config(IgnoreDeferred))
     }
 
-    afterIgnoreDeferred<M>(set: IntoSystemSet<M>) {
+    afterIgnoreDeferred(set: IntoSystemSet) {
         this.afterIgnoreDeferredInner(set.intoSystemSet().intern());
         return this;
     }
 
-    private distributiveRunIfInner<M>(condition: Condition<M>) {
+    private distributiveRunIfInner(condition: Condition<any>) {
         this.conditions.push(newCondition(condition));
     }
 
-    distributiveRunIf<M>(condition: Condition<M>): ScheduleConfigs<T> {
+    distributiveRunIf(condition: Condition<any>): ScheduleConfigs<T> {
         this.distributiveRunIfInner(condition);
         return this;
     }
 
-    // @ts-expect-error
-    private runIfDyn<M>(condition: Condition<M>) {
+    // @ts-ignore
+    private runIfDyn(condition: Condition) {
         this.conditions.push(condition);
     }
 
-    runIf<M>(condition: Condition<M>) {
+    runIf(condition: Condition<any>) {
         this.conditions.push(newCondition(condition));
         return this;
 
@@ -331,7 +331,7 @@ export class ScheduleConfig<T extends Schedulable> implements IntoScheduleConfig
         ambiguousWith(this.graph_info, set);
     }
 
-    ambiguousWith<M>(set: IntoSystemSet<M>) {
+    ambiguousWith(set: IntoSystemSet) {
         this.ambiguousWithInner(set.intoSystemSet().intern());
         return this
     }
@@ -406,7 +406,7 @@ export class Configs<T extends Schedulable> implements IntoScheduleConfig<T> {
         }
     }
 
-    before<M>(set: IntoSystemSet<M>) {
+    before(set: IntoSystemSet) {
         this.beforeInner(set.intoSystemSet().intern());
         return this;
     }
@@ -419,7 +419,7 @@ export class Configs<T extends Schedulable> implements IntoScheduleConfig<T> {
         }
     }
 
-    after<M>(set: IntoSystemSet<M>) {
+    after(set: IntoSystemSet) {
         this.afterInner(set.intoSystemSet().intern())
         return this;
     }
@@ -432,7 +432,7 @@ export class Configs<T extends Schedulable> implements IntoScheduleConfig<T> {
         }
     }
 
-    beforeIgnoreDeferred<M>(set: IntoSystemSet<M>) {
+    beforeIgnoreDeferred(set: IntoSystemSet) {
         this.beforeIgnoreDeferredInner(set.intoSystemSet().intern())
         return this;
     }
@@ -445,12 +445,12 @@ export class Configs<T extends Schedulable> implements IntoScheduleConfig<T> {
         }
     }
 
-    afterIgnoreDeferred<M>(set: IntoSystemSet<M>) {
+    afterIgnoreDeferred(set: IntoSystemSet) {
         this.afterIgnoreDeferredInner(set.intoSystemSet().intern())
         return this
     }
 
-    private distributiveRunIfInner<M>(condition: Condition<M>) {
+    private distributiveRunIfInner(condition: Condition<any>) {
         const configs = this.configs;
         for (let i = 0; i < configs.length; i++) {
             // @ts-expect-error
@@ -458,16 +458,16 @@ export class Configs<T extends Schedulable> implements IntoScheduleConfig<T> {
         }
     }
 
-    distributiveRunIf<M>(condition: Condition<M>) {
+    distributiveRunIf(condition: Condition<any>) {
         this.distributiveRunIfInner(condition);
         return this
     }
 
-    private runIfDyn<M>(condition: Condition<M>) {
+    private runIfDyn(condition: Condition<any>) {
         this.collective_conditions.push(condition);
     }
 
-    runIf<M>(condition: Condition<M>) {
+    runIf(condition: Condition<any>) {
         this.runIfDyn(newCondition(condition));
         return this;
 
@@ -481,7 +481,7 @@ export class Configs<T extends Schedulable> implements IntoScheduleConfig<T> {
         }
     }
 
-    ambiguousWith<M>(set: IntoSystemSet<M>) {
+    ambiguousWith(set: IntoSystemSet) {
         this.ambiguousWithInner(set.intoSystemSet().intern())
         return this;
     }

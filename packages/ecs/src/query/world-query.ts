@@ -1,17 +1,23 @@
-import { type Option } from "joshkaposh-option";
+import type { Option } from "joshkaposh-option";
 import { defineWorldQuery } from "define";
 import { unit } from "../util";
-import { Archetype } from "../archetype";
-import { Entity } from "../entity";
-import { Table, type TableRow } from "../storage/table";
-import { ThinWorld, World } from "../world";
+import type { Archetype } from "../archetype";
+import type { Entity } from "../entity";
+import type { Table, TableRow } from "../storage/table";
+import type { World } from "../world";
 import { FilteredAccess } from "./access";
-import { Component, Components, ThinComponents, Tick, type ComponentId } from "../component";
-import { StorageType, ThinTable } from "../storage";
+import type { Component, Components, ThinComponents, Tick, ComponentId } from "../component";
+import { StorageType, type ThinTable } from "../storage";
+
+type ThinWorld = any;
 
 export function is_dense(ty: Component) {
     return ty.storage_type === StorageType.Table
 }
+
+export type InferQueryItem<T> = T extends RequiredWorldQuery<infer Item> ? Item : never;
+export type InferQueryFetch<T> = T extends RequiredWorldQuery<any, infer Fetch> ? Fetch : never;
+export type InferQueryState<T> = T extends RequiredWorldQuery<any, any, infer State> ? State : never;
 
 export interface RequiredWorldQuery<Item extends any = any, Fetch extends any = any, State extends any = any> {
     readonly [$WorldQuery]: true;

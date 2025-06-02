@@ -13,7 +13,11 @@
             "@packages/define": [
                 "../define/src"
             ],
+            "@packages/ecs-util": [
+                "../ecs-util/src"
+            ],
             "references": [
+                "../ecs-util/src",
                 "../define/src"
             ]
         }

@@ -1,6 +1,7 @@
 {
     "extends": "./tsconfig.common.json",
     "include": [
+        "packages/ecs-util",
         "packages/ecs",
         "packages/ecs-app",
         "packages/ecs-input",

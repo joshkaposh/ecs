@@ -1,5 +1,4 @@
-import { defineSystem, defineResource } from "ecs";
-import { defineEvent } from "define";
+import { defineSystem, defineResource, defineEvent } from "define";
 import { ButtonInput } from "./button_input";
 
 export type MouseButton = 0 | 1 | 2 | 3 | 4 | (number & {})

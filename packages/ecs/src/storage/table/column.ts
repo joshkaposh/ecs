@@ -60,7 +60,7 @@ export class Column {
         return this.data.length;
     }
 
-    private __push(ptr: {}, ticks: ComponentTicks) {
+    __push(ptr: {}, ticks: ComponentTicks) {
         this.data.push(ptr);
         this.ticks.push(ticks);
         // this.added_ticks.push(ticks.added);
@@ -69,12 +69,12 @@ export class Column {
 
     getDataSlice(_len: number) {
         return this.data;
-        // return this.data.slice(0, len);
     }
 
     getTicksSlice(_len: number) {
         return this.ticks;
     }
+
     // getAddedTicksSlice(_len: number) {
     //     return this.added_ticks;
     //     // return this.added_ticks.slice(0, len);
@@ -133,35 +133,29 @@ export class Column {
         return this.ticks[row];
     }
 
-    // @ts-ignore
-    private __swapRemoveUnchecked(row: TableRow): Option<[{}, ComponentTicks]> {
+    __swapRemoveUnchecked(row: TableRow): Option<[{}, ComponentTicks]> {
         const d = swap_remove(this.data, row)
         const t = swap_remove(this.ticks, row);
 
-        // const a = swap_remove(this.added_ticks, row)
-        // const c = swap_remove(this.changed_ticks, row);
-        // return d == null ? undefined : [d, a!, c!];
         return d == null ? undefined : [d, t!];
 
     }
 
-    // @ts-expect-error
-    private pop(last_element_index: number) {
+    pop(_last_element_index: number) {
         this.data.pop();
         this.ticks.pop();
         // this.added_ticks.pop();
         // this.changed_ticks.pop();
     }
 
-    private __swapRemoveAndDropUncheckedNonoverlapping(last_element_index: number, row: TableRow) {
+    __swapRemoveAndDropUncheckedNonoverlapping(last_element_index: number, row: TableRow) {
         swapRemoveUncheckedNonoverlapping(this.data, row, last_element_index);
         swapRemoveUncheckedNonoverlapping(this.ticks, row, last_element_index);
         // swapRemoveUncheckedNonoverlapping(this.added_ticks, row, last_element_index);
         // swapRemoveUncheckedNonoverlapping(this.changed_ticks, row, last_element_index);
     }
 
-    // @ts-expect-error
-    private __swapRemoveAndForgetUnchecked(last_element_index: number, row: TableRow) {
+    __swapRemoveAndForgetUnchecked(last_element_index: number, row: TableRow) {
         swapRemoveUnchecked(this.data, row, last_element_index);
         swapRemoveUnchecked(this.ticks, row, last_element_index);
 
@@ -173,15 +167,13 @@ export class Column {
      * Call to expand / shrink the memory allocation for this Column
      * The caller should make sure their saved capacity is updated to new_capacity after this operation
      */
-    // @ts-expect-error
-    private __realloc(current_capacity: number, new_capacity: number) {
+    __realloc(_current_capacity: number, _new_capacity: number) {
         // realloc(this.data, current_capacity, new_capacity)
         // realloc(this.added_ticks, current_capacity, new_capacity)
         // realloc(this.changed_ticks, current_capacity, new_capacity)
     }
 
-    // @ts-expect-error
-    private __alloc(new_capacity: number) {
+    __alloc(_new_capacity: number) {
         // alloc(this.data, new_capacity)
         // alloc(this.added_ticks, new_capacity)
         // alloc(this.changed_ticks, new_capacity)
@@ -192,15 +184,13 @@ export class Column {
      * Assumes the slot in uninitialized
      * To overwrite existing initialized value, use Column.replace() instead
      */
-    // @ts-expect-error
-    private __initialize(row: TableRow, data: {}, change_tick: Tick) {
+    __initialize(row: TableRow, data: {}, change_tick: Tick) {
         this.data[row] = data;
         this.ticks[row] = new ComponentTicks(change_tick, change_tick);
         // this.added_ticks[row] = change_tick;
         // this.changed_ticks[row] = change_tick;
     }
-
-    private __replace(row: TableRow, data: {}, change_tick: Tick) {
+    __replace(row: TableRow, data: {}, change_tick: Tick) {
         this.data[row] = data;
         const ticks = this.ticks[row];
         ticks.added = change_tick;
@@ -211,9 +201,7 @@ export class Column {
      * Removes the element from `other` at `src_row` and inserts it
      * into the current column to initialize the values at `dst_row`
      */
-    // @ts-expect-error
-
-    private __initializeFromUnchecked(other: Column, other_last_element_index: number, src_row: TableRow, dst_row: TableRow) {
+    __initializeFromUnchecked(other: Column, _other_last_element_index: number, src_row: TableRow, dst_row: TableRow) {
         // Init data
 
         this.data[dst_row] = swap_remove(other.data, src_row)!;
@@ -239,9 +227,7 @@ export class Column {
         // this.added_ticks.length = 0;
         // this.changed_ticks.length = 0;
     }
-
-    // @ts-expect-error
-    private __reserve_exact(additional: number) {
+    __reserve_exact(_additional: number) {
         // reserve(this.data,ca additional);
     }
 

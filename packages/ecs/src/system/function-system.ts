@@ -145,8 +145,7 @@ export class SystemState<Param extends Required<SystemParam>> {
 
     }
 
-    // @ts-expect-error
-    static fromBuilder<Param extends Required<SystemParam>>(world: World, builder: ParamBuilder<any[]>) {
+    static fromBuilder<Param extends Required<SystemParam>>(world: World, builder: ParamBuilder<Param extends any[] ? Param : never>) {
         TODO('SystemState.from_builder()', world, builder)
     }
 
@@ -339,19 +338,19 @@ export class FunctionSystem<Marker, F extends SystemParamFunction<Marker>> imple
         return this.intoConfig().inSet(set);
     }
 
-    before<M>(set: IntoSystemSet<M>): ScheduleConfigs<Schedulable<any, any>> {
+    before(set: IntoSystemSet): ScheduleConfigs<Schedulable<any, any>> {
         return this.intoConfig().before(set);
     }
 
-    beforeIgnoreDeferred<M>(set: IntoSystemSet<M>): ScheduleConfigs<Schedulable<any, any>> {
+    beforeIgnoreDeferred(set: IntoSystemSet): ScheduleConfigs<Schedulable<any, any>> {
         return this.intoConfig().beforeIgnoreDeferred(set);
     }
 
-    after<M>(set: IntoSystemSet<M>): ScheduleConfigs<Schedulable<any, any>> {
+    after(set: IntoSystemSet): ScheduleConfigs<Schedulable<any, any>> {
         return this.intoConfig().after(set);
     }
 
-    afterIgnoreDeferred<M>(set: IntoSystemSet<M>): ScheduleConfigs<Schedulable<any, any>> {
+    afterIgnoreDeferred(set: IntoSystemSet): ScheduleConfigs<Schedulable<any, any>> {
         return this.intoConfig().afterIgnoreDeferred(set);
     }
 
@@ -363,7 +362,7 @@ export class FunctionSystem<Marker, F extends SystemParamFunction<Marker>> imple
         return this.intoConfig().distributiveRunIf(condition);
     }
 
-    ambiguousWith<M>(set: IntoSystemSet<M>): ScheduleConfigs<Schedulable<any, any>> {
+    ambiguousWith(set: IntoSystemSet): ScheduleConfigs<Schedulable<any, any>> {
         return this.intoConfig().ambiguousWith(set);
     }
 

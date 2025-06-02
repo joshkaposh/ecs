@@ -1,0 +1,20 @@
+{
+    "extends": "../../tsconfig.json",
+    "include": [
+        "src"
+    ],
+    "compilerOptions": {
+        "emitDeclarationOnly": true,
+        "outDir": "./dist",
+        "paths": {
+            "@packages/ecs-time": [
+                "../ecs-time/src"
+            ],
+            "references": [
+                "../define",
+                "../ecs-app",
+                "../ecs"
+            ]
+        }
+    }
+}

@@ -1,10 +1,12 @@
 import { FixedBitSet } from "fixed-bit-set";
-import { Archetype, ArchetypeGeneration, ArchetypeId, QueryData, QueryFilter, QueryIter, World, QueryDataTuple, All, Tick, Entity, QueryEntityError, QueryCombinationIter, ThinWorld, ThinQueryIter, ThinQueryData, ThinQueryFilter, AsQueryItem, AsQueryState, RemapQueryTupleToQueryData, RemapQueryTupleToQueryFilter } from "ecs";
+import { Archetype, ArchetypeGeneration, ArchetypeId, QueryData, QueryFilter, QueryIter, World, QueryDataTuple, All, Tick, Entity, QueryEntityError, QueryCombinationIter, ThinQueryIter, ThinQueryData, ThinQueryFilter, QueryItem, AsQueryState, QueryTupleToQueryData, QueryTupleToQueryFilter } from "ecs";
 import { TableId } from "../storage/table";
 import { Access, FilteredAccess } from "./access";
 import { is_some, Result } from "joshkaposh-option";
 import { debug_assert } from "../util";
 import { TODO } from "joshkaposh-iterator/src/util";
+
+type ThinWorld = any;
 
 export interface StorageIdTable {
     table_id: TableId;
@@ -20,7 +22,7 @@ export function from_tuples<D extends QueryData, F extends QueryFilter>(fetch: r
     return [new QueryDataTuple(fetch) as unknown as D, All(...filter) as unknown as F];
 }
 
-export class QueryState<D extends QueryData, F extends QueryFilter = QueryFilter> {
+export class QueryState<D extends QueryData = QueryData, F extends QueryFilter = QueryFilter> {
     D: D;
     F: F;
     readonly is_dense: boolean;
@@ -61,7 +63,7 @@ export class QueryState<D extends QueryData, F extends QueryFilter = QueryFilter
         this.__matched_archetypes = matched_archetypes;
     }
 
-    static new<Data extends readonly any[], Filter extends readonly any[], D extends RemapQueryTupleToQueryData<Data>, F extends RemapQueryTupleToQueryFilter<Filter>>(data: Data, filter: Filter, world: World): QueryState<D, F> {
+    static new<Data extends readonly any[], Filter extends readonly any[], D extends QueryTupleToQueryData<Data>, F extends QueryTupleToQueryFilter<Filter>>(data: Data, filter: Filter, world: World): QueryState<D, F> {
         const D = new QueryDataTuple(data);
         const F = All(...filter);
 
@@ -437,37 +439,37 @@ export class QueryState<D extends QueryData, F extends QueryFilter = QueryFilter
         )
     }
 
-    get(world: World, entity: Entity): Result<AsQueryItem<D>, QueryEntityError> {
+    get(world: World, entity: Entity): Result<QueryItem<D>, QueryEntityError> {
         // return this.query(world).get_inner(entity);
         return TODO('QueryState.get()', world, entity)
     }
 
-    get_mut(world: World, entity: Entity): Result<AsQueryItem<D>, QueryEntityError> {
+    get_mut(world: World, entity: Entity): Result<QueryItem<D>, QueryEntityError> {
         return TODO('QueryState.get_mut()', world, entity)
         // return this.query_mut(world).get_inner(entity);
     }
 
-    get_manual(world: World, entity: Entity): Result<AsQueryItem<D>, QueryEntityError> {
+    get_manual(world: World, entity: Entity): Result<QueryItem<D>, QueryEntityError> {
         return TODO('QueryState.get_manual', world, entity)
         // return this.query_manual(world).get_inner(entity);
     }
 
-    get_unchecked(world: World, entity: Entity): Result<AsQueryItem<D>, QueryEntityError> {
+    get_unchecked(world: World, entity: Entity): Result<QueryItem<D>, QueryEntityError> {
         return TODO('QueryState.get_unchecked', world, entity)
         // return this.query_unchecked(world).get_inner(entity);
     }
 
-    get_many(world: World, entities: Entity[]): Result<AsQueryItem<D>[], QueryEntityError> {
+    get_many(world: World, entities: Entity[]): Result<QueryItem<D>[], QueryEntityError> {
         return TODO('QueryState.get_many()', world, entities)
         // return this.query(world).get_many_inner(entities);
     }
 
-    get_many_mut(world: World, entities: Entity[]): Result<AsQueryItem<D>[], QueryEntityError> {
+    get_many_mut(world: World, entities: Entity[]): Result<QueryItem<D>[], QueryEntityError> {
         return TODO('QueryState.get_many_mut()', world, entities);
         // return this.query_mut(world).get_many_inner(entities);
     }
 
-    iter(world: World): QueryIter<AsQueryItem<D>, F> {
+    iter(world: World): QueryIter<QueryItem<D>, F> {
         this.validate_world(world.id);
         return this.iter_unchecked(world);
         // return this.query(world).iter();
@@ -483,12 +485,12 @@ export class QueryState<D extends QueryData, F extends QueryFilter = QueryFilter
         // return this.query_manual(world).iter_manual();
     }
 
-    iter_unchecked(world: World): QueryIter<AsQueryItem<D>, F> {
+    iter_unchecked(world: World): QueryIter<QueryItem<D>, F> {
         this.update_archetypes(world);
         return this.iter_unchecked_manual(world, world.lastChangeTick, world.changeTick);
     }
 
-    iter_unchecked_manual(world: World, last_run: Tick, this_run: Tick): QueryIter<AsQueryItem<D>, F> {
+    iter_unchecked_manual(world: World, last_run: Tick, this_run: Tick): QueryIter<QueryItem<D>, F> {
         return new QueryIter(world, this as any, last_run, this_run);
     }
 
@@ -750,7 +752,7 @@ export class ThinQueryState<D extends ThinQueryData, F extends ThinQueryFilter =
         }
     }
 
-    update_archetypes(world: ThinWorld) {
+    update_archetypes(world: World) {
         this.validate_world(world.id);
         const archetypes = world.archetypes;
 
@@ -1021,32 +1023,32 @@ export class ThinQueryState<D extends ThinQueryData, F extends ThinQueryFilter =
         // )
     }
 
-    get(world: ThinWorld, entity: Entity): Result<AsQueryItem<D>, QueryEntityError> {
+    get(world: ThinWorld, entity: Entity): Result<QueryItem<D>, QueryEntityError> {
         // return this.query(world).get_inner(entity);
         return TODO('QueryState.get()', world, entity)
     }
 
-    get_mut(world: ThinWorld, entity: Entity): Result<AsQueryItem<D>, QueryEntityError> {
+    get_mut(world: ThinWorld, entity: Entity): Result<QueryItem<D>, QueryEntityError> {
         return TODO('QueryState.get_mut()', world, entity)
         // return this.query_mut(world).get_inner(entity);
     }
 
-    get_manual(world: ThinWorld, entity: Entity): Result<AsQueryItem<D>, QueryEntityError> {
+    get_manual(world: ThinWorld, entity: Entity): Result<QueryItem<D>, QueryEntityError> {
         return TODO('QueryState.get_manual', world, entity)
         // return this.query_manual(world).get_inner(entity);
     }
 
-    get_unchecked(world: ThinWorld, entity: Entity): Result<AsQueryItem<D>, QueryEntityError> {
+    get_unchecked(world: ThinWorld, entity: Entity): Result<QueryItem<D>, QueryEntityError> {
         return TODO('QueryState.get_unchecked', world, entity)
         // return this.query_unchecked(world).get_inner(entity);
     }
 
-    get_many(world: ThinWorld, entities: Entity[]): Result<AsQueryItem<D>[], QueryEntityError> {
+    get_many(world: ThinWorld, entities: Entity[]): Result<QueryItem<D>[], QueryEntityError> {
         return TODO('QueryState.get_many()', world, entities)
         // return this.query(world).get_many_inner(entities);
     }
 
-    get_many_mut(world: ThinWorld, entities: Entity[]): Result<AsQueryItem<D>[], QueryEntityError> {
+    get_many_mut(world: ThinWorld, entities: Entity[]): Result<QueryItem<D>[], QueryEntityError> {
         return TODO('QueryState.get_many_mut()', world, entities);
         // return this.query_mut(world).get_many_inner(entities);
     }

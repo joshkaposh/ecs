@@ -1,0 +1,13 @@
+{
+  "name": "ecs-render",
+  "version": "0.0.1",
+  "description": "functions and types for rendering in the ECS",
+  "license": "MIT",
+  "author": "",
+  "type": "module",
+  "main": "src/index.ts",
+  "scripts": {
+    "test": "vitest"
+  },
+  "devDependencies": {}
+}

@@ -28,21 +28,20 @@ export type IdentifierErrorType = typeof IdentifierError[keyof typeof Identifier
 // }
 
 export class Identifier {
-    // @ts-expect-error
     #low: number // u32;
-    // @ts-expect-error
     #high: number // NonZeroU32
     constructor(low: number, high: number, kind: IdKind) {
         const masked_value = IdentifierMask.extract_value_from_high(high);
         const packed_high = IdentifierMask.pack_kind_into_high(masked_value, kind)
+
+        this.#low = low;
+        this.#high = packed_high;
 
         if (packed_high === 0) {
             // @ts-expect-error
             return IdentifierError.InvalidIdentifier();
         }
 
-        this.#low = low;
-        this.#high = packed_high;
     }
 
     low() {

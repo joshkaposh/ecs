@@ -4,30 +4,29 @@ import { Plugin, PluginsState } from "./plugin";
 
 export type RunMode = { Once: number } | { Loop: Option<number> }
 
-export class ScheduleRunnerPlugin extends Plugin {
+class _ScheduleRunnerPlugin implements Plugin {
     run_mode: RunMode;
+    readonly name = 'ScheduleRunnerPlugin';
     private constructor(mode: RunMode) {
-        super()
         this.run_mode = mode;
     }
 
     /**
      * @returns a ScheduleRunner configured to be run only once.
      */
-    static runOnce() {
-        return new ScheduleRunnerPlugin({ Once: 0 })
+    static runOnce(): Required<Plugin> {
+        return new ScheduleRunnerPlugin({ Once: 0 }) as unknown as Required<Plugin>;
     }
 
     /**
      * `duration` is in ms.
      * @returns a ScheduleRunner configured to be looped.
      */
-    static runLoop(duration?: number | null) {
-        return new ScheduleRunnerPlugin({ Loop: duration })
+    static runLoop(duration?: number | null): Required<Plugin> {
+        return new ScheduleRunnerPlugin({ Loop: duration }) as unknown as Required<Plugin>;
     }
 
-
-    build(app: App): void {
+    build(app: App) {
         const mode = this.run_mode;
         const is_once = 'Once' in mode;
         app.setRunner(() => {
@@ -86,3 +85,7 @@ export class ScheduleRunnerPlugin extends Plugin {
         })
     }
 }
+
+Plugin(_ScheduleRunnerPlugin.prototype);
+
+export const ScheduleRunnerPlugin = _ScheduleRunnerPlugin;

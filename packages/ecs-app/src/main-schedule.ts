@@ -1,13 +1,10 @@
 import { iter } from "joshkaposh-iterator";
-import { defineResource, defineSystem } from "define";
-import { World } from "ecs/src/world";
-import { StorageType } from "ecs/src/storage";
-import { Schedule, ScheduleLabel } from "ecs/src/schedule";
+import { defineResource, defineSystem, set } from "define";
+import { Schedule, ScheduleLabel, SystemSet } from "ecs/src/schedule";
 import { is_some } from "joshkaposh-option";
 import { Plugin } from "./plugin";
 import { App } from "./app";
 import { ExecutorKind } from "ecs/src/executor";
-import { v4 } from "uuid";
 
 export const $Main = 'Main';
 export const $PreStartup = 'PreStartup';
@@ -123,11 +120,9 @@ const FixedMainScheduleOrder = defineResource(class FixedMainScheduleOrder {
     }
 })
 
-class MainSchedulePlugin extends Plugin {
-
-    static readonly type_id = v4() as UUID;
-
-
+export type MainSchedulePlugin = typeof MainSchedulePlugin;
+const MainSchedulePlugin = Plugin({
+    name: 'MainSchedulePlugin',
     build(app: App): void {
         const main_schedule = new Schedule($Main);
         main_schedule.set_executor_kind(ExecutorKind.SingleThreaded);
@@ -159,7 +154,8 @@ class MainSchedulePlugin extends Plugin {
 
         // console.log('MainSchedulePlugin build()', app.world().get_resource(MainScheduleOrder), app.world().get_resource(FixedMainScheduleOrder));
     }
-}
+});
+
 export { MainScheduleOrder, FixedMainScheduleOrder, MainSchedulePlugin }
 
 export const MainSchedule = {
@@ -194,9 +190,9 @@ export const MainSchedule = {
     })
 } as const;
 
-export type RunFixedMainLoopSystem = 0 | 1 | 2
+export type RunFixedMainLoopSystem = SystemSet;
 export const RunFixedMainLoopSystem = {
-    BeforeFixedMainLoop: 0,
-    FixedMainLoop: 1,
-    AfterFixedMainLoop: 2
+    BeforeFixedMainLoop: set(),
+    FixedMainLoop: set(),
+    AfterFixedMainLoop: set()
 } as const

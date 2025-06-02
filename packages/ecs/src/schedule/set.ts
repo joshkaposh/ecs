@@ -95,8 +95,7 @@ export class AnonymousSet implements SystemSet {
     }
 }
 
-// @ts-expect-error
-export interface IntoSystemSet<M> {
+export interface IntoSystemSet {
     intoSystemSet(): SystemSet;
 }
 

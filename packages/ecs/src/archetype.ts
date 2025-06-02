@@ -134,9 +134,8 @@ export interface InternalArchetypeEntity {
 }
 
 export class ArchetypeEntity {
-    private entity: Entity;
-    // @ts-expect-error
-    private table_row: TableRow;
+    entity: Entity;
+    table_row: TableRow;
     constructor(entity: Entity, table_row: TableRow) {
         this.entity = entity;
         this.table_row = table_row;
@@ -178,7 +177,7 @@ export const ArchetypeFlags = {
 } as const;
 
 class Observers {
-    updateArchetypeFlags(component_id: ComponentId, flags: ArchetypeFlags) {
+    updateArchetypeFlags(_component_id: ComponentId, flags: ArchetypeFlags) {
         return flags;
     }
 };
@@ -422,8 +421,7 @@ export class Archetype {
         }
     }
 
-    // @ts-ignore
-    private __reserve(additional: number) {
+    __reserve(additional: number) {
         reserve(this.#entities, additional)
     }
 
@@ -433,8 +431,7 @@ export class Archetype {
      * in.
      * @throws This function will **throw** if `index >= this.len()`
      */
-    // @ts-ignore
-    private __swapRemove(row: ArchetypeRow): ArchetypeSwapRemoveResult {
+    __swapRemove(row: ArchetypeRow): ArchetypeSwapRemoveResult {
 
         if (row >= this.length) {
             throw new RangeError(`index ${row} exceeds length ${this.length}`)
@@ -451,8 +448,7 @@ export class Archetype {
         }
     }
 
-    // @ts-ignore
-    private __clearEntities() {
+    __clearEntities() {
         this.#entities.length = 0;
     }
 }
@@ -637,7 +633,6 @@ export class Archetypes {
 
     clearEntities() {
         for (const archetype of this.#archetypes) {
-            // @ts-expect-error
             archetype.__clearEntities();
         }
     }

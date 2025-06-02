@@ -4,6 +4,7 @@ import { type ComponentId, type Components, ComponentTicks, type Resource, Tick,
 import { SparseSet, ThinSparseSet } from "./sparse-set";
 import type { ArchetypeComponentId } from "../archetype";
 import { $read_and_write, Mut, TicksMut } from "../change_detection";
+import { unit } from "../util";
 
 class ResourceData<R extends Resource> {
     #data: Option<InstanceType<R>>;
@@ -82,6 +83,7 @@ class ResourceData<R extends Resource> {
 
     deleteAndDrop() {
         this.#data = null;
+        return unit;
     }
 
     checkChangeTicks(change_tick: Tick) {

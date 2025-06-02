@@ -1,6 +1,6 @@
 import { Iterator, done, item } from "joshkaposh-iterator";
 import { Archetype, ArchetypeEntity, Archetypes, InternalArchetypeEntity } from "../archetype";
-import { AsQueryFetch, AsQueryItem, QueryData, ThinQueryData } from "./fetch";
+import { QueryFetch, QueryItem, QueryData, ThinQueryData } from "./fetch";
 import { QueryState, StorageId, StorageIdArchetype, StorageIdTable, ThinQueryState } from "./state";
 import type { Entity } from "../entity";
 import { Table, Tables, ThinTable, ThinTables } from "../storage/table";
@@ -9,8 +9,10 @@ import { TODO } from "joshkaposh-iterator/src/util";
 import { debug_assert } from "../util";
 import { ComponentProxy } from "define";
 import { QueryFilter, ThinQueryFilter } from "./filter";
-import { ThinWorld, World } from "../world";
+import { World } from "../world";
 import { Tick } from "../tick";
+
+type ThinWorld = any;
 
 export class QueryIter<D, F> extends Iterator<D> {
     #tables: Tables;
@@ -78,7 +80,7 @@ export class QueryIter<D, F> extends Iterator<D> {
      */
     fold_over_storage_range<B>(
         accum: B,
-        fold: (acc: B, x: AsQueryItem<D>) => B,
+        fold: (acc: B, x: QueryItem<D>) => B,
         storage: StorageId,
         from?: number,
         to?: number
@@ -117,7 +119,7 @@ export class QueryIter<D, F> extends Iterator<D> {
      */
     fold_over_table_range<B>(
         accum: B,
-        fold: (acc: B, x: AsQueryItem<D>) => B,
+        fold: (acc: B, x: QueryItem<D>) => B,
         table: Table,
         row_start: number,
         row_end: number
@@ -159,7 +161,7 @@ export class QueryIter<D, F> extends Iterator<D> {
      */
     fold_over_archetype_range<B>(
         accum: B,
-        fold: (acc: B, x: AsQueryItem<D>) => B,
+        fold: (acc: B, x: QueryItem<D>) => B,
         archetype: Archetype,
         index_start: number,
         index_end: number,
@@ -214,7 +216,7 @@ export class QueryIter<D, F> extends Iterator<D> {
      */
     fold_over_dense_archetype_range<B>(
         accum: B,
-        fold: (acc: B, x: AsQueryItem<D>) => B,
+        fold: (acc: B, x: QueryItem<D>) => B,
         archetype: Archetype,
         rows_start: number,
         rows_end: number
@@ -338,7 +340,7 @@ export class QueryIter<D, F> extends Iterator<D> {
     }
 }
 
-export class ThinQueryIter<D extends readonly any[], F extends readonly any[]> extends Iterator<AsQueryItem<D>> {
+export class ThinQueryIter<D extends readonly any[], F extends readonly any[]> extends Iterator<QueryItem<D>> {
     #tables: ThinTables;
     #archetypes: Archetypes;
     #query_state: ThinQueryState<any, any>;
@@ -402,7 +404,7 @@ export class ThinQueryIter<D extends readonly any[], F extends readonly any[]> e
      */
     fold_over_storage_range<B>(
         accum: B,
-        fold: (acc: B, x: AsQueryItem<D>) => B,
+        fold: (acc: B, x: QueryItem<D>) => B,
         storage: StorageId,
         from?: number,
         to?: number
@@ -441,7 +443,7 @@ export class ThinQueryIter<D extends readonly any[], F extends readonly any[]> e
      */
     fold_over_table_range<B>(
         accum: B,
-        fold: (acc: B, x: AsQueryItem<D>) => B,
+        fold: (acc: B, x: QueryItem<D>) => B,
         table: ThinTable,
         row_start: number,
         row_end: number
@@ -481,7 +483,7 @@ export class ThinQueryIter<D extends readonly any[], F extends readonly any[]> e
      */
     fold_over_archetype_range<B>(
         accum: B,
-        fold: (acc: B, x: AsQueryItem<D>) => B,
+        fold: (acc: B, x: QueryItem<D>) => B,
         archetype: Archetype,
         index_start: number,
         index_end: number,
@@ -536,7 +538,7 @@ export class ThinQueryIter<D extends readonly any[], F extends readonly any[]> e
      */
     fold_over_dense_archetype_range<B>(
         accum: B,
-        fold: (acc: B, x: AsQueryItem<D>) => B,
+        fold: (acc: B, x: QueryItem<D>) => B,
         archetype: Archetype,
         rows_start: number,
         rows_end: number
@@ -653,7 +655,7 @@ export class ThinQueryIter<D extends readonly any[], F extends readonly any[]> e
         return this;
     }
 
-    for_each(fn: (value: AsQueryItem<D>) => void): this {
+    for_each(fn: (value: QueryItem<D>) => void): this {
         for (const proxies of this) {
             const len = this.#cursor.current_len;
             for (let i = this.index(); i < len; i = this.index()) {
@@ -767,8 +769,6 @@ function cursor_next_entity<D, F>(cursor: QueryIterationCursor<D, F>, state: Que
     }
 }
 
-const LOG_TIME = true
-
 class QueryIterationCursor<D, F> {
     readonly is_dense: boolean;
     __table_entities: Entity[];
@@ -777,14 +777,14 @@ class QueryIterationCursor<D, F> {
     __storage_id_iter: StorageId[];
     __current_len: number;
     __current_row: number;
-    __fetch: AsQueryFetch<D>;
-    __filter: AsQueryFetch<F>;
+    __fetch: QueryFetch<D>;
+    __filter: QueryFetch<F>;
 
     __item: IteratorResult<D>;
 
     constructor(
-        fetch: AsQueryFetch<D>,
-        filter: AsQueryFetch<F>,
+        fetch: QueryFetch<D>,
+        filter: QueryFetch<F>,
         storage_id_iter: StorageId[],
         is_dense: boolean,
         table_entities: Entity[] = [],
@@ -967,12 +967,12 @@ class ThinQueryIterationCursor<D extends readonly any[], F extends readonly any[
     storage_id_iter: StorageId[];
     current_len: number;
     current_row: number;
-    fetch: AsQueryFetch<D> & { proxy: any };
-    filter: AsQueryFetch<F>;
+    fetch: QueryFetch<D> & { proxy: any };
+    filter: QueryFetch<F>;
 
     constructor(
-        fetch: AsQueryFetch<D> & { proxy: any },
-        filter: AsQueryFetch<F>,
+        fetch: QueryFetch<D> & { proxy: any },
+        filter: QueryFetch<F>,
         storage_id_iter: StorageId[],
         is_dense: boolean,
         table_entities = new Uint32Array(),
@@ -1031,10 +1031,10 @@ class ThinQueryIterationCursor<D extends readonly any[], F extends readonly any[
         tables: ThinTables,
         archetypes: Archetypes,
         state: ThinQueryState<ThinQueryData, ThinQueryFilter>,
-    ): IteratorResult<AsQueryItem<D>> {
+    ): IteratorResult<QueryItem<D>> {
         if (this.is_dense) {
             // return this.index(tables, state, proxy) as any;
-            return this.next_table(tables, state) as IteratorResult<AsQueryItem<D>>;
+            return this.next_table(tables, state) as IteratorResult<QueryItem<D>>;
             // while (true) {
             // we are on the beginning of the query, or finished processing a table, so skip to the next
             // if (proxy.index === proxy.length) {
@@ -1227,8 +1227,8 @@ class ThinQueryIterationCursor<D extends readonly any[], F extends readonly any[
     }
 }
 
-// @ts-expect-error
-export class QueryCombinationIter<D extends readonly any[], F extends readonly any[], K extends number> extends Iterator<AsQueryItem<D>> {
+// @ts-ignore
+export class QueryCombinationIter<D extends readonly any[], F extends readonly any[], K extends number> extends Iterator<QueryItem<D>> {
     static new<D extends readonly any[], F extends readonly any[], K extends number>(
         _world: World,
         _state: QueryState<QueryData, QueryFilter>,
@@ -1244,13 +1244,13 @@ export class QueryCombinationIter<D extends readonly any[], F extends readonly a
         return this;
     }
 
-    next(): IteratorResult<AsQueryItem<D>> {
+    next(): IteratorResult<QueryItem<D>> {
         return iterationDone;
     }
 }
 
-// @ts-expect-error
-export class QueryManyIter<D extends readonly any[], F extends readonly any[]> extends Iterator<AsQueryItem<D>> {
+// @ts-ignore
+export class QueryManyIter<D extends readonly any[], F extends readonly any[]> extends Iterator<QueryItem<D>> {
     static new<D extends readonly any[], F extends readonly any[]>(
         _world: World,
         _state: QueryState<QueryData, QueryFilter>,
@@ -1266,13 +1266,13 @@ export class QueryManyIter<D extends readonly any[], F extends readonly any[]> e
         return this;
     }
 
-    next(): IteratorResult<AsQueryItem<D>> {
+    next(): IteratorResult<QueryItem<D>> {
         return iterationDone;
     }
 }
 
-// @ts-expect-error
-export class QueryManyUniqueIter<D extends readonly any[], F extends readonly any[]> extends Iterator<AsQueryItem<D>> {
+// @ts-ignore
+export class QueryManyUniqueIter<D extends readonly any[], F extends readonly any[]> extends Iterator<QueryItem<D>> {
 
     static new<D extends readonly any[], F extends readonly any[]>(
         _world: World,
@@ -1289,7 +1289,7 @@ export class QueryManyUniqueIter<D extends readonly any[], F extends readonly an
         return this;
     }
 
-    next(): IteratorResult<AsQueryItem<D>> {
+    next(): IteratorResult<QueryItem<D>> {
         return iterationDone;
     }
 }

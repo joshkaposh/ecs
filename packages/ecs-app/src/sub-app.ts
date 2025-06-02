@@ -11,12 +11,13 @@ import { IntoSystemSet, SystemSet } from "ecs/src/schedule/set";
 import { IntoScheduleConfig, Schedulable } from "ecs/src/schedule/config";
 import { Chain } from "ecs/src/schedule/schedule";
 
-type ExtractFn = (world1: World, world2: World) => void;
+type GetTypeRegistration = any;
 
+type ExtractFn = (world1: World, world2: World) => void;
 
 export class SubApp {
     #world!: World;
-    __plugin_registry: Plugin[];
+    __plugin_registry: Required<Plugin>[];
     __plugin_names!: Set<any>;
     __plugin_build_depth!: number;
     __plugins_state: PluginsState;
@@ -25,7 +26,7 @@ export class SubApp {
 
     constructor(
         world = new World(),
-        plugin_registry: Plugin[] = [],
+        plugin_registry: Required<Plugin>[] = [],
         plugin_names: Set<any> = new Set(),
         plugins_state: PluginsState = PluginsState.Adding,
         plugin_build_depth: number = 0,
@@ -39,7 +40,7 @@ export class SubApp {
         this.__plugins_state = plugins_state;
         this.#extract = extract;
         this.update_schedule = update_schedule;
-        world.initResource(Schedules);
+        world.initResource(Schedules as any);
     }
 
     static #memswap(self: SubApp, other: SubApp) {
@@ -141,8 +142,7 @@ export class SubApp {
     }
 
     addSystems(schedule: ScheduleLabel, systems: IntoScheduleConfig<Schedulable>) {
-        const schedules = this.#world.resource(Schedules);
-        schedules.addSystems(schedule, systems)
+        this.#world.resource(Schedules).addSystems(schedule, systems)
         return this;
     }
 
@@ -175,7 +175,7 @@ export class SubApp {
     }
 
     editSchedule(label: ScheduleLabel, f: (schedule: Schedule) => void) {
-        const schedules = this.#world.resource(Schedules);
+        const schedules = this.#world.resource(Schedules) as any;
         if (!schedules.has(label)) {
             schedules.insert(new Schedule(label))
         }
@@ -203,18 +203,35 @@ export class SubApp {
         return this;
     }
 
-    ignoreAmbiguity(label: ScheduleLabel, a: IntoSystemSet<any>, b: IntoSystemSet<any>) {
-        const schedules = this.#world.resourceMut(Schedules);
+    ignoreAmbiguity(label: ScheduleLabel, a: IntoSystemSet, b: IntoSystemSet) {
+        const schedules = this.#world.resourceMut(Schedules) as any;
         schedules.v.ignoreAmbiguity(label, a, b);
         return this;
     }
-
 
     addEvent(type: Event) {
         if (!this.#world.hasResource(type)) {
             EventRegistry.registerEvent(type, this.#world)
         }
 
+        return this;
+    }
+
+    registerType<T extends GetTypeRegistration>(_type: T) {
+        // const registry = this.#world.resourceMut(AppTypeRegistry);
+        // registry.write().register(type);
+        return this;
+    }
+
+    registerTypeData(_type: any, _data: any) {
+        // const registry = this.#world.resourceMut(AppTypeRegistry);
+        // registry.write().registerTypeData(type, data);
+        return this;
+    }
+
+    registerFunction<T extends any>(_type: T) {
+        // const registry = this.#world.resourceMut(AppFunctionRegistry);
+        // registry.write().register(type);
         return this;
     }
 

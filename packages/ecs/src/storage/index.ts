@@ -3,6 +3,7 @@ import { Resources, ThinResources } from "./resources";
 import { SparseSets, ThinSparseSets } from "./sparse-set";
 import { Tables, ThinTables } from "./table";
 import { StorageType } from './storage-type';
+
 export * from './storage-type';
 export * from './table';
 export * from './sparse-set';
@@ -20,7 +21,7 @@ export class ThinStorages {
     }
 
     prepare_component(component: ThinComponentInfo) {
-        if (component.storageType === StorageType.SparseSet) {
+        if (component.storage_type === StorageType.SparseSet) {
             this.sparse_sets.getOrSet(component);
         }
     }
@@ -31,14 +32,14 @@ export class Storages {
     readonly sparse_sets: SparseSets;
     readonly resources: Resources;
 
-    constructor(tables: Tables = Tables.default(), sparse_sets: SparseSets = new SparseSets(), resources: Resources = new Resources()) {
+    constructor(tables = new Tables(), sparse_sets = new SparseSets(), resources = new Resources()) {
         this.tables = tables;
         this.sparse_sets = sparse_sets;
         this.resources = resources;
     }
 
     prepare_component(component: ComponentInfo) {
-        if (component.storageType === StorageType.SparseSet) {
+        if (component.storage_type === StorageType.SparseSet) {
             this.sparse_sets.__getOrSet(component);
         }
     }

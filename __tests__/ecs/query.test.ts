@@ -1,19 +1,22 @@
 import { assert, test } from 'vitest'
-import { With, Without, World, Maybe, Added, mut, Changed, Entity } from 'ecs'
-import { defineComponent2, defineComponent, defineMarker } from 'define';
+import { With, Without, World, Maybe, Added, mut, Changed, Entity, QueryItem } from 'ecs'
+import { defineComponent, defineMarker } from 'define';
 import { TypedArray } from 'joshkaposh-option';
 import { skip } from '../constants';
+import { bench, bench_second } from '../performance';
+import { unit } from 'ecs-util';
 
 const A = defineComponent(class A { constructor(public value = 'hello world!') { } })
 const B = defineComponent(class B { constructor(public value = 'getting groovy!') { } })
 const C = defineComponent(class C { constructor(public value = 'c!') { } })
 const D = defineComponent(class D { constructor(public value = 'd!') { } })
+const E = defineComponent(class E { constructor(public value = 'e!') { } })
+
 
 const AVec3 = defineComponent(class AVect3 { constructor(public x = 0, public y = 0, public z = 0) { } })
 const BVec3 = defineComponent(class BVect3 { constructor(public x = 0, public y = 0, public z = 0) { } })
 const CVec3 = defineComponent(class CVect3 { constructor(public x = 0, public y = 0, public z = 0) { } })
 const DVec3 = defineComponent(class DVect3 { constructor(public x = 0, public y = 0, public z = 0) { } })
-
 
 const Vect3 = {
     x: TypedArray.f32,
@@ -21,10 +24,10 @@ const Vect3 = {
     z: TypedArray.f32,
 } as const;
 
-const ThinVec3 = defineComponent2(Vect3);
-const ThinA = defineComponent2(Vect3);
-const ThinB = defineComponent2(Vect3);
-const ThinC = defineComponent2(Vect3);
+// const ThinVec3 = defineComponent2(Vect3);
+// const ThinA = defineComponent2(Vect3);
+// const ThinB = defineComponent2(Vect3);
+// const ThinC = defineComponent2(Vect3);
 
 function assert_throws(fn: () => void) {
     assert((() => {
@@ -91,6 +94,62 @@ const skip_change_detection = true;
 
 
 // })
+
+// const un = unit;
+
+
+test('query performance', () => {
+    const simple_iter = (count: number) => {
+        const world = new World();
+        const queryAB = world.query([A, B]);
+        const queryCD = world.query([C, D]);
+        const queryCE = world.query([C, E]);
+
+        for (let i = 0; i < count; i++) {
+            world.spawn(new A('0'), new B('1'), new C('2'));
+            world.spawn(new A('0'), new B('1'), new C('2'), new D('3'));
+            world.spawn(new A('0'), new B('1'), new C('2'), new E('3'));
+        }
+
+        const systemAB = () => {
+            for (const [a, b] of queryAB.iter(world)) {
+                const x = a.value;
+                a.value = b.value;
+                b.value = x;
+            }
+        }
+
+        const systemCD = () => {
+            for (const [a, b] of queryCD.iter(world)) {
+                const x = a.value;
+                a.value = b.value;
+                b.value = x;
+            }
+        }
+
+        const systemCE = () => {
+            for (const [a, b] of queryCE.iter(world)) {
+                const x = a.value;
+                a.value = b.value;
+                b.value = x;
+            }
+        }
+
+
+        return () => {
+            systemAB();
+            systemCD();
+            systemCE();
+        }
+    }
+
+    const query = bench_second(1000, simple_iter);
+
+    console.log(`Query {
+        op/sec: ${query.hz}
+        ms/op: ${query.ms}
+        }`);
+})
 
 test.skipIf(skip.large).concurrent('large query perf test', () => {
     const w = new World();
@@ -167,8 +226,18 @@ test.skipIf(skip_non_change_detection)('query_with_marker', () => {
     const qred = w.queryFiltered([A, B], [With(Team.Red)]);
     const qblue = w.queryFiltered([A, B], [With(Team.Blue)]);
 
+
     const qab = w.query([A, B]);
     const qa = w.query([A]);
+
+    const qaiter = qa.iter(w);
+
+
+    for (const elt of qab.iter(w)) {
+        const [a, b] = elt;
+        a;
+        b;
+    }
 
     w.spawn(new A())
     w.spawn(new A())

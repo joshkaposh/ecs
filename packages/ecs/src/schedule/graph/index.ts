@@ -241,8 +241,7 @@ export function simple_cycles_in_component(graph: DiGraph, scc: NodeId[]): [Node
                     for (let i = 0; i < path.length; i++) {
                         maybe_in_more_cycles.add(path[i])
                     }
-                    // @ts-expect-error
-                    cycles.push(...path)
+                    cycles.push(...path as unknown as [NodeId, NodeId][])
 
                 } else if (!blocked.has(next)) {
                     // first time seeing `next` on this path

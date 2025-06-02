@@ -1,13 +1,15 @@
 import type { Option, View } from "joshkaposh-option";
 import { ComponentProxy, ComponentRecord, defineWorldQuery } from "define";
-import { Archetype, Component, ComponentId, Components, DeferredWorld, EntityMut, EntityRef, FilteredAccess, is_component, is_thin_component, Resource, Resources, StorageType, ThinComponents, ThinWorld, Tick, World } from "ecs";
+import { Archetype, Component, ComponentId, Components, DeferredWorld, EntityMut, EntityRef, FilteredAccess, is_component, is_thin_component, Resource, Resources, StorageType, ThinComponents, Tick, World } from "ecs";
 import { unit, debug_assert, Instance } from "../util";
 import { Entity } from "../entity";
 import { Table, TableRow, ThinTable } from "../storage/table";
-import { $WorldQuery, is_dense, RequiredWorldQuery, ThinWorldQuery, WorldQuery } from "./world-query";
+import { $WorldQuery, is_dense, InferQueryItem, RequiredWorldQuery, ThinWorldQuery, WorldQuery, InferQueryFetch, InferQueryState } from "./world-query";
 import { ComponentSparseSet, ThinComponentSparseSet } from "../storage/sparse-set";
 import { TicksMut, Ticks, Ref, Mut, ResMut, Res } from "../change_detection";
 import { ComponentTicks } from "../tick";
+
+type ThinWorld = World;
 
 export interface QueryData<Item = any, Fetch = any, State = any> extends WorldQuery<Item, Fetch, State> { }
 export interface ReadonlyQueryData<Item extends Readonly<any> = Readonly<any>, Fetch = any, State = any> extends QueryData<Item, Fetch, State> { }
@@ -17,25 +19,26 @@ export interface ReadonlyThinQueryData<Item extends Readonly<any> = Readonly<any
 
 type InferQueryData<T> =
     T extends QueryData ? T :
-    T extends Component ? Read<T> :
+    T extends Component ? WorldQuery<Readonly<InstanceType<T>>, ReadFetch<T>, ComponentId> :
+    T extends Resource ? WorldQuery<Readonly<InstanceType<T>>, ReadFetch<T>, ComponentId> :
     T extends typeof Entity ? QueryEntity :
     T extends typeof EntityRef ? QueryEntityRef :
     T extends typeof EntityMut ? QueryEntityMut :
     never;
 
-export type AsQueryItem<T> = T extends readonly any[] ? {
-    [K in keyof T]: InferQueryData<T[K]> extends RequiredWorldQuery<infer Item> ? Item : never;
-} : InferQueryData<T> extends RequiredWorldQuery<infer Item> ? Item : never;
+export type QueryItem<T> = T extends readonly any[] ? {
+    [K in keyof T]: InferQueryItem<InferQueryData<T[K]>>;
+} : InferQueryItem<InferQueryData<T>>;
 
-export type AsQueryFetch<T> = T extends readonly any[] ? {
-    [K in keyof T]: InferQueryData<T[K]> extends RequiredWorldQuery<any, infer Fetch> ? Fetch : never;
-} : InferQueryData<T> extends RequiredWorldQuery<any, infer Fetch> ? Fetch : never;
+export type QueryFetch<T> = T extends readonly any[] ? {
+    [K in keyof T]: InferQueryFetch<InferQueryData<T[K]>>;
+} : InferQueryFetch<InferQueryData<T>>;
 
 export type AsQueryState<T> = T extends readonly any[] ? {
-    [K in keyof T]: InferQueryData<T[K]> extends RequiredWorldQuery<any, any, infer State> ? State : never;
-} : InferQueryData<T> extends RequiredWorldQuery<any, any, infer State> ? State : never;
+    [K in keyof T]: InferQueryState<InferQueryData<T[K]>>;
+} : InferQueryState<InferQueryData<T>>;
 
-export type RemapQueryTupleToQueryData<T extends readonly any[]> = QueryData<AsQueryItem<T>, AsQueryFetch<T>, AsQueryState<T>>
+export type QueryTupleToQueryData<T extends readonly any[]> = QueryData<QueryItem<T>, QueryFetch<T>, AsQueryState<T>>
 
 class QueryUnit implements RequiredWorldQuery<unit, unit, unit> {
     IS_DENSE = true;
@@ -205,12 +208,10 @@ class RefComponent<T extends Component, R extends Ref<T>> implements QueryData<R
     fetch(fetch: RefFetch<T>, entity: Entity, table_row: number): R {
         return fetch.components.extract(
             (table) => {
-                const [table_components, ticks] = table!;
+                const [table_components, ticks] = table as unknown as [any[], ComponentTicks[]];
                 const component = table_components[table_row];
-                // @ts-expect-error
                 const tick = ticks[table_row];
-                const ref = new Ref(component, new Ticks(ticks as unknown as ComponentTicks, fetch.this_run, fetch.last_run))
-                // this.#refs[table_row] = ref;
+                const ref = new Ref(component, new Ticks(tick, fetch.this_run, fetch.last_run))
                 return ref;
             },
             (sparse_set) => {
@@ -325,7 +326,7 @@ class ReadThinComponent<T extends ComponentRecord> implements ThinQueryData<Read
                 () => world.storages.sparse_sets.get(component_id)!
             ),
             proxy: ComponentProxy.from_component(this.#ty as any)
-        }
+        } as any
     }
 
     set_archetype(fetch: ThinReadFetch<T>, component_id: number, _archetype: Archetype, table: ThinTable): void {
@@ -381,13 +382,13 @@ class MutComponent<T extends Component> implements QueryData<Mut<T>, MutComponen
     readonly [$WorldQuery] = true;
 
     // #ptrs: SparseSet<Mut<T>>;
-    #ptrs: Mut<T>[]
+    // #ptrs: Mut<T>[]
 
     constructor(ty: T) {
         this.#ty = ty;
         this.IS_DENSE = ty.storage_type === StorageType.Table;
         // this.#ptrs = new SparseSet();
-        this.#ptrs = [];
+        // this.#ptrs = [];
     }
 
     init_fetch(world: World, component_id: number, last_run: Tick, this_run: Tick): MutComponentFetch<T> {
@@ -625,7 +626,7 @@ class OptionComponent<T extends Component> implements QueryData<Readonly<Instanc
     }
 }
 
-export type Read<T extends Component | Resource> = T extends Resource ? ReadResource<T> : ReadComponent<T>;
+export type Read<T extends Component | Resource> = T extends Component ? ReadComponent<T> : ReadResource<T extends Resource ? T : never>;
 
 export function res<T extends Resource>(type: T) {
     return new ReadResource(type);
@@ -639,7 +640,7 @@ export function ref<T extends Component>(type: T) {
     return new RefComponent(type);
 }
 
-export type Mutable<T extends Component | Resource> = T extends Resource ? MutResource<T> : MutComponent<T>;
+export type Mutable<T extends Component | Resource> = T extends Resource ? MutResource<T> : MutComponent<T extends Component ? T : never>;
 export function mut<T extends Component>(type: T) {
     return new MutComponent(type);
 }

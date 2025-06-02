@@ -14,6 +14,20 @@ export type Class<Static extends {} = {}, Inst extends {} = {}> = (new (...args:
 
 export type Instance<T> = T extends new (...args: any[]) => any ? InstanceType<T> : T;
 
+export type NoReadonly<T> = {
+    -readonly [K in keyof T]: T[K];
+}
+
+export type DeepMutOnly<T> = NoReadonly<{
+    -readonly [K in keyof T]:
+    // Is it a primitive? Then return it
+    T[K] extends (number | string | symbol) ? T[K]
+    // Is it an array of items? Then make the array mutable and the item as well
+    : T[K] extends Array<infer A> ? Array<DeepMutOnly<A>>
+    // It is some other object, make it mutable as well
+    : DeepMutOnly<T[K]>;
+}>
+
 export type DeepReadonly<T> = Readonly<{
     [K in keyof T]:
     // Is it a primitive? Then make it readonly
@@ -24,20 +38,77 @@ export type DeepReadonly<T> = Readonly<{
     : DeepReadonly<T[K]>;
 }>
 
-export type Trait<Required, Provided> = {
-    required: Required
-    provided: Provided;
-};
+export function all_tuples_iter_into_flattened<T, R>(tuples: Iterable<(T | T[])>, callback: (element: T) => R = (e: T) => e as unknown as R, flattened: R[] = []) {
+    for (const maybeTuple of tuples) {
+        if (Array.isArray(maybeTuple)) {
+            all_tuples_into_flattened(maybeTuple, callback, flattened);
+        } else {
+            flattened.push(callback(maybeTuple));
+        }
+    }
+    return flattened;
+}
 
-export type MutOrReadonlyArray<T> =
-    T extends Array<infer Inner> ? MutOrReadonlyArray<Inner> :
-    T[] | readonly T[];
-
-export function all_tuples<T>(tuples: (T | T[])[], fn: (tuple: (T | T[])[]) => void) {
+export function all_tuples_into_flattened<T, R>(tuples: (T | T[])[], callback: (element: T) => R = (e: T) => e as unknown as R, flattened: R[] = []) {
     for (let i = 0; i < tuples.length; i++) {
         const maybeTuple = tuples[i];
         if (Array.isArray(maybeTuple)) {
-            fn(maybeTuple);
+            all_tuples_into_flattened(maybeTuple, callback, flattened);
+        } else {
+            flattened.push(callback(maybeTuple));
+        }
+    }
+    return flattened;
+}
+
+function recursively_flatten_tuples<T, T2, R>(tuples: (T | T[])[], callback: (element: T2) => R, flattened: R[] = []) {
+    for (let i = 0; i < tuples.length; i++) {
+        const maybeTuple = tuples[i];
+        if (Array.isArray(maybeTuple)) {
+            recursively_flatten_tuples(maybeTuple, callback, flattened);
+        } else {
+            flattened.push(callback(maybeTuple as unknown as T2));
+        }
+    }
+    return flattened;
+}
+
+export function flatTuples<T>(tuples: (T | T[])[], callback: (tuple: T[]) => void = (e) => e) {
+    for (let i = 0; i < tuples.length; i++) {
+        recursively_flatten_tuples(tuples[i] as (T | T[])[], callback)
+    }
+}
+
+export function toflatTuples<T, R>(tuples: (T | T[])[], callback: (tuple: T[]) => R = (e) => e as R) {
+    const flattened = new Array(tuples.length);
+
+    for (let i = 0; i < tuples.length; i++) {
+        flattened[i] = recursively_flatten_tuples(tuples[i] as (T | T[])[], callback)
+    }
+
+    return flattened;
+}
+
+export function all_tuples_iter<T>(tuples: Iterable<(T | T[])>, callback: (element: T) => void = () => { }) {
+    for (const maybeTuple of tuples) {
+        if (Array.isArray(maybeTuple)) {
+            all_tuples_into_flattened(maybeTuple, callback);
+        } else {
+            callback(maybeTuple)
+        }
+    }
+}
+
+/**
+ * Applies `callback` to every element in the possibly nested array `tuples`.
+ */
+export function all_tuples<T, R>(tuples: (T | T[])[], callback: (element: T) => R = (e: T) => e as unknown as R) {
+    for (let i = 0; i < tuples.length; i++) {
+        const maybeTuple = tuples[i];
+        if (Array.isArray(maybeTuple)) {
+            all_tuples(maybeTuple, callback);
+        } else {
+            callback(maybeTuple);
         }
     }
 }
@@ -55,6 +126,10 @@ export function is_class_instance<T extends Class>(ty: unknown): ty is InstanceT
     return ty?.constructor?.name !== 'Function' && ty?.constructor?.name !== 'Object'
 }
 
+export function type_id(type: Partial<TypeId> & { constructor: TypeId }) {
+    return type.type_id ?? type.constructor.type_id;
+}
+
 export function is_class<T extends Class>(value: unknown): value is T {
     if (is_primitive(value)) {
         return false;
@@ -62,7 +137,7 @@ export function is_class<T extends Class>(value: unknown): value is T {
     return is_class_ctor(value) || is_class_instance(value);
 }
 
-export function debug_assert(is_true: boolean, msg: string) {
+export function debug_assert(is_true: boolean, msg?: string) {
     // if (is_true) {
     //     let message = 'Assertion failed'
     //     if (msg) {

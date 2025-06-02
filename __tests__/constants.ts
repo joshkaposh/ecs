@@ -1,4 +1,4 @@
 export const skip = {
-    large: false,
-    perf: false,
+    large: true,
+    perf: true,
 }

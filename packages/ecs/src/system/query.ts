@@ -219,9 +219,9 @@ export class Query<const D extends readonly any[], const F extends readonly any[
         return single as AsQueryItem<D>;
     }
 
-    count() {
-        return this.#state.iter(this.#world).remaining();
-    }
+    // count() {
+    //     return this.#state.iter(this.#world).remaining();
+    // }
 
     is_empty(): boolean {
         return this.iter().next().done!;

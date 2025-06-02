@@ -1,11 +1,9 @@
 import { Iterator } from "joshkaposh-iterator";
 import { Entity } from "./entity";
-import { Component } from "./component";
-import { DeferredWorld, EntityFetchError, EntityWorldMut } from "./world";
+import { Component, HookContext } from "./component";
+import { DeferredWorld, EntityFetchError } from "./world";
 
-type HookContext = any;
-
-export type RelationshipHookMode = number;
+export type RelationshipHookMode = 0 | 1 | 2;
 export const RelationshipHookMode = {
     Run: 0,
     Skip: 1,
@@ -18,11 +16,11 @@ interface RelationshipProps<T extends any = any> {
     from(entity: Entity): Relationship<T>;
     onInsert?(world: DeferredWorld, context: HookContext): void;
     onReplace?(world: DeferredWorld, context: HookContext): void;
-
 }
 
-export type Relationship<T extends any = any> = Component & Required<RelationshipProps<T>>
-type RelationshipTarget<R extends Relationship> = Component & {
+export interface Relationship<T extends any = any> extends Component, Required<RelationshipProps<T>> { }
+
+export interface RelationshipTarget<R extends Relationship> extends Component {
     readonly LINKED_SPAWN: boolean;
     Relationship: R;
     Collection: RelationshipSourceCollection;
@@ -73,7 +71,7 @@ export function defineRelationship<T>(relationship: RelationshipProps<T>): Relat
 
     }
 
-    relationship.onReplace ??= function onReplace(world: DeferredWorld, context: HookContext) {
+    relationship.onReplace ??= function onReplace(_world: DeferredWorld, _context: HookContext) {
 
     }
 

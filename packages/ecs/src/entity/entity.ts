@@ -3,7 +3,7 @@ import { TODO, assert, resize } from "joshkaposh-iterator/src/util";
 import { Option, u32 } from 'joshkaposh-option';
 import { ArchetypeId, ArchetypeRow } from "../archetype";
 import { TableId, TableRow } from "../storage/table";
-import { extend, reserve, swap_remove } from "../array-helpers";
+import { reserve, swap_remove } from "../array-helpers";
 import { type SystemMeta, defineParam } from "../system";
 import type { World } from "../world";
 
@@ -260,8 +260,7 @@ class Entities {
         return loc;
     }
 
-    // @ts-expect-error
-    private __alloc_at_without_replacement(entity: Entity): AllocAtWithoutReplacement {
+    __alloc_at_without_replacement(entity: Entity): AllocAtWithoutReplacement {
         this.__verify_flushed();
 
         const i = index(entity);
@@ -269,11 +268,10 @@ class Entities {
         if (i >= this.__meta.length) {
             // TODO
             TODO('Entities.__alloc_at_without_replacement() extend call')
-            // @ts-expect-error
-            extend(this.__pending, this.__meta.length, i);
+            // extend(this.__pending, this.__meta, i);
             const new_free_cursor = this.__pending.length;
             this.__free_cursor = new_free_cursor;
-            resize(this.__meta, i + 1, EntityMeta.EMPTY);
+            // resize(this.__meta, i + 1, EntityMeta.EMPTY);
             this.__len += 1;
             result = AllocAtWithoutReplacement.DidNotExist;
         } else {
@@ -377,15 +375,13 @@ class Entities {
     ///  - `index` must be a valid entity index.
     ///  - `location` must be valid for the entity at `index` or immediately made valid afterwards
     ///    before handing control to unknown code.
-    // @ts-ignore
-    private __set(index: number, location: EntityLocation) {
+    __set(index: number, location: EntityLocation) {
         // SAFETY: Caller guarantees that `index` a valid entity index
         // self.meta.get_unchecked_mut(index as usize).location = location;
         this.__meta[index].location = location;
     }
 
-    // @ts-ignore
-    private __reserve_generations(index: number, generations: number): boolean {
+    __reserve_generations(index: number, generations: number): boolean {
         if (index >= this.__meta.length) {
             return false
         }

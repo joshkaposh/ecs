@@ -2,7 +2,9 @@ import {
     // Added,
     All,
     // Changed,
-    Component, ComponentId, Query, QueryData, QueryDataTuple, QueryFilter, QueryState, StorageType, With, Without, World
+    Component, ComponentId, Query, QueryData, QueryDataTuple, QueryFilter, QueryState, StorageType,
+    // With, Without,
+    World
 } from "ecs";
 import { FilteredAccess, UnboundedAccessError } from "./access";
 
@@ -12,9 +14,9 @@ export class QueryBuilder<const D extends any[] = [], const F extends any[] = []
 
     #or: boolean;
     #first: boolean;
-    // @ts-expect-error
+    // @ts-ignore
     #D!: QueryData;
-    // @ts-expect-error
+    // @ts-ignore
     #F!: QueryFilter;
 
     #data: D;
@@ -93,8 +95,8 @@ export class QueryBuilder<const D extends any[] = [], const F extends any[] = []
         return this;
     }
 
-    with<T extends Component>(type: T): this {
-        this.filter(With(type));
+    with<T extends Component>(_type: T): this {
+        // this.filter(With(type));
         return this;
     }
 
@@ -105,8 +107,8 @@ export class QueryBuilder<const D extends any[] = [], const F extends any[] = []
         return this;
     }
 
-    without<T extends Component>(type: T) {
-        this.filter(Without(type));
+    without<T extends Component>(_type: T) {
+        // this.filter(Without(type));
         return this;
     }
 

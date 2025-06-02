@@ -2,25 +2,22 @@ import { type World, type FromWorld, SpawnBatchIter } from "../../world";
 import { Entity } from "../../entity";
 import { Bundle, InsertMode } from "../../bundle";
 import { BundleInput } from "../../world/entity-ref";
-import { MutOrReadonlyArray } from "../../util";
 import type { Resource } from "../../component";
 import { ScheduleLabel } from "../../schedule";
 import { Event } from "../../event";
 import { defineCommand, HandleError } from "../../error/command-handling";
-
 
 export type CommandFn = (world: World) => any
 export interface Command<Out extends any = void> extends HandleError<Out> {
     exec(world: World): Out;
 }
 
-
 export function spawn_batch(bundles: BundleInput[]) {
-    return defineCommand(world => new SpawnBatchIter(world, bundles))
+    return defineCommand(world => new SpawnBatchIter(world, bundles).drop())
 }
 
-export function insert_batch(batch: MutOrReadonlyArray<[Entity, Bundle][]>, insert_mode: InsertMode) {
-    return defineCommand(world => world.tryInsertBatch(insert_mode, batch));
+export function insert_batch(batch: [Entity, Bundle][], insert_mode: InsertMode) {
+    return defineCommand(world => world.tryInsertBatch(batch, insert_mode));
 }
 
 export function init_resource<T extends Resource, R extends T & FromWorld<T>>(resource: R) {

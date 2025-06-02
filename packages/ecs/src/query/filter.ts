@@ -6,7 +6,7 @@ import { Archetype } from "../archetype";
 import { Component, ComponentId, Components, is_newer_than } from "../component";
 import { FilteredAccess } from "./access";
 import type { World } from "../world";
-import { type AsQueryState, type AsQueryFetch, type AsQueryItem, StorageSwitch } from "./fetch";
+import { type QueryState, type QueryFetch, type QueryItem, StorageSwitch } from "./fetch";
 import { Table, TableRow } from "../storage/table";
 import { unit } from "../util";
 import { ComponentSparseSet } from "../storage/sparse-set";
@@ -23,7 +23,7 @@ export interface ThinQueryFilter<Item = any, Fetch = any, State = any> extends T
     filter_fetch(fetch: Fetch, entity: Entity, table_row: number): boolean;
 }
 
-export type RemapQueryTupleToQueryFilter<T extends readonly any[]> = QueryFilter<AsQueryItem<T>, AsQueryFetch<T>, AsQueryState<T>>
+export type QueryTupleToQueryFilter<T extends readonly any[]> = QueryFilter<QueryItem<T>, QueryFetch<T>, QueryState<T>>
 
 interface FilterFetch<T extends WorldQuery<any, any, any>> {
     fetch: T;
@@ -268,7 +268,7 @@ class _Without<T extends Component> {
 defineWorldQuery(_Without.prototype);
 
 
-class _Or<F extends QueryFilter<boolean, FilterFetch<WorldQuery>, any>[]> implements QueryFilter<boolean, AsQueryFetch<F>, AsQueryState<F>> {
+class _Or<F extends QueryFilter<boolean, FilterFetch<WorldQuery>, any>[]> implements QueryFilter<boolean, QueryFetch<F>, QueryState<F>> {
     readonly IS_ARCHETYPAL: boolean;
     readonly IS_DENSE: boolean;
     readonly [$WorldQuery]: true;
@@ -291,16 +291,16 @@ class _Or<F extends QueryFilter<boolean, FilterFetch<WorldQuery>, any>[]> implem
         this.IS_DENSE = Boolean(is_dense);
     }
 
-    init_fetch(world: World, state: AsQueryState<F[]>, last_run: Tick, this_run: Tick): AsQueryFetch<F> {
+    init_fetch(world: World, state: QueryState<F[]>, last_run: Tick, this_run: Tick): QueryFetch<F> {
         return state.map((state, i) => {
             return {
                 fetch: this.#filters[i].init_fetch(world, state, last_run, this_run),
                 matches: false
             }
-        }) as AsQueryFetch<F>
+        }) as QueryFetch<F>
     }
 
-    set_table(fetch: AsQueryFetch<F>, state: AsQueryState<F>, table: Table): void {
+    set_table(fetch: QueryFetch<F>, state: QueryState<F>, table: Table): void {
         for (let i = 0; i < state.length; i++) {
             const filter = this.#filters[i];
             const filter_fetch = fetch[i];
@@ -311,7 +311,7 @@ class _Or<F extends QueryFilter<boolean, FilterFetch<WorldQuery>, any>[]> implem
         }
     }
 
-    set_archetype(fetch: AsQueryFetch<F>, state: AsQueryState<F>, archetype: Archetype, table: Table): void {
+    set_archetype(fetch: QueryFetch<F>, state: QueryState<F>, archetype: Archetype, table: Table): void {
         for (let i = 0; i < fetch.length; i++) {
             const filter = this.#filters[i];
             const filter_fetch = fetch[i] as FilterFetch<WorldQuery>;
@@ -324,7 +324,7 @@ class _Or<F extends QueryFilter<boolean, FilterFetch<WorldQuery>, any>[]> implem
 
     set_access(_state: any[], _access: FilteredAccess): void { }
 
-    fetch(fetch: AsQueryFetch<F>, entity: Entity, table_row: TableRow): boolean {
+    fetch(fetch: QueryFetch<F>, entity: Entity, table_row: TableRow): boolean {
         const filters = this.#filters;
         let b = false;
         for (let i = 0; i < filters.length; i++) {
@@ -349,12 +349,12 @@ class _Or<F extends QueryFilter<boolean, FilterFetch<WorldQuery>, any>[]> implem
         access.set_to_access(new_access)
     }
 
-    init_state(world: World): AsQueryState<F> {
-        return this.#filters.map(f => f.init_state(world)) as AsQueryState<F>;
+    init_state(world: World): QueryState<F> {
+        return this.#filters.map(f => f.init_state(world)) as QueryState<F>;
     }
 
-    get_state(components: Components): Option<AsQueryState<F>> {
-        return this.#filters.map(f => f.get_state(components)) as AsQueryState<F>;
+    get_state(components: Components): Option<QueryState<F>> {
+        return this.#filters.map(f => f.get_state(components)) as QueryState<F>;
     }
 
     matches_component_set(state: any[], set_contains_id: (component_id: ComponentId) => boolean): boolean {
@@ -374,7 +374,7 @@ class _Or<F extends QueryFilter<boolean, FilterFetch<WorldQuery>, any>[]> implem
         return Boolean(matches);
     }
 
-    filter_fetch(fetch: AsQueryFetch<F>, entity: Entity, table_row: number): boolean {
+    filter_fetch(fetch: QueryFetch<F>, entity: Entity, table_row: number): boolean {
         return this.fetch(fetch, entity, table_row);
     }
 }

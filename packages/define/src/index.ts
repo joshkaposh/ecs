@@ -1,16 +1,17 @@
 import { v4 } from 'uuid';
-import { Events, type Event, type WorldQuery, type RequiredWorldQuery } from 'ecs';
+import { Events, type Event, type WorldQuery, type RequiredWorldQuery, StorageType, World } from 'ecs';
 
 export * from './component';
 export * from './system';
 export * from './set';
 
-export function defineEvent<E extends new (...args: any[]) => any>(type: E): Event<E> {
-    // @ts-expect-error
-    type.type_id = v4();
-    // @ts-expect-error
+export function defineEvent<E extends new (...args: any[]) => any>(type: E & Partial<{
+    type_id: UUID;
+    storage_type: StorageType;
+    from_world(world: World): any;
+}>): Event<E> {
+    type.type_id = v4() as UUID;
     type.storage_type = 1;
-    // @ts-expect-error
     type.from_world = function from_world(_world) {
         return new Events(type as unknown as Event<E>);
     }
@@ -29,12 +30,10 @@ function matches_component_set() {
 
 function update_component_access() { }
 function init_state<T>(): T {
-    // @ts-expect-error
-    return
+    return undefined as unknown as T;
 }
 function get_state<T>(): T {
-    // @ts-expect-error
-    return
+    return undefined as unknown as T;
 }
 
 export function defineWorldQuery<Item extends any, Fetch extends any, State extends any>(world_query: RequiredWorldQuery<Item, Fetch, State>): WorldQuery<Item, Fetch, State> {

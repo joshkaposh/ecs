@@ -35,10 +35,9 @@ import {
     // remove,
     remove_with_requires, retain
 } from './entity-command';
-import { CommandWithEntity, defineCommand, HandleError } from '../../error';
+import { CommandWithEntity } from '../../error';
 import { Event } from '../../event';
 import { ScheduleLabel } from '../../schedule';
-import { Mut } from '../../change_detection';
 
 export * from './command';
 export * from './entity-command';
@@ -395,22 +394,22 @@ class EntityEntryCommands<T extends Component> {
     //     return this;
     // }
 
-    orInsert(type: InstanceType<T>) {
+    orInsert(type: BundleInput) {
         this.#entity_commands.insertIfNew(type);
         return this;
     }
 
-    orTryInsert(type: InstanceType<T>) {
+    orTryInsert(type: BundleInput) {
         this.#entity_commands.tryInsertIfNew(type);
         return this;
     }
 
-    orInsertWith(type: () => InstanceType<T>) {
+    orInsertWith(type: () => BundleInput) {
         return this.orTryInsert(type());
     }
 
-    or_default<D extends T extends new () => InstanceType<T> ? T : never>(this: EntityEntryCommands<D>) {
-        return this.orInsert(new this.#type() as InstanceType<T>)
+    or_default<D extends T extends new () => BundleInput ? T : never>(this: EntityEntryCommands<D>) {
+        return this.orInsert(new this.#type())
     }
 
     entity() {

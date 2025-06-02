@@ -22,10 +22,10 @@ interface ToString {
 
 }
 
-export interface SystemSetDefinition extends SystemSet, IntoSystemSet<SystemSet>, IntoScheduleConfig<Schedulable<SystemSet, Chain>>, ProcessScheduleConfig, ToString { }
+export interface SystemSetDefinition extends SystemSet, IntoSystemSet, IntoScheduleConfig<Schedulable<SystemSet, Chain>>, ProcessScheduleConfig, ToString { }
 
 export function set<const S extends readonly (System<any, any> | SystemSet | IntoScheduleConfig<Schedulable>)[]>(...system_sets: S): SystemSetDefinition {
-    const sets = system_sets.flat(Infinity) as unknown as (SystemSet & IntoSystemSet<any> & IntoScheduleConfig<Schedulable>)[];
+    const sets = system_sets.flat(Infinity) as unknown as (SystemSet & IntoSystemSet & IntoScheduleConfig<Schedulable>)[];
     const hash = get_hash_of_systems(sets);
 
     const set = SetRegistry.get(hash);

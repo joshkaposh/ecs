@@ -2,7 +2,7 @@ import { ErrorExt, Option } from "joshkaposh-option";
 import { defineEvent } from 'define';
 import type { Component, Resource } from "ecs/src/component";
 import { Event, EventCursor, Events } from "ecs/src/event";
-import type { Schedule, ScheduleBuildSettings, ScheduleLabel, SystemSet, Chain, IntoScheduleConfig, Schedulable } from "ecs/src/schedule";
+import type { Schedule, ScheduleBuildSettings, ScheduleLabel, SystemSet, Chain, IntoScheduleConfig, Schedulable, IntoSystemSet } from "ecs/src/schedule";
 import type { IntoSystem, SystemInput } from "ecs/src/system";
 import { PlaceholderPlugin, Plugin, Plugins, PluginsState } from "./plugin";
 import { SubApp, SubApps } from "./sub-app";
@@ -56,10 +56,15 @@ export { AppExit }
 
 export type AppLabel = string;
 
-export type AppError = ErrorExt<string>
-export function AppError(plugin_name: string) {
-    return new ErrorExt(plugin_name)
-}
+export type AppError = ErrorExt<string>;
+export const AppError = {
+    DuplicatePlugin(plugin_name: string) {
+        return new ErrorExt(plugin_name, `DuplicatePlugin - ${plugin_name}`);
+    }
+} as const;
+// export function AppError(plugin_name: string) {
+// return new ErrorExt(plugin_name)
+// }
 
 
 function run_once(app: App): AppExit {
@@ -90,11 +95,9 @@ export class App {
         const app = new App();
         app.#sub_apps.main.update_schedule = $Main
 
-        app.addPlugin(new MainSchedulePlugin());
+        app.addPlugin(MainSchedulePlugin);
         app.addSystems($First,
             event_update_system.inSet(EventUpdates).runIf(event_update_condition)
-            // event_update_system.inSet(EventUpdates)
-            // .runIf(event_update_condition)
         )
 
         app.addEvent(AppExit);
@@ -207,8 +210,14 @@ export class App {
         return this;
     }
 
+    registerType(type: any) {
+        this.#sub_apps.main.registerType(type);
+        return this;
+    }
+
     registerSystem<I extends SystemInput, O>(_input: I, system: IntoSystem<I, O>) {
-        return this.main.registerSystem(system);
+        this.main.registerSystem(system);
+        return this;
     }
 
     configureSets(schedule: ScheduleLabel, sets: IntoScheduleConfig<Schedulable<SystemSet, Chain>>) {
@@ -255,27 +264,24 @@ export class App {
         return res;
     }
 
-
-    addPlugin(plugin: Plugin): App {
-        // addPlugin(plugin: Plugin): Result<this, ErrorExt<AppError>> {
-        if (plugin.is_unique() && this.main.__plugin_names.has(plugin.name)) {
-            throw AppError(plugin.name)
+    addPlugin(plugin: Required<Plugin>) {
+        if (plugin.isUnique() && this.main.__plugin_names.has(plugin.name)) {
+            throw AppError.DuplicatePlugin(plugin.name)
         }
 
         const index = this.main.__plugin_registry.length;
-        this.main.__plugin_registry.push(new PlaceholderPlugin());
+        this.main.__plugin_registry.push(PlaceholderPlugin);
         this.main.__plugin_build_depth += 1;
 
         let result;
         try {
-            plugin.build(this)
+            plugin.build(this);
         } catch (error) {
             result = error
         }
 
         this.main.__plugin_names.add(plugin.name);
         this.main.__plugin_build_depth -= 1;
-
 
         if (result) {
             throw result;
@@ -298,7 +304,7 @@ export class App {
     }
 
     isPluginAdded(plugin: Plugin) {
-        return this.main.isPluginAdded(plugin)
+        return this.main.isPluginAdded(plugin);
     }
 
     getAddedPlugins(plugin: Plugin) {
@@ -345,6 +351,11 @@ export class App {
 
     updateSubAppByLabel(label: AppLabel) {
         this.#sub_apps.updateSubAppByLabel(label);
+    }
+
+    ignoreAmbiguity(schedule: ScheduleLabel, a: IntoSystemSet, b: IntoSystemSet) {
+        this.#sub_apps.main.ignoreAmbiguity(schedule, a, b);
+        return this;
     }
 
     addSchedule(label: Schedule) {

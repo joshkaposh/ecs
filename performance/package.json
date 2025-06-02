@@ -1,0 +1,17 @@
+{
+    "name": "bench",
+    "version": "0.0.1",
+    "description": "",
+    "main": "dist/src/bench.js",
+    "type": "module",
+    "scripts": {
+        "start": "node dist/src/bench.js",
+        "build": "tsc --project tsconfig.json"
+    },
+    "keywords": [],
+    "author": "",
+    "license": "MIT",
+    "devDependencies": {
+        "@types/node": "^22.15.19"
+    }
+}

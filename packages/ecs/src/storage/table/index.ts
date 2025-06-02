@@ -108,23 +108,17 @@ export class Table {
         }
     }
 
-    private __reserve(additional: number) {
-        // this.#entities.capacity() - this.#length < additional
-        if (capacity(this.#entities.length) - this.#entities.length < additional) {
-            // this.entities.reserve(additional);
-            // reserve(this.#entities,capacity(this.#length), additional);
-            // this.#length = Math.min(this.#length, additional);
+    __reserve(_additional: number) {
+        // if (capacity(this.#entities.length) - this.#entities.length < additional) {
+        //     // use entities vector capacity as driving capacity for all related allocations
+        //     let new_capacity = capacity(this.#entities.length);
 
-            // use entities vector capacity as driving capacity for all related allocations
-            let new_capacity = capacity(this.#entities.length);
-
-            const values = this.#columns.inner_values();
-            for (let i = 0; i < values.length; i++) {
-                const column = values[i]
-                // @ts-expect-error
-                column.__reserve_exact(new_capacity - column.length);
-            }
-        }
+        //     const values = this.#columns.inner_values();
+        //     for (let i = 0; i < values.length; i++) {
+        //         const column = values[i]
+        //         column.__reserve_exact(new_capacity - column.length);
+        //     }
+        // }
     }
 
     /// Allocates space for a new entity
@@ -149,9 +143,7 @@ export class Table {
     ///
     /// # Safety
     /// `row` must be in-bounds
-
-    // @ts-ignore
-    private __swapRemoveUnchecked(row: TableRow) {
+    __swapRemoveUnchecked(row: TableRow) {
         debug_assert(row < this.entityCount, '');
         const last_element_index = this.entityCount - 1;
 
@@ -159,14 +151,13 @@ export class Table {
         if (row !== last_element_index) {
             for (let i = 0; i < values.length; i++) {
                 const column = values[i];
-                // @ts-expect-error
                 column.__swapRemoveAndDropUncheckedNonoverlapping(last_element_index, row)
             }
         } else {
             for (let i = 0; i < values.length; i++) {
                 const column = values[i];
-                // @ts-expect-error
-                column.__dropLastComponent(last_element_index)
+                column.pop(last_element_index);
+                // column.__dropLastComponent(last_element_index)
             }
 
         }
@@ -178,58 +169,23 @@ export class Table {
         return ent;
     }
 
-    /// Moves the `row` column values to `new_table`, for the columns shared between both tables.
-    /// Returns the index of the new row in `new_table` and the entity in this table swapped in
-    /// to replace it (if an entity was swapped in). missing columns will be "forgotten". It is
-    /// the caller's responsibility to drop them.  Failure to do so may result in resources not
-    /// being released (i.e. files handles not being released, memory leaks, etc.)
-    ///
-    /// # Safety
-    /// Row must be in-bounds
-    // @ts-ignore
-    private __moveToAndForgetMissingUnchecked(row: TableRow, new_table: Table): TableMoveResult {
+    /**
+     * Moves the `row` column values to `new_table`, for the columns shared between both tables.
+     * Returns the index of the new row in `new_table` and the entity in this table swapped in
+     * to replace it (if an entity was swapped in).
+     * 
+     * # Safety
+     * row must be in-bounds
+     */
+
+    __moveToAndDropMissingUnchecked(row: TableRow, new_table: Table): TableMoveResult {
         const last_element_index = this.#entities.length - 1
         const is_last = row === last_element_index;
         const new_row = new_table.allocate(swap_remove(this.#entities, row)!);
 
         this.#columns.forEach((component_id, column) => {
-            let new_column = new_table.getColumn(component_id);
-            if (new_column != null) {
-                // @ts-expect-error
-                new_column.__initializeFromUnchecked(column, last_element_index, row, new_row)
-            } else {
-                // @ts-expect-error
-                column.__swapRemoveUnchecked(row)
-            }
-        })
-
-        return {
-            new_row,
-            swapped_entity: is_last ? null : this.#entities[row]
-        }
-    }
-
-    /// Moves the `row` column values to `new_table`, for the columns shared between both tables.
-    /// Returns the index of the new row in `new_table` and the entity in this table swapped in
-    /// to replace it (if an entity was swapped in).
-    ///
-    /// # Safety
-    /// row must be in-bounds
-    // @ts-ignore
-    private __moveToAndDropMissingUnchecked(row: TableRow, new_table: Table): TableMoveResult {
-        const last_element_index = this.#entities.length - 1
-        const is_last = row === last_element_index;
-        const new_row = new_table.allocate(swap_remove(this.#entities, row as number)!);
-
-        this.#columns.forEach((component_id, column) => {
-            const new_column = new_table.getColumn(component_id)
-            if (new_column) {
-                // @ts-expect-error
-                new_column.__initializeFromUnchecked(column, last_element_index, row, new_row)
-            } else {
-                // @ts-expect-error
-                column.__swapRemoveUnchecked(row)
-            }
+            const new_column = new_table.getColumn(component_id);
+            new_column ? new_column.__initializeFromUnchecked(column, last_element_index, row, new_row) : column.__swapRemoveUnchecked(row);
         })
 
         return {
@@ -244,15 +200,13 @@ export class Table {
     ///
     /// # Safety
     /// `row` must be in-bounds. `new_table` must contain every component this table has
-    // @ts-ignore
-    private __moveToSupersetUnchecked(row: TableRow, new_table: Table): TableMoveResult {
+    __moveToSupersetUnchecked(row: TableRow, new_table: Table): TableMoveResult {
         debug_assert(row < this.entityCount, '');
         const last_element_index = this.entityCount - 1;
         const is_last = row === last_element_index;
         const swapped = swap_remove(this.#entities, row)!;
         const new_row = new_table.allocate(swapped)
 
-        // @ts-expect-error
         this.#columns.forEach((component_id, column) => new_table.getColumn(component_id)!.__initializeFromUnchecked(column, last_element_index, row, new_row))
 
         return {
@@ -301,18 +255,10 @@ export class Tables {
     #tables: Table[];
     #table_ids: Map<string, TableId>;
 
-    constructor(tables: Table[] = [], table_ids: Map<string, TableId> = new Map()) {
+    constructor(tables: Table[] = [TableBuilder.withCapacity(0, 0).build()], table_ids = new Map()) {
         this.#tables = tables;
         this.#table_ids = table_ids;
     }
-
-    static default() {
-        return new Tables(
-            [TableBuilder.withCapacity(0, 0).build()],
-            new Map()
-        )
-    }
-
 
     /**
      * The total amount of tables.
@@ -334,25 +280,33 @@ export class Tables {
         }
     }
 
+    /**
+     * @returns a table at the index `id`.
+     */
     get(id: TableId): Option<Table> {
         return this.#tables[id];
     }
 
-    get2(a: TableId, b: TableId) {
+    /**
+     * @returns two tables at the indices `a` and `b`.
+     */
+    get2(a: TableId, b: TableId): [Table, Table] {
         if (a > b) {
             const [b_slice, a_slice] = split_at(this.#tables, a)!;
-            return [a_slice[0], b_slice[b]] as const;
+            return [a_slice[0], b_slice[b]];
         } else {
             const [a_slice, b_slice] = split_at(this.#tables, b)!;
-            return [a_slice[a], b_slice[0]] as const
+            return [a_slice[a], b_slice[0]];
         }
     }
 
-    /// Attempts to fetch a table based on the provided components,
-    /// creating and returning a new [`Table`] if one did not already exist.
-    ///
-    /// # Safety
-    /// `component_ids` must contain components that exist in `components`
+    /**
+     * Attempts to fetch a table based on the provided components,
+     * creating and returning a new [`Table`] if one did not already exist.
+     * 
+     * # Safety
+     * `component_ids` must contain components that exist in `components`
+     */
     __getIdOrSet(component_ids: ComponentId[], components: Components): TableId {
         if (component_ids.length === 0) {
             return TableId.empty;
@@ -360,17 +314,14 @@ export class Tables {
 
         const tables = this.#tables;
 
-        let value!: TableId;
-        const hash = component_ids.join(',')
-
-        return entry(this.#table_ids, hash, () => {
+        return entry(this.#table_ids, component_ids.join(','), () => {
+            const id = tables.length;
             const table = TableBuilder.withCapacity(0, component_ids.length)
             for (let i = 0; i < component_ids.length; i++) {
                 table.addColumn(components.getInfo(component_ids[i])!)
             }
             tables.push(table.build());
-            value = tables.length - 1;
-            return value;
+            return id;
         })
     }
 
@@ -378,6 +329,9 @@ export class Tables {
         return iter(this.#tables);
     }
 
+    /**
+     * Empties all the tables.
+     */
     clear() {
         const tables = this.#tables;
         for (let i = 0; i < tables.length; i++) {

@@ -1,14 +1,14 @@
 import { v4 } from "uuid";
 import { Option } from "joshkaposh-option";
 import { assert } from "joshkaposh-iterator/src/util";
-import { AndCondition, AndMarker, check_system_change_tick, CombinatorSystem, Condition, DeferredWorld, InternedSystemSet, IntoScheduleConfig, MAX_CHANGE_AGE, NandCondition, NandMarker, NorCondition, NorMarker, OrCondition, OrMarker, ParamBuilder, PipeSystem, relative_to, Schedulable, ScheduleConfig, ScheduleGraph, System, SystemFn, SystemMeta, SystemState, SystemTypeSet, World, XnorCondition, XnorMarker, XorCondition, XorMarker } from "ecs";
+import { AndCondition, AndMarker, check_system_change_tick, CombinatorSystem, Condition, DeferredWorld, InternedSystemSet, IntoScheduleConfig, IntoSystemSet, MAX_CHANGE_AGE, NandCondition, NandMarker, NorCondition, NorMarker, OrCondition, OrMarker, ParamBuilder, PipeSystem, relative_to, Schedulable, ScheduleConfig, ScheduleGraph, System, SystemFn, SystemMeta, SystemState, SystemTypeSet, World, XnorCondition, XnorMarker, XorCondition, XorMarker } from "ecs";
 import { unit } from "ecs/src/util";
 import { Tick } from "ecs/src/tick";
 
-interface SystemMetadata<In, Out> extends System<In, Out> {
+interface SystemMetadata<In, Out> extends System<In, Out>, IntoSystemSet {
     readonly func: SystemFn<In, Out>;
     readonly build_params: (builder: ParamBuilder) => In;
-    readonly meta: SystemMeta;
+    meta: SystemMeta;
     state: Option<SystemState<any>>
 }
 
@@ -365,7 +365,6 @@ function intoSystemSet(this: SystemMetadata<any, any>) {
 
 function clone<S extends SystemMetadata<any, any>>(this: S) {
     const cloned = { ...this };
-    // @ts-expect-error
     cloned.meta = new SystemMeta(cloned.name);
     cloned.state = null;
     return cloned
@@ -448,21 +447,21 @@ function and<In, Out extends boolean, C extends Condition<any>>(this: Condition<
     const b = other.intoSystem();
     const name = `${a.name} && ${b.name}`;
 
-    return new CombinatorSystem(new AndMarker(), a, b, name);
+    return new CombinatorSystem(AndMarker, a, b, name);
 }
 
 function nand<In, Out extends boolean, C extends Condition<any>>(this: Condition<In, Out>, other: C): NandCondition<Condition<In, Out>, C> {
     const a = this.intoSystem();
     const b = other.intoSystem();
     const name = `${a.name} && ${b.name}`;
-    return new CombinatorSystem(new NandMarker(), a, b, name);
+    return new CombinatorSystem(NandMarker, a, b, name);
 }
 
 function or<In, Out extends boolean, C extends Condition<any>>(this: Condition<In, Out>, other: C): OrCondition<Condition<In, Out>, C> {
     const a = this.intoSystem();
     const b = other.intoSystem();
     const name = `${a.name} && ${b.name}`;
-    return new CombinatorSystem(new OrMarker(), a, b, name);
+    return new CombinatorSystem(OrMarker, a, b, name);
 
 }
 
@@ -470,21 +469,21 @@ function nor<In, Out extends boolean, C extends Condition<any>>(this: Condition<
     const a = this.intoSystem();
     const b = other.intoSystem();
     const name = `${a.name} && ${b.name}`;
-    return new CombinatorSystem(new NorMarker(), a, b, name);
+    return new CombinatorSystem(NorMarker, a, b, name);
 }
 
 function xor<In, Out extends boolean, C extends Condition<any>>(this: Condition<In, Out>, other: C): XorCondition<Condition<In, Out>, C> {
     const a = this.intoSystem();
     const b = other.intoSystem();
     const name = `${a.name} && ${b.name}`;
-    return new CombinatorSystem(new XorMarker(), a, b, name) as XorCondition<Condition<In, Out>, C>;
+    return new CombinatorSystem(XorMarker, a, b, name) as XorCondition<Condition<In, Out>, C>;
 }
 
 function xnor<In, Out extends boolean, C extends Condition<any>>(this: Condition<In, Out>, other: C): XnorCondition<Condition<In, Out>, C> {
     const a = this.intoSystem();
     const b = other.intoSystem();
     const name = `${a.name} && ${b.name}`;
-    return new CombinatorSystem(new XnorMarker(), a, b, name);
+    return new CombinatorSystem(XnorMarker, a, b, name);
 }
 
 function ConditionBase<
