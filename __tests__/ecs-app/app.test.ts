@@ -1,6 +1,6 @@
 import { test, assert, expect } from "vitest";
-import { App, Plugin } from 'ecs-app';
-import { defineEvent } from "define";
+import { App } from 'ecs-app';
+import { defineEvent, definePlugin } from "define";
 import { NoopPluginGroup, PluginGroupBuilder } from "ecs-app/src/plugin-group";
 import { did_throw } from "../helpers";
 
@@ -14,19 +14,19 @@ test('app add_event', () => {
     assert(app.getEvent(MyEvent)!.getCursor() != null);
 })
 
-const PluginA = Plugin({
+const PluginA = definePlugin({
     name: 'PluginA',
-    build(app) { }
+    build() { }
 })
 
-const PluginB = Plugin({
+const PluginB = definePlugin({
     name: 'PluginB',
-    build(app) { }
+    build() { }
 })
 
-const PluginC = Plugin({
+const PluginC = definePlugin({
     name: 'PluginC',
-    build(app) { }
+    build() { }
 })
 
 

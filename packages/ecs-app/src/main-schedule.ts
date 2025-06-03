@@ -1,5 +1,5 @@
 import { iter } from "joshkaposh-iterator";
-import { defineResource, defineSystem, set } from "define";
+import { definePlugin, defineResource, defineSystem, set } from "define";
 import { Schedule, ScheduleLabel, SystemSet } from "ecs/src/schedule";
 import { is_some } from "joshkaposh-option";
 import { Plugin } from "./plugin";
@@ -121,7 +121,7 @@ const FixedMainScheduleOrder = defineResource(class FixedMainScheduleOrder {
 })
 
 export type MainSchedulePlugin = typeof MainSchedulePlugin;
-const MainSchedulePlugin = Plugin({
+const MainSchedulePlugin = definePlugin({
     name: 'MainSchedulePlugin',
     build(app: App): void {
         const main_schedule = new Schedule($Main);

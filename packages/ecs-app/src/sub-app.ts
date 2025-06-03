@@ -10,6 +10,7 @@ import { IntoSystemSet, SystemSet } from "ecs/src/schedule/set";
 // import { MainScheduleOrder } from "./main_schedule";
 import { IntoScheduleConfig, Schedulable } from "ecs/src/schedule/config";
 import { Chain } from "ecs/src/schedule/schedule";
+import { DiagnosticStore, type Diagnostic } from 'ecs-diagnostic';
 
 type GetTypeRegistration = any;
 
@@ -232,6 +233,12 @@ export class SubApp {
     registerFunction<T extends any>(_type: T) {
         // const registry = this.#world.resourceMut(AppFunctionRegistry);
         // registry.write().register(type);
+        return this;
+    }
+
+    registerDiagnostic(diagnostic: Diagnostic) {
+        this.initResource(DiagnosticStore);
+        this.world.resourceMut(DiagnosticStore).v.add(diagnostic);
         return this;
     }
 

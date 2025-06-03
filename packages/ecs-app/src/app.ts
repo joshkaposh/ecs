@@ -8,6 +8,7 @@ import { PlaceholderPlugin, Plugin, Plugins, PluginsState } from "./plugin";
 import { SubApp, SubApps } from "./sub-app";
 import { $First, $Main, MainSchedulePlugin } from "./main-schedule";
 import { event_update_condition, event_update_system, EventUpdates } from "./update-events";
+import { Diagnostic } from "ecs-diagnostic";
 
 type AppExit = InstanceType<typeof AppExit>;
 const AppExit = defineEvent(class AppExit {
@@ -217,6 +218,11 @@ export class App {
 
     registerSystem<I extends SystemInput, O>(_input: I, system: IntoSystem<I, O>) {
         this.main.registerSystem(system);
+        return this;
+    }
+
+    registerDiagnostic(diagnostic: Diagnostic) {
+        this.main.registerDiagnostic(diagnostic);
         return this;
     }
 

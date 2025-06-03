@@ -1,6 +1,7 @@
 import type { Option } from "joshkaposh-option";
 import { App, AppExit } from "./app";
-import { Plugin, PluginsState } from "./plugin";
+import { type Plugin, PluginsState } from "./plugin";
+import { definePlugin } from "define";
 
 export type RunMode = { Once: number } | { Loop: Option<number> }
 
@@ -86,6 +87,6 @@ class _ScheduleRunnerPlugin implements Plugin {
     }
 }
 
-Plugin(_ScheduleRunnerPlugin.prototype);
+definePlugin(_ScheduleRunnerPlugin.prototype);
 
 export const ScheduleRunnerPlugin = _ScheduleRunnerPlugin;

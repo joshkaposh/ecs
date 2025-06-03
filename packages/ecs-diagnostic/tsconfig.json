@@ -8,9 +8,13 @@
         "outDir": "./dist",
     },
     "paths": {
-        "@packages/ecs": "../ecs",
+        "@packages/define": "../ecs/src",
+        "@packages/ecs": "../ecs/src",
+        "@packages/ecs-time": "../ecs-time/src",
         "references": [
-            "../ecs"
+            "../define",
+            "../ecs",
+            "../ecs-time"
         ]
     }
 }

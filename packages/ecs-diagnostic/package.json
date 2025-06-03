@@ -1,0 +1,13 @@
+{
+  "name": "ecs-diagnostic",
+  "version": "0.0.1",
+  "description": "diagnostic functions and types for ECS",
+  "license": "MIT",
+  "author": "",
+  "type": "module",
+  "main": "src/index.ts",
+  "scripts": {
+    "test": "vitest"
+  },
+  "devDependencies": {}
+}

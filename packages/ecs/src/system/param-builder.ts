@@ -9,6 +9,7 @@ import { Query, ThinQuery } from "./query";
 import { Event, EventReader, Events, EventWriter } from "../event";
 import { TODO } from "joshkaposh-iterator/src/util";
 import { RemovedComponents } from "../removal-detection";
+import { Instance } from "../util";
 
 type Push<Previous extends any[], Current> = ParamBuilder<[...Previous, Current]>;
 
@@ -100,10 +101,10 @@ export class ParamBuilder<P extends any[] = []> {
     }
 
     removedComponents<T extends Component>(type: T): Push<P, RemovedComponents> {
-        return this.#add_param(RemovedComponents, (world, meta) => RemovedComponents.init_state(world, meta, world.componentId(type)));
+        return this.#add_param(RemovedComponents, (world, meta) => RemovedComponents.init_state(world, meta, world.componentId(type)!));
     }
 
-    custom<T extends SystemParam>(param: T): Push<P, SystemParamItem<T>> {
+    custom<T extends SystemParam>(param: T): Push<P, Instance<T>> {
         return this.#add_param(param, param.init_state);
     }
 }

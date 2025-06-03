@@ -1,5 +1,6 @@
 import { v4 } from 'uuid';
-import { Events, type Event, type WorldQuery, type RequiredWorldQuery, StorageType, World } from 'ecs';
+import { Events, StorageType, type Event, type WorldQuery, type Tick, type RequiredWorldQuery, type World, type SystemParam, type SystemMeta, type DeferredWorld, type Archetype } from 'ecs';
+import type { Plugin, App } from 'ecs-app';
 
 export * from './component';
 export * from './system';
@@ -46,4 +47,81 @@ export function defineWorldQuery<Item extends any, Fetch extends any, State exte
     world_query.get_state ??= get_state;
 
     return world_query as WorldQuery<Item, Fetch, State>;
+}
+
+const $PARAM_INTERNAL = Symbol('SystemParam');
+
+export function defineSystemParam<T extends Record<PropertyKey, any>>(type: T & Partial<SystemParam>): T & Required<SystemParam> {
+    if (!(type && typeof type === 'object')) {
+        throw new Error(`Invalid \`SystemParam\` type: expected a class or object`);
+    }
+
+    const fields = Object.values(type).filter(v => $PARAM_INTERNAL in v);
+    type.init_state ??= function init_state(world: World, system_meta: SystemMeta) {
+        for (let i = 0; i < fields.length; i++) {
+            fields[i].init_state(world, system_meta);
+        }
+    }
+    type.get_param ??= function get_param(state: any, meta: SystemMeta, world: World, change_tick: Tick) {
+        for (let i = 0; i < fields.length; i++) {
+            fields[i].get_param(state, meta, world, change_tick);
+        }
+
+    }
+    type.new_archetype ??= function new_archetype(state: any, archetype: Archetype, meta: SystemMeta) {
+        for (let i = 0; i < fields.length; i++) {
+            fields[i].new_archetype(state, archetype, meta);
+        }
+
+    }
+    type.validate_param ??= function validate_param(state: any, meta: SystemMeta, world: World) {
+        for (let i = 0; i < fields.length; i++) {
+            const ret = fields[i].validate_param(state, meta, world);
+            if (ret) {
+                return ret;
+            }
+        }
+
+        return
+
+    }
+    type.exec ??= function exec(state: any, meta: SystemMeta, world: World) {
+        for (let i = 0; i < fields.length; i++) {
+            fields[i].exec!(state, meta, world);
+        }
+
+    }
+    type.queue ??= function queue(state: any, meta: SystemMeta, world: DeferredWorld) {
+        for (let i = 0; i < fields.length; i++) {
+            fields[i].queue(state, meta, world);
+        }
+    }
+
+    return type as T & Required<SystemParam>;
+}
+
+export function definePlugin<T extends Plugin>(plugin: Partial<T> & { build(app: App): void; name: string }): Required<Plugin> & T {
+    // @ts-expect-error
+    plugin.type_id ??= v4() as UUID;
+
+    plugin.ready ??= function ready(_app: App) {
+        return true
+    }
+
+    plugin.finish ??= function finish(_app: App) { }
+
+    plugin.cleanup ??= function cleanup(_app: App) { }
+
+    plugin.isUnique ??= function isUnique() {
+        return true;
+    }
+    plugin.addToApp ??= function addToApp(app: App) {
+        try {
+            app.addPlugin(this as Required<Plugin>);
+        } catch (error) {
+            throw new Error(`Error adding plugin ${this.name} : plugin was already added in application`);
+        }
+    }
+
+    return plugin as Required<Plugin> & T;
 }

@@ -10,10 +10,19 @@
             "@packages/ecs-time": [
                 "../ecs-time/src"
             ],
+            "@packages/ecs": [
+                "../ecs/src"
+            ],
+            "@packages/ecs-app": [
+                "../ecs-app/src"
+            ],
+            "@packages/define": [
+                "../define/src"
+            ],
             "references": [
                 "../define",
+                "../ecs",
                 "../ecs-app",
-                "../ecs"
             ]
         }
     }

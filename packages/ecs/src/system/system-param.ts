@@ -5,6 +5,7 @@ import type { DeferredWorld, FromWorld, World } from "../world";
 import type { SystemMeta } from './function-system';
 import type { Class, Instance } from "../util";
 import type { ErrorType, Option, Result } from "joshkaposh-option";
+import { System } from ".";
 
 // TODO: implement Array<SystemParam> ... somehow
 
@@ -152,54 +153,153 @@ export interface SystemParam<State = any, Item = any> {
 
 export interface SystemBuffer<T extends any = any> extends FromWorld<T> {
     exec(system_meta: SystemMeta, world: World): void;
-    queue(system_meta: SystemMeta, world: DeferredWorld): void;
-    get(): Instance<T>;
+    queue?(system_meta: SystemMeta, world: DeferredWorld): void;
 }
 
 type DS<T> = T extends SystemParam<infer State> ? State : never;
 type DI<T> = T extends SystemParam<any, infer Item> ? Item : never;
 
-export function defineParam<T extends SystemParam>(type: T): Required<SystemParam<DS<T>, DI<T>>> {
+const $PARAM_INTERNAL = Symbol('SystemParam');
+
+export function defineParam<P extends SystemParam, T extends {}>(type: P & T): T & Required<SystemParam<DS<P>, DI<P>>> {
+    type.new_archetype ??= function new_archetype() { }
+    type.validate_param ??= function validate_param() { }
+    type.exec ??= function exec() { }
+    type.queue ??= function queue() { }
+    Object.defineProperty(type, $PARAM_INTERNAL, {
+        get() {
+            return true
+        },
+        enumerable: false,
+        configurable: false
+    })
+
+    return type as T & Required<SystemParam<DS<P>, DI<P>>>;
+}
+
+type DeriveSystemParam = Record<PropertyKey, SystemParam>;
+
+export function deriveSystemParam<T extends DeriveSystemParam>(type: T & Partial<SystemParam>) {
+    // for (const key in type) {
+    // }
+    type.init_state ??= function init_state(world: World, system_meta: SystemMeta) {
+        for (const key in type) {
+            const value = type[key];
+            if ($PARAM_INTERNAL in value) {
+                value.init_state(world, system_meta);
+            }
+        }
+    }
+    type.get_param ??= function get_param(state: any, meta: SystemMeta, world: World, change_tick: Tick) {
+        for (const key in type) {
+            const value = type[key];
+            if ($PARAM_INTERNAL in value) {
+                value.get_param(state, meta, world, change_tick);
+            }
+        }
+
+    }
+    type.new_archetype ??= function new_archetype(state: any, archetype: Archetype, meta: SystemMeta) {
+        for (const key in type) {
+            const value = type[key];
+            if ($PARAM_INTERNAL in value) {
+                value.new_archetype!(state, archetype, meta);
+            }
+        }
+
+    }
+    type.validate_param ??= function validate_param(state: any, meta: SystemMeta, world: World) {
+        for (const key in type) {
+            const value = type[key];
+            if ($PARAM_INTERNAL in value) {
+                const ret = value.validate_param!(state, meta, world);
+                if (ret) {
+                    return ret;
+                }
+            }
+        }
+
+        return
+
+    }
+    type.exec ??= function exec(state: any, meta: SystemMeta, world: World) {
+        for (const key in type) {
+            const value = type[key];
+            if ($PARAM_INTERNAL in value) {
+                value.exec!(state, meta, world);
+            }
+        }
+
+    }
+    type.queue ??= function queue(state: any, meta: SystemMeta, world: DeferredWorld) {
+        for (const key in type) {
+            const value = type[key];
+            if ($PARAM_INTERNAL in value) {
+                value.queue!(state, meta, world);
+            }
+        }
+    }
+}
+
+export function defineSystemParam<P extends SystemParam, T>(type: P & T): Required<P> & T {
     type.new_archetype ??= function new_archetype() { }
     type.validate_param ??= function validate_param() { }
     type.exec ??= function exec() { }
     type.queue ??= function queue() { }
 
-    return type as Required<SystemParam<DS<T>, DI<T>>>;
+    return type as Required<P> & T;
 }
 
-export type Deferred<T> = SystemParam;
-const Deferred = {
-    from_world() { },
+export interface Deferred<T> extends Required<SystemParam> {
+    get(): Instance<T>;
+};
 
-    init_state<T extends SystemBuffer>(world: World, system_meta: SystemMeta, type: T) {
-        system_meta.setHasDeferred();
-        return type.from_world(world);
-    },
+export function Deferred<T>(type: FromWorld<T>): Deferred<T> {
+    return {
+        init_state(world, system_meta) {
+            system_meta.setHasDeferred();
+            return type.from_world(world);
+        },
+        new_archetype(_state, _archetype, _system_meta) { },
 
-    validate_param(_state: SystemBuffer, _system_meta: SystemMeta, _world: World) { },
+        validate_param(_state, _system_meta, _world) { },
 
-    new_archetype(_state: SystemBuffer, _archetype: Archetype, _system_meta: SystemMeta) {
-    },
+        queue(state, system_meta, world) {
+            state.queue(system_meta, world);
+        },
 
-    exec(state: SystemBuffer, system_meta: SystemMeta, world: World) {
-        state.exec(system_meta, world);
-    },
+        exec(state, system_meta, world) {
+            state.exec(system_meta, world)
+        },
 
-    queue(state: SystemBuffer, system_meta: SystemMeta, world: DeferredWorld) {
-        state.queue(system_meta, world);
-    },
+        get_param(state, _system, _world, _change_tick) {
+            return state.get();
+        },
 
-    get_param<T extends SystemBuffer>(state: T, _system_meta: SystemMeta, _world: World, _change_tick: Tick) {
-        return state.get();
-    },
+        get() {
+            return type as Instance<T>;
+        }
+    }
+}
+Deferred.init_state = function init_state<T>(this: FromWorld<T>, world: World, meta: SystemMeta): Deferred<T> {
+    meta.setHasDeferred();
+    return this.from_world(world) as Deferred<T>;
+}
+Deferred.new_archetype = function new_archetype(this: any, _archetype: Archetype, _meta: SystemMeta) { }
 
-    get() { }
+Deferred.validate_param = function validate_param(this: any, _meta: SystemMeta, _world: World) { }
 
-} as const;
+Deferred.queue = function queue(state: Required<SystemBuffer>, meta: SystemMeta, world: DeferredWorld) {
+    state.queue(meta, world);
+}
 
-defineParam(Deferred);
-export { Deferred }
+Deferred.exec = function exec(state: Required<SystemBuffer>, meta: SystemMeta, world: World) {
+    state.exec(meta, world);
+}
+
+Deferred.get_param = function get_param(state: any, _meta: SystemMeta, _world: World, _change_tick: Tick) {
+    return state.get();
+}
 
 export type SystemParamItem<T> = T extends SystemParam<any, infer Item> ? Item : never;
 export type SystemParamState<T> = T extends SystemParam<infer State> ? State : never;

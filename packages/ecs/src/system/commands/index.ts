@@ -7,7 +7,6 @@ import { Entities, Entity, EntityDoesNotExistDetails } from '../../entity';
 // import { Event } from '../../event';
 // import { ScheduleLabel } from '../../schedule';
 // import { SystemIn } from '../system';
-import { MutOrReadonlyArray } from '../../util';
 import { CommandQueue, DeferredWorld, FromWorld, RawCommandQueue, World } from '../../world';
 import {
     BundleInput,
@@ -46,7 +45,7 @@ export * from './entity-command';
 
 type InternalQueue = CommandQueue | RawCommandQueue;
 
-type FetchState = [typeof Deferred, Entities];
+type FetchState<T extends any = any> = [Deferred<T>, Entities];
 
 export class Commands implements SystemParamClass<typeof Commands> {
     #queue: InternalQueue;
@@ -79,29 +78,29 @@ export class Commands implements SystemParamClass<typeof Commands> {
 
     //* SystemParam impl
     static init_state(world: World, system_meta: SystemMeta): FetchState {
-        return [Deferred.init_state(
+        return [Deferred.init_state.call(
+            CommandQueue,
             world,
             system_meta,
-            CommandQueue as any
         ),
         world.entities
         ]
     }
 
     static new_archetype(state: FetchState, archetype: Archetype, system_meta: SystemMeta) {
-        Deferred.new_archetype(state[0] as any, archetype, system_meta);
+        Deferred.new_archetype.call(state[0] as any, archetype, system_meta);
     }
 
     static exec(state: FetchState, system_meta: SystemMeta, world: World) {
-        Deferred.exec(state[0] as unknown as SystemBuffer, system_meta, world);
+        Deferred.exec(state[0] as unknown as Required<SystemBuffer>, system_meta, world);
     }
 
     static queue(state: FetchState, system_meta: SystemMeta, world: DeferredWorld) {
-        Deferred.queue(state[0] as unknown as SystemBuffer, system_meta, world);
+        Deferred.queue(state[0] as unknown as Required<SystemBuffer>, system_meta, world);
     }
 
     static validate_param(state: FetchState, system_meta: SystemMeta, world: World) {
-        Deferred.validate_param(state[0] as unknown as SystemBuffer, system_meta, world);
+        Deferred.validate_param.call(state[0], system_meta, world);
     }
 
     static get_param(state: FetchState, _system_meta: SystemMeta, _world: World, _change_tick: Tick) {
@@ -152,19 +151,19 @@ export class Commands implements SystemParamClass<typeof Commands> {
         this.#queue.push(command.handle_error_with(error_handler as any))
     }
 
-    insertBatch(bundles: MutOrReadonlyArray<[Entity, Bundle][]>) {
+    insertBatch<const T extends [Entity, Bundle][]>(bundles: T) {
         this.queue(insert_batch(bundles, InsertMode.Replace))
     }
 
-    insertBatchIfNew(bundles: MutOrReadonlyArray<[Entity, Bundle][]>) {
+    insertBatchIfNew<const T extends [Entity, Bundle][]>(bundles: T) {
         this.queue(insert_batch(bundles, InsertMode.Keep))
     }
 
-    tryInsertBatch(bundles: MutOrReadonlyArray<[Entity, Bundle][]>) {
+    tryInsertBatch<const T extends [Entity, Bundle][]>(bundles: T) {
         this.queue(insert_batch(bundles, InsertMode.Replace).handle_error_with(console.warn))
     }
 
-    tryInsertBatchIfNew(bundles: MutOrReadonlyArray<[Entity, Bundle][]>) {
+    tryInsertBatchIfNew<const T extends [Entity, Bundle][]>(bundles: T) {
         this.queue(insert_batch(bundles, InsertMode.Keep).handle_error_with(console.warn))
     }
 

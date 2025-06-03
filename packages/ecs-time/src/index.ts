@@ -1,14 +1,31 @@
-import { defineResource, defineSystem, set } from 'define';
-import { $First, $FixedPostUpdate, $RunFixedMainLoop, event_update_system, Plugin, RunFixedMainLoopSystem, signal_event_update_system } from 'ecs-app';
+import type { Err } from 'joshkaposh-option';
 import { EventRegistry, ShouldUpdateEvents } from 'ecs';
+import { $First, $FixedPostUpdate, $RunFixedMainLoop, event_update_system, Plugin, RunFixedMainLoopSystem, signal_event_update_system } from 'ecs-app';
+import { definePlugin, defineResource, defineSystem, set } from 'define';
 import { Time } from './time';
 import { Real } from './real';
 import { Fixed, run_fixed_main_schedule } from './fixed';
 import { update_virtual_time, Virtual } from './virtual';
 
+class TimeError extends Error implements Err<number> {
+    #invalid_duration: number;
+    constructor(invalid_duration: number) {
+        super(`Invalid duration: ${invalid_duration} cannot be less than zero`);
+        this.#invalid_duration = invalid_duration;
+    }
+
+    get(): number {
+        return this.#invalid_duration;
+    }
+}
+
+export function durationSince(lhs: number, rhs: number): number | TimeError {
+    return lhs > rhs ? new TimeError(rhs - lhs) : rhs - rhs;
+}
+
 export const TimeSystems = set();
 
-export const TimePlugin = Plugin({
+export const TimePlugin = definePlugin({
     name: 'TimePlugin',
     build(app) {
         app.initResource(Time)

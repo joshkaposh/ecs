@@ -1,5 +1,5 @@
+import { definePlugin } from "define";
 import { App } from "./app";
-import { v4 } from "uuid";
 
 export interface Plugin {
     readonly name: string;
@@ -22,31 +22,31 @@ export interface Plugin {
     isUnique?(): boolean;
 }
 
-export function Plugin<T extends Plugin>(plugin: Partial<T> & { build(app: App): void; name: string }): Required<Plugin> & T {
-    // @ts-expect-error
-    plugin.type_id ??= v4() as UUID;
+// export function Plugin<T extends Plugin>(plugin: Partial<T> & { build(app: App): void; name: string }): Required<Plugin> & T {
+//     // @ts-expect-error
+//     plugin.type_id ??= v4() as UUID;
 
-    plugin.ready ??= function ready(_app: App) {
-        return true
-    }
+//     plugin.ready ??= function ready(_app: App) {
+//         return true
+//     }
 
-    plugin.finish ??= function finish(_app: App) { }
+//     plugin.finish ??= function finish(_app: App) { }
 
-    plugin.cleanup ??= function cleanup(_app: App) { }
+//     plugin.cleanup ??= function cleanup(_app: App) { }
 
-    plugin.isUnique ??= function isUnique() {
-        return true;
-    }
-    plugin.addToApp ??= function addToApp(app: App) {
-        try {
-            app.addPlugin(this as Required<Plugin>);
-        } catch (error) {
-            throw new Error(`Error adding plugin ${this.name} : plugin was already added in application`);
-        }
-    }
+//     plugin.isUnique ??= function isUnique() {
+//         return true;
+//     }
+//     plugin.addToApp ??= function addToApp(app: App) {
+//         try {
+//             app.addPlugin(this as Required<Plugin>);
+//         } catch (error) {
+//             throw new Error(`Error adding plugin ${this.name} : plugin was already added in application`);
+//         }
+//     }
 
-    return plugin as Required<Plugin> & T;
-}
+//     return plugin as Required<Plugin> & T;
+// }
 
 export type PluginsState = 0 | 1 | 2 | 3;
 export const PluginsState = {
@@ -57,7 +57,7 @@ export const PluginsState = {
 } as const
 
 export type PlaceholderPlugin = typeof PlaceholderPlugin;
-export const PlaceholderPlugin = Plugin({
+export const PlaceholderPlugin = definePlugin({
     name: 'PlaceHolderPlugin',
     build() { }
 })
