@@ -1,11 +1,42 @@
 {
     "extends": "./tsconfig.common.json",
-    "include": [
-        "packages/ecs-util",
-        "packages/ecs",
-        "packages/ecs-app",
-        "packages/ecs-input",
-        "packages/ecs-math",
-        "packages/ecs-ui"
+    "files": [],
+    "references": [
+        {
+            "path": "packages/define"
+        },
+        {
+            "path": "packages/ecs-app"
+        },
+        {
+            "path": "packages/ecs-core-pipeline"
+        },
+        {
+            "path": "packages/ecs-diagnostic"
+        },
+        {
+            "path": "packages/ecs-input"
+        },
+        {
+            "path": "packages/ecs-internal"
+        },
+        {
+            "path": "packages/ecs-math"
+        },
+        {
+            "path": "packages/ecs-render"
+        },
+        {
+            "path": "packages/ecs-time"
+        },
+        {
+            "path": "packages/ecs-transform"
+        },
+        {
+            "path": "packages/ecs-ui"
+        },
+        {
+            "path": "packages/ecs-util"
+        }
     ]
 }

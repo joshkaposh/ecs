@@ -8,4 +8,4 @@ test('into_system_type_id_consistency', () => {
 
     assert(system.type_id === function_system.system_type_id)
     assert(system.type_id !== reference_system.intoSystem().type_id)
-})
+});

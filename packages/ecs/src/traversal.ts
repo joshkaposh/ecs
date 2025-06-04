@@ -12,7 +12,7 @@ export interface Traversal<D> extends RequiredWorldQuery {
 export const traversal_unit = defineWorldQuery({
     IS_DENSE: true,
     [$WorldQuery]: true,
-    init_fetch(_world, _state, _last_run, this_run) {
+    init_fetch(_world, _state, _last_run, _this_run) {
         return unit;
     },
 

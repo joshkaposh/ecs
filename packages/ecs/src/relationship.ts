@@ -1,7 +1,7 @@
-import { Iterator } from "joshkaposh-iterator";
-import { Entity } from "./entity";
-import { Component, HookContext } from "./component";
-import { DeferredWorld, EntityFetchError } from "./world";
+import type { Iterator } from "joshkaposh-iterator";
+import type { Entity } from "./entity";
+import type { Component, HookContext } from "./component";
+import type { DeferredWorld } from "./world";
 
 export type RelationshipHookMode = 0 | 1 | 2;
 export const RelationshipHookMode = {
@@ -10,7 +10,7 @@ export const RelationshipHookMode = {
     RunIfNotLinked: 2,
 } as const;
 
-interface RelationshipProps<T extends any = any> {
+export interface RelationshipProps<T extends any = any> {
     readonly RelationshipTarget: RelationshipTarget<Relationship<T>>;
     get(): Entity;
     from(entity: Entity): Relationship<T>;
@@ -39,42 +39,4 @@ export interface RelationshipSourceCollection {
     extendFromIter(iterable: Iterable<Entity>): void;
 }
 
-
-
-export function defineRelationship<T>(relationship: RelationshipProps<T>): Relationship<T> {
-    relationship.onInsert ??= function onInsert(world: DeferredWorld, context: HookContext) {
-        const { entity, relationship_hook_mode } = context;
-        if (relationship_hook_mode === RelationshipHookMode.Run) {
-
-        } else if (relationship_hook_mode === RelationshipHookMode.Skip) {
-            return;
-        } else {
-            // RelationshipHookMode.RunIfNotLinked
-            if (this.RelationshipTarget.LINKED_SPAWN) {
-                return
-            }
-        }
-
-        const target_entity = world.entity(entity);
-        if (target_entity.id === entity) {
-            console.warn(`The ({${this}}) ${target_entity} relationship on entity ${entity} points to itself.  The invalid `);
-            world.commands.entity(entity).remove(this as any);
-            return
-        }
-
-        const target_entity_mut = world.getEntityMut(target_entity as any) as any;
-
-        if (!(target_entity_mut instanceof EntityFetchError)) {
-            const relationship_target = target_entity_mut.getMut(this.RelationshipTarget);
-            relationship_target.collection_mut_risky().add(entity);
-        }
-
-    }
-
-    relationship.onReplace ??= function onReplace(_world: DeferredWorld, _context: HookContext) {
-
-    }
-
-    return relationship as Relationship<T>;
-}
 

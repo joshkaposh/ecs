@@ -1,25 +1,26 @@
 {
     "extends": "../../tsconfig.json",
     "include": [
-        "src"
+        "./src"
     ],
     "compilerOptions": {
         "emitDeclarationOnly": true,
         "outDir": "./dist",
         "paths": {
-            "@packages/ecs": [
-                "../ecs/src"
+            "define": [
+                "../define"
             ],
-            "@packages/define": [
-                "../define/src"
-            ],
-            "@packages/ecs-util": [
-                "../ecs-util/src"
-            ],
-            "references": [
-                "../ecs-util/src",
-                "../define/src"
+            "ecs-util": [
+                "../ecs-util"
             ]
         }
-    }
+    },
+    "references": [
+        {
+            "path": "../define"
+        },
+        {
+            "path": "../ecs-util"
+        }
+    ]
 }

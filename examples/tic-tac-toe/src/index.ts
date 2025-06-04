@@ -1,11 +1,10 @@
-import { set } from 'define';
-import { $PostUpdate, $Startup, $Update, App, Plugin, ScheduleRunnerPlugin } from 'ecs-app';
-import { InputPlugin } from 'ecs-input';
-import { Render2dPlugin } from 'ecs-render';
+import { definePlugin, set } from 'define';
+import { $PostUpdate, $Startup, $Update, App } from 'ecs-app';
+import { DefaultPlugins } from 'ecs-internal';
 import { Board } from './components';
 import { can_select, check_win, game_over, render_grid, render_selected, select_square, spawn_squares } from './systems';
 
-const TicTacToePlugin = Plugin({
+const TicTacToePlugin = definePlugin({
     name: 'TicTacToePlugin',
     build(app) {
         app
@@ -23,9 +22,7 @@ const TicTacToePlugin = Plugin({
 
 function init() {
     App.default()
-        .addPlugin(ScheduleRunnerPlugin.runLoop())
-        .addPlugin(InputPlugin)
-        .addPlugin(Render2dPlugin)
+        .addPlugins(new DefaultPlugins())
         .addPlugin(TicTacToePlugin)
         .run();
 }

@@ -1,130 +1,110 @@
-import { $PostUpdate, App, Plugin, Plugins, ScheduleRunnerPlugin } from 'ecs-app';
+import { definePlugin, set } from 'define';
+import { $PostUpdate, App, Plugins, ScheduleRunnerPlugin } from 'ecs-app';
+import { TimePlugin } from 'ecs-time';
+import { InputPlugin } from 'ecs-input';
+import { DiagnosticsPlugin, FrameCountPlugin } from 'ecs-diagnostic';
+// TODO: use env to determine if rendering is 2d or 3d
+import { Render2dPlugin as RenderPlugin } from 'ecs-render';
+import { UiPlugin } from 'ecs-ui';
 
-const PanicHandlerPlugin = Plugin({
+const PanicHandlerPlugin = definePlugin({
     name: 'PanicHandlerPlugin',
-    build(app: App): void {
-    }
-})
+    build() { }
+});
 
-const LogPlugin = Plugin({
-    build(app: App): void {
-    }
-})
+const LogPlugin = definePlugin({
+    name: 'LogPlugin',
+    build() { }
+});
 
-const FrameCountPlugin = Plugin({
-    build(app: App): void {
-    }
-})
+const WindowPlugin = definePlugin({
+    name: 'WindowPlugin',
+    build() { }
+});
 
-const WindowPlugin = Plugin({
-    build(app: App): void {
+const AccessibilityPlugin = definePlugin({
+    name: 'AccessibilityPlugin',
+    build() { }
+});
 
-    }
-})
+const TransformPlugin = definePlugin({
+    name: 'TransformPlugin',
+    build() { }
+});
 
-const AccessibilityPlugin = Plugin({
-    build(app: App): void {
-    }
-})
+const AssetPlugin = definePlugin({
+    name: 'AssetPlugin ',
+    build() { }
+});
 
-const InputPlugin = Plugin({
-    build(app: App): void {
-    }
-})
+const ScenePlugin = definePlugin({
+    name: 'ScenePlugin ',
+    build() { }
+});
 
-const TimePlugin = Plugin({
-    build(app: App): void {
-    }
-})
+const ImagePlugin = definePlugin({
+    name: 'ImagePlugin',
+    build() { }
+});
 
-const TransformPlugin = Plugin({
-    build(app: App): void {
-    }
-})
+const PipelinedRenderingPlugin = definePlugin({
+    name: 'PipelinedRenderingPlugin',
+    build() { }
+});
 
-const DiagnosticsPlugin = Plugin({
-    build(app: App): void {
-    }
-})
+const CorePipelinePlugin = definePlugin({
+    name: 'CorePipelinePlugin',
+    build() { }
+});
 
-const AssetPlugin = Plugin({
-    build(app: App): void {
-    }
-})
+const AntiAliasingPlugin = definePlugin({
+    name: 'AntiAliasingPlugin',
+    build() { }
+});
 
-const ScenePlugin = Plugin({
-    build(app: App): void {
-    }
-})
+const SpritePlugin = definePlugin({
+    name: 'SpritePlugin',
+    build() { }
+});
 
-const RenderPlugin = Plugin({
-    build(app: App): void {
-    }
-})
+const TextPlugin = definePlugin({
+    name: 'TextPlugin',
+    build() { }
+});
 
-const ImagePlugin = Plugin({
-    build(app: App): void {
-    }
-})
+const AudioPlugin = definePlugin({
+    name: 'AudioPlugin',
+    build() { }
+});
 
-const PipelinedRenderingPlugin = Plugin({
-    build(app: App): void {
-    }
-})
+const AnimationPlugin = definePlugin({
+    name: 'AnimationPlugin',
+    build() { }
+});
 
-const CorePipelinePlugin = Plugin({
-    build(app: App): void {
-    }
-})
+const StatesPlugin = definePlugin({
+    name: 'StatesPlugin',
+    build() { }
+});
 
-const AntiAliasingPlugin = Plugin({
-    build(app: App): void {
-    }
-})
+const DevToolsPlugin = definePlugin({
+    name: 'DevToolsPlugin',
+    build() { }
+});
 
-const SpritePlugin = Plugin({
-    build(app: App): void {
-    }
-})
+const CiTestingPlugin = definePlugin({
+    name: 'CiTestingPlugin',
+    build() { }
+});
 
-const TextPlugin = Plugin({
-    build(app: App): void {
-    }
-})
+// TODO: implement
+const advanceAnimations = set();
+const uiLayoutSystem = set();
+const animateTargets = set();
 
-const UiPlugin = Plugin({
-    build(app: App): void {
-    }
-})
-
-const AudioPlugin = Plugin({
-    build(app: App): void {
-    }
-})
-
-const AnimationPlugin = Plugin({
-    build(app: App): void {
-    }
-})
-
-const StatesPlugin = Plugin({
-    build(app: App): void {
-    }
-})
-
-const DevToolsPlugin = Plugin({
-    build(app: App): void {
-    }
-})
-
-const CiTestingPlugin = Plugin({
-    build(app: App): void {
-
-    }
-})
-
-const IgnoreAmbiguitiesPlugin = Plugin({
-    build(app: App): void {
+const IgnoreAmbiguitiesPlugin = definePlugin({
+    name: 'IgnoreAmbiguitiesPlugin',
+    build(app: App) {
         const env = import.meta.env;
         if (env.ANIMATION && env.UI) {
             if (app.isPluginAdded(AnimationPlugin)
@@ -134,7 +114,7 @@ const IgnoreAmbiguitiesPlugin = Plugin({
             }
         }
     }
-})
+});
 
 export class DefaultPlugins implements Plugins {
     #panic_handler = PanicHandlerPlugin;
@@ -164,7 +144,7 @@ export class DefaultPlugins implements Plugins {
     #dev_tools?: typeof DevToolsPlugin;
     #ci_testing?: typeof CiTestingPlugin;
 
-    addToApp(app: App): void {
+    addToApp(app: App) {
         app
             .addPlugin(this.#panic_handler)
             .addPlugin(this.#frame_count)
@@ -243,12 +223,12 @@ export class DefaultPlugins implements Plugins {
 }
 
 export class MinimalPlugins implements Plugins {
-    #frame_count = new FrameCountPlugin();
-    #time = new TimePlugin();
+    #frame_count = FrameCountPlugin;
+    #time = TimePlugin;
     #runner = ScheduleRunnerPlugin.runLoop();
-    #ci_testing?: CiTestingPlugin;
+    #ci_testing?: typeof CiTestingPlugin;
 
-    addToApp(app: App): void {
+    addToApp(app: App) {
         app
             .addPlugin(this.#frame_count)
             .addPlugin(this.#time)

@@ -84,7 +84,7 @@ test('update with duration', () => {
 
     assert(time.first_update() === startup + secs(1));
     assert(time.last_update() === startup + secs(3));
-    assert(time.delta === secs(1));
+    assert(time.delta === secs(1), `${time.delta} !== ${secs(1)}`);
     assert(time.elapsed === secs(2));
 });
 

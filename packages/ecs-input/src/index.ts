@@ -1,6 +1,6 @@
-import { defineEvent } from 'define';
-import { EventWriter } from 'ecs';
-import { App, Plugin } from 'ecs-app';
+import { defineEvent, definePlugin } from 'define';
+import type { EventWriter } from 'ecs';
+import type { App } from 'ecs-app';
 import { AccumulatedMouseMotion, MouseButton, MouseButtonInput, MouseMotion } from './mouse';
 import { KeyboardButtonInput, Key } from './keyboard';
 import { ButtonInput } from './button_input';
@@ -46,7 +46,7 @@ function handleKeyup(this: InstanceType<typeof KeyboardButtonInput>, e: Keyboard
     this.release(e.code as Key);
 }
 
-export const InputPlugin = Plugin({
+export const InputPlugin = definePlugin({
     name: 'InputPlugin',
     build(app: App): void {
         app

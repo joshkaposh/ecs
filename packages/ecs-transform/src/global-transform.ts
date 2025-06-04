@@ -1,8 +1,93 @@
 import { defineComponent } from "define";
 import { Transform } from "./transform";
 
+class Mat4 {
+    constructor(translation: any, rotation: any) {
+
+    }
+
+    static from(affine: Affine3A) {
+        const [_, rotation, translation] = affine.toScaleRotationTranslation()
+        return new Mat4(translation, rotation);
+    }
+}
+
+class Mat3 {
+    determinant(): any { }
+}
+
+class Vec3 {
+    x: number;
+    y: number;
+    z: number;
+
+    static get ZERO() {
+        return new Vec3();
+    }
+
+
+
+    constructor(x = 0, y = 0, z = 0) {
+        this.x = x;
+        this.y = y;
+        this.z = z;
+    }
+}
+
+class Isometry3d {
+
+    constructor(translation: Vec3, rotation: Vec3) {
+
+    }
+
+    into() { }
+}
+type Quat = any;
+type Vec3A = any;
+
+class Affine3A {
+    translation: Vec3;
+    rotation: Vec3;
+    scale: Vec3;
+    matrix3: Mat3;
+
+    constructor(translation = new Vec3(), rotation = new Vec3(), scale = new Vec3()) {
+        this.translation = translation;
+        this.rotation = rotation;
+        this.scale = scale;
+        this.matrix3 = new Mat3();
+    }
+
+    static get IDENTITY() {
+        return new Affine3A();
+    }
+
+
+    static fromMat4(mat: Mat4) {
+        return new Affine3A()
+    }
+
+    static fromTranslation(translation: Vec3) {
+        return new Affine3A(translation);
+    }
+
+    static fromRotationTranslation(rotation: Vec3, translation: Vec3) {
+        return new Affine3A(translation, rotation);
+    }
+
+    static fromScale(scale: Vec3) {
+        return new Affine3A(new Vec3(), new Vec3(), scale);
+    }
+
+    toScaleRotationTranslation(): [Vec3, Vec3, Vec3] {
+        return [] as any;
+    }
+
+    transformPoint(point: Vec3) { }
+}
+
 export const GlobalTransform = defineComponent(class GlobalTransform {
-    #inner: any;
+    #inner: Affine3A;
 
     constructor(inner: any = Affine3A.IDENTITY) {
         this.#inner = inner;
@@ -12,37 +97,37 @@ export const GlobalTransform = defineComponent(class GlobalTransform {
         return new GlobalTransform(Affine3A.IDENTITY);
     }
 
-    static from_transform(transform: Transform) {
-        return new GlobalTransform(transform.compute_affine());
+    static fromTransform(transform: InstanceType<Transform>) {
+        return new GlobalTransform(transform.computeAffine());
     }
 
-    static from_mat4(world_from_local: Mat4) {
-        return new GlobalTransform(Affine3A.from_mat4(world_from_local));
-    }
-
-
-    static from_xyz(x: number, y: number, z: number) {
-        return GlobalTransform.from_translation([x, y, z]);
+    static fromMat4(world_from_local: Mat4) {
+        return new GlobalTransform(Affine3A.fromMat4(world_from_local));
     }
 
 
-    static from_translation(translation: Vec3) {
-        return new GlobalTransform(Affine3A.from_translation(translation));
+    static fromXYZ(x: number, y: number, z: number) {
+        return GlobalTransform.fromTranslation(new Vec3(x, y, z));
     }
 
-    static from_rotation(rotation: Quat) {
-        return new GlobalTransform(Affine3A.from_rotation_translation(rotation, Vec3.ZERO));
+
+    static fromTranslation(translation: Vec3) {
+        return new GlobalTransform(Affine3A.fromTranslation(translation));
     }
 
-    static from_scale(scale: Vec3) {
-        return new GlobalTransform(Affine3A.from_scale(scale));
+    static fromRotation(rotation: Quat) {
+        return new GlobalTransform(Affine3A.fromRotationTranslation(rotation, Vec3.ZERO));
     }
 
-    static from_isometry(iso: Isometry3d) {
+    static fromScale(scale: Vec3) {
+        return new GlobalTransform(Affine3A.fromScale(scale));
+    }
+
+    static fromIsometry(iso: Isometry3d) {
         return new GlobalTransform(iso.into());
     }
 
-    compute_matrix() {
+    computeMatrix() {
         return Mat4.from(this.#inner);
     }
 
@@ -53,24 +138,24 @@ export const GlobalTransform = defineComponent(class GlobalTransform {
         return this.#inner;
     }
 
-    compute_transform() {
-        const [scale, rotation, translation] = this.#inner.to_scale_rotation_translation();
+    computeTransform() {
+        const [scale, rotation, translation] = this.#inner.toScaleRotationTranslation();
         return new Transform(translation, rotation, scale)
     }
 
-    to_isometry() {
-        const [_, rotation, translation] = this.#inner.to_scale_rotation_translation();
+    toIsometry() {
+        const [_, rotation, translation] = this.#inner.toScaleRotationTranslation();
         return new Isometry3d(translation, rotation);
     }
 
-    reparented_to(parent: GlobalTransform) {
-        const relative_affine = parent.affine().inverse() * this.affine();
-        const [scale, rotation, translation] = relative_affine.to_scale_rotation_translation();
+    reparentedTo(parent: GlobalTransform) {
+        const relative_affine = (parent.affine().inverse() * this.affine()) as unknown as Affine3A;
+        const [scale, rotation, translation] = relative_affine.toScaleRotationTranslation();
         return new Transform(translation, rotation, scale);
     }
 
-    to_scale_rotation_translation(): [Vec3, Quat, Vec3] {
-        return this.#inner.to_scale_rotation_translation();
+    toScaleRotationTranslation(): [Vec3, Quat, Vec3] {
+        return this.#inner.toScaleRotationTranslation();
     }
 
     get translation() {
@@ -82,7 +167,7 @@ export const GlobalTransform = defineComponent(class GlobalTransform {
     }
 
     get rotation() {
-        return this.#inner.to_scale_rotation_translation()[1];
+        return this.#inner.toScaleRotationTranslation()[1];
     }
 
     get scale() {
@@ -106,14 +191,14 @@ export const GlobalTransform = defineComponent(class GlobalTransform {
     /**
      * Transforms the given point from local space to global space, applying shear, scale, rotation, and translation.
      */
-    transform_point(point: Vec3) {
-        return this.#inner.transform_point3(point);
+    transformPoint(point: Vec3) {
+        return this.#inner.transformPoint(point);
     }
 
     /**
      * Multiplies `self` with `transform` component by component, returning the resulting [`GlobalTransform`].
      */
-    mul_transform(transform: InstanceType<Transform>) {
+    mulTransform(transform: InstanceType<Transform>) {
         return new GlobalTransform(this.#inner.mul(transform.compute_affine()));
     }
 
@@ -121,10 +206,7 @@ export const GlobalTransform = defineComponent(class GlobalTransform {
         return new GlobalTransform(this.#inner.mul(transform.#inner));
     }
 
-    mul_vec3(value: Vec3) {
-        return this.transform_point(value);
+    mulVec3(value: Vec3) {
+        return this.transformPoint(value);
     }
-
-
-
 });

@@ -11,6 +11,8 @@ function assert_is_normalized(message: string, length_squared: number) {
     }
 }
 
+type Vec3 = any;
+
 export type Transform = typeof Transform;
 export const Transform = defineComponent(class Transform {
 
@@ -105,7 +107,7 @@ export const Transform = defineComponent(class Transform {
         return this;
     }
 
-    aligned_by(main_axis: Dir3, main_direction: Dir3, secondary_axis: Dir3, secondary_direction: Dir3) {
+    alignedBy(main_axis: Dir3, main_direction: Dir3, secondary_axis: Dir3, secondary_direction: Dir3) {
         this.align(main_axis, main_direction, secondary_axis, secondary_direction);
         return this;
     }
@@ -113,7 +115,7 @@ export const Transform = defineComponent(class Transform {
     /**
      * Returns this [`Transform`] with a new translation.
      */
-    with_translation(translation: Vec3) {
+    withTranslation(translation: Vec3) {
         this.translation = translation;
         return this;
     }
@@ -121,7 +123,7 @@ export const Transform = defineComponent(class Transform {
     /**
      * Returns this [`Transform`] with a new rotation.
      */
-    with_rotation(rotation: Quat) {
+    withRotation(rotation: Quat) {
         this.rotation = rotation;
         return this;
     }
@@ -129,7 +131,7 @@ export const Transform = defineComponent(class Transform {
     /**
      * Returns this [`Transform`] with a new scale.
      */
-    with_scale(scale: Vec3) {
+    withScale(scale: Vec3) {
         this.scale = scale;
         return this;
     }
@@ -137,22 +139,22 @@ export const Transform = defineComponent(class Transform {
     /**
      * @returns the 3d affine transformation matrix from this transform's translation, rotation, and scale.
      */
-    compute_matrix() {
-        return Mat4.from_scale_rotation_translation(this.scale, this.rotation, this.translation);
+    computeMatrix() {
+        return Mat4.fromScaleRotationTranslation(this.scale, this.rotation, this.translation);
     }
 
     /**
      * @returns the 3d affine transformation matrix from this transform's translation, rotation, and scale.
      */
-    compute_affine() {
-        return Affine3A.from_scale_rotation_translation(this.scale, this.rotation, this.translation);
+    computeAffine() {
+        return Affine3A.fromScaleRotationTranslation(this.scale, this.rotation, this.translation);
     }
 
     /**
      * the unit vector in the local `X` direction.
      */
     get local_x() {
-        return Dir3.new_unchecked(this.rotation * Vec3.X)
+        return Dir3.newUnchecked(this.rotation * Vec3.X)
     }
 
     /**
@@ -173,7 +175,7 @@ export const Transform = defineComponent(class Transform {
      * the unit vector in the local `Y` direction.
      */
     get local_y() {
-        return Dir3.new_unchecked(this.rotation * Vec3.Y)
+        return Dir3.newUnchecked(this.rotation * Vec3.Y)
     }
 
     /**
@@ -194,7 +196,7 @@ export const Transform = defineComponent(class Transform {
      * the unit vector in the local `Z` direction.
      */
     get local_z() {
-        return Dir3.new_unchecked(this.rotation * Vec3.Z)
+        return Dir3.newUnchecked(this.rotation * Vec3.Z)
     }
 
     get forward() {
@@ -209,58 +211,58 @@ export const Transform = defineComponent(class Transform {
         this.rotation = rotation.mul(this.rotation);
     }
 
-    rotate_axis(axis: Dir3, angle: number) {
+    rotateAxis(axis: Dir3, angle: number) {
         assert_is_normalized('The axis given to `Transform.rotate_axis` is not normalized. This may be a result of obtaining the axis from the transform. See the documentation of `Transform.rotate_axis` for more details.', axis.length_squared());
-        this.rotate(Quat.from_axis_angle(axis.into(), angle));
+        this.rotate(Quat.fromAxisAngle(axis.into(), angle));
     }
 
-    rotate_x(angle: number) {
-        this.rotate(Quat.from_rotation_x(angle));
+    rotateX(angle: number) {
+        this.rotate(Quat.fromRotationX(angle));
     }
 
-    rotate_y(angle: number) {
-        this.rotate(Quat.from_rotation_y(angle));
+    rotateY(angle: number) {
+        this.rotate(Quat.fromRotationY(angle));
     }
 
-    rotate_z(angle: number) {
-        this.rotate(Quat.from_rotation_z(angle));
+    rotateZ(angle: number) {
+        this.rotate(Quat.fromRotationZ(angle));
     }
 
-    rotate_local(rotation: Quat) {
+    rotateLocal(rotation: Quat) {
         this.rotation.mulEq(rotation);
     }
 
-    rotate_local_axis(axis: Dir3, angle: number) {
+    rotateLocalAxis(axis: Dir3, angle: number) {
         assert_is_normalized('The axis given to `Transform.rotate_axis_local` is not normalized. This may be a result of obtaining the axis from the transform. See the documentation of `Transform.rotate_axis_local` for more details.', axis.length_squared())
-        this.rotate_local(Quat.from_axis_angle(axis.into(), angle));
+        this.rotateLocal(Quat.fromAxisAngle(axis.into(), angle));
     }
 
-    rotate_local_x(angle: number) {
-        this.rotate_local(Quat.from_rotation_x(angle));
+    rotateLocalX(angle: number) {
+        this.rotateLocal(Quat.fromRotationX(angle));
     }
 
-    rotate_local_y(angle: number) {
-        this.rotate_local(Quat.from_rotation_y(angle));
+    rotateLocalY(angle: number) {
+        this.rotateLocal(Quat.fromRotationY(angle));
     }
 
-    rotate_local_z(angle: number) {
-        this.rotate_local(Quat.from_rotation_z(angle));
+    rotateLocalZ(angle: number) {
+        this.rotateLocal(Quat.fromRotationZ(angle));
     }
 
-    translate_around(point: Vec3, rotation: Quat) {
+    translateAround(point: Vec3, rotation: Quat) {
         this.translation = point + rotation * (this.translation - point);
     }
 
-    rotate_around(point: Vec3, rotation: Quat) {
-        this.translate_around(point, rotation);
+    rotateAround(point: Vec3, rotation: Quat) {
+        this.translateAround(point, rotation);
         this.rotate(rotation);
     }
 
-    look_at(target: Vec3, up: Dir3) {
-        this.look_to(target - this.translation, up)
+    lookAt(target: Vec3, up: Dir3) {
+        this.lookTo(target - this.translation, up)
     }
 
-    look_to(direction: Dir3, up: Dir3) {
+    lookTo(direction: Dir3, up: Dir3) {
         const back = direction.neg() ?? Dir3.NEG_Z;
         up = up ?? Dir3.Y;
 
@@ -284,8 +286,8 @@ export const Transform = defineComponent(class Transform {
             first_rotation;
     }
 
-    mul_transform(transform: Transform) {
-        const translation = this.transform_point(transform.translation);
+    mulTransform(transform: Transform) {
+        const translation = this.transformPoint(transform.translation);
         const rotation = this.rotation.mul(transform.rotation);
         const scale = this.scale * transform.scale;
         return new Transform(translation, rotation, scale);
@@ -300,18 +302,18 @@ export const Transform = defineComponent(class Transform {
      * 
      * If you always want to transform a point in local space to worldsapce, or if you need the inverse transformations, see [`GlobalTransform.transform_point`]
      */
-    transform_point(point: Vec3) {
+    transformPoint(point: Vec3) {
         point.set(this.scale * point);
         point.set(this.rotation * point);
         point.add(this.translation);
         return point;
     }
 
-    is_finite() {
+    isFinite() {
         return this.translation.is_finite() && this.rotation.is_finite() && this.scale.is_finite();
     }
 
-    to_isometry() {
+    toIsometry() {
         return new Isometry3d(this.translation, this.rotation);
     }
 
@@ -320,7 +322,7 @@ export const Transform = defineComponent(class Transform {
     }
 
     mulVec3(value: Vec3) {
-        return this.transform_point(value);
+        return this.transformPoint(value);
     }
 })
 

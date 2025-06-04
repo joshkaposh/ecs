@@ -1,5 +1,7 @@
 import { defineSystem } from "define";
-import { Added, Changed, Entity, Maybe, mut, Or, ref, Without } from "ecs";
+import { Added, Changed, ChildOf, Children, Entity, Maybe, mut, Or, ref, Without } from "ecs";
+import { Transform, TransformTreeChanged } from "./transform";
+import { GlobalTransform } from "./global-transform";
 
 /**
  * Update [`GlobalTransform`] component of entities that aren't in the hierarchy
@@ -13,7 +15,7 @@ export const sync_simple_transforms = defineSystem(b => b
             [Transform, mut(GlobalTransform)],
             [Or(Changed(Transform), Added(GlobalTransform)), Without(ChildOf), Without(Children)]
         ),
-        b.query([ref(Transform), mut(GlobalTransform)], [Without(ChildOf), Without(Children)])
+        b.queryFiltered([ref(Transform), mut(GlobalTransform)], [Without(ChildOf), Without(Children)])
     ).removedComponents(ChildOf), function sync_simple_transforms(query, orphaned) {
         // update changed entities
         query.p0().for_each(([transform, global_transform]) => global_transform.copyFrom(transform));
@@ -43,12 +45,12 @@ export const mark_dirty_trees = defineSystem((b) => b
             Added(GlobalTransform)
         )
         ]
-    ).removedComponent(ChildOf)
+    ).removedComponents(ChildOf)
     .query(
         [Maybe(ChildOf),
         mut(TransformTreeChanged)]
     ), function mark_dirty_trees(changed_transforms, orphaned, transforms) {
-        for (const entity of changed_transforms.iter().chain(orphaned.read())) {
+        for (const [entity] of changed_transforms.iter().chain(orphaned.read())) {
             let next = entity;
             let tuple;
             while ((tuple = transforms.get_mut(next)) != null) {
@@ -66,4 +68,6 @@ export const mark_dirty_trees = defineSystem((b) => b
                 }
             }
         }
-    })
+    });
+
+export const propagate_parent_transforms = defineSystem(b => b, function propagate_parent_transforms() { });

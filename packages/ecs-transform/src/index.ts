@@ -1,14 +1,18 @@
-import { set } from 'define';
-import { $PostStartup, $PostUpdate, App, Plugin } from 'ecs-app';
-import { mark_dirty_trees, } from './systems';
+import { definePlugin, set } from 'define';
+import { $PostStartup, $PostUpdate, App } from 'ecs-app';
+import { mark_dirty_trees, propagate_parent_transforms, sync_simple_transforms, } from './systems';
+import { Transform, TransformTreeChanged } from './transform';
+import { GlobalTransform } from './global-transform';
 
 export const TransformSystems = {
     Propagate: set()
 } as const
 
-export class TransformPlugin extends Plugin {
+
+export const TransformPlugin = definePlugin({
+    name: 'TransformPlugin',
     build(app: App): void {
-        if (process.env.reflect) {
+        if (import.meta.env.reflect) {
             app
                 .registerType(Transform)
                 .registerType(TransformTreeChanged)
@@ -33,4 +37,4 @@ export class TransformPlugin extends Plugin {
                 .inSet(TransformSystems.Propagate)
             )
     }
-}
+});
